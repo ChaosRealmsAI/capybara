@@ -26,7 +26,8 @@ for path in \
   spec/interfaces.md \
   spec/runtime.md \
   spec/versions/REGISTRY.json \
-  spec/versions/v0.4-cef-shell-poc/bdd.json
+  spec/versions/v0.4-cef-shell-poc/bdd.json \
+  spec/versions/v0.4-cef-shell-poc/status.json
 do
   require_file "$path"
 done
@@ -34,7 +35,17 @@ done
 rg -q '^wef = ' Cargo.toml || fail "workspace must depend on wef for CEF/Chromium"
 rg -q '^wef\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must use workspace wef"
 rg -q 'data-capy-browser", "cef"' crates/capy-shell/src/browser/assets.rs || fail "CEF browser identity marker missing"
-rg -q 'active_version": "v0.4-cef-shell-poc"' spec/versions/REGISTRY.json || fail "spec active_version must point at v0.4 CEF foundation"
+
+active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"
+[[ -n "$active_version" ]] || fail "spec active_version is missing"
+require_file "spec/versions/$active_version/bdd.json"
+require_file "spec/versions/$active_version/status.json"
+jq -e '.versions[] | select(.id == "v0.4-cef-shell-poc" and .status == "merged-verified")' \
+  spec/versions/REGISTRY.json >/dev/null || fail "v0.4 CEF foundation must remain registered as merged-verified"
+jq -e --arg active "$active_version" '
+  .versions[] | select(.id == $active) |
+  (.id == "v0.4-cef-shell-poc" or ((.depends_on // []) | index("v0.4-cef-shell-poc") != null))
+' spec/versions/REGISTRY.json >/dev/null || fail "active version must be v0.4 CEF foundation or depend on it"
 
 if rg -n '\bwry\b|objc2-web-kit|javascriptcore|WKWebView|WebKit' \
   Cargo.toml Cargo.lock crates/capy-shell/Cargo.toml crates/capy-shell/src; then
@@ -51,9 +62,6 @@ check_rust_file_size() {
   local lines
   lines="$(wc -l < "$file" | tr -d ' ')"
   case "$file" in
-    crates/capy-shell/src/agent.rs|crates/capy-shell/src/app.rs)
-      [[ "$lines" -le 1300 ]] || fail "$file has $lines lines; legacy ceiling is 1300 before module split"
-      ;;
     *)
       [[ "$lines" -le 900 ]] || fail "$file has $lines lines; split module before crossing 900"
       ;;

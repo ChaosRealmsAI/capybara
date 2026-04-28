@@ -196,7 +196,7 @@ fn inject_initialization_script(content: Vec<u8>) -> Result<Vec<u8>, String> {
 }
 
 fn initialization_script() -> String {
-    let cwd = std::env::current_dir()
+    let cwd = default_session_cwd()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "/".to_string());
     let cwd_json = serde_json::to_string(&cwd).unwrap_or_else(|_| "\"/\"".to_string());
@@ -289,12 +289,45 @@ fn initialization_script() -> String {
 }
 
 fn frontend_root() -> Result<PathBuf, String> {
-    let root = project_root()?.join("frontend/capy-app");
-    let index = root.join("index.html");
-    if !index.exists() {
-        return Err(format!("frontend missing: {}", index.display()));
+    let candidates = frontend_root_candidates();
+    for root in candidates {
+        let index = root.join("index.html");
+        if index.exists() {
+            return Ok(root);
+        }
     }
-    Ok(root)
+    Err(
+        "frontend missing: set CAPY_FRONTEND_ROOT or bundle Contents/Resources/capy-app"
+            .to_string(),
+    )
+}
+
+fn frontend_root_candidates() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(root) = std::env::var_os("CAPY_FRONTEND_ROOT").filter(|value| !value.is_empty()) {
+        roots.push(PathBuf::from(root));
+    }
+    if let Some(root) = bundled_frontend_root() {
+        roots.push(root);
+    }
+    if let Ok(root) = project_root() {
+        roots.push(root.join("frontend/capy-app"));
+    }
+    roots
+}
+
+fn bundled_frontend_root() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let contents_dir = exe.parent()?.parent()?;
+    (contents_dir.file_name()?.to_str()? == "Contents")
+        .then(|| contents_dir.join("Resources").join("capy-app"))
+}
+
+fn default_session_cwd() -> Result<PathBuf, String> {
+    if let Some(cwd) = std::env::var_os("CAPY_DEFAULT_CWD").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(cwd));
+    }
+    project_root().or_else(|_| std::env::current_dir().map_err(|err| err.to_string()))
 }
 
 fn project_root() -> Result<PathBuf, String> {
@@ -387,6 +420,16 @@ mod tests {
         assert_eq!(
             url,
             "http://127.0.0.1:1/index.html?project=demo%20project/alpha&dpr=2.000"
+        );
+    }
+
+    #[test]
+    fn source_project_root_is_a_frontend_candidate() {
+        let candidates = frontend_root_candidates();
+        assert!(
+            candidates
+                .iter()
+                .any(|path| path.ends_with("frontend/capy-app"))
         );
     }
 }
