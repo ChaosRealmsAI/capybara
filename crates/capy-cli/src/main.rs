@@ -36,8 +36,8 @@ enum Command {
     Screenshot(ScreenshotArgs),
     #[command(about = "Capture the native macOS window PNG")]
     Capture(CaptureArgs),
-    #[command(about = "Cut a fixed-backdrop generated asset into a transparent PNG")]
-    Cutout(CutoutArgs),
+    #[command(about = "Cut generated assets into transparent PNGs with withoutbg/focus")]
+    Cutout(cutout::CutoutCliArgs),
     #[command(about = "Run a lightweight Capybara runtime verification")]
     Verify(VerifyArgs),
     #[command(about = "Manage persistent Claude/Codex conversations")]
@@ -98,40 +98,6 @@ struct CaptureArgs {
     out: PathBuf,
     #[arg(long)]
     window: Option<String>,
-}
-
-#[derive(Debug, Args)]
-struct CutoutArgs {
-    #[arg(long)]
-    input: PathBuf,
-    #[arg(long)]
-    output: PathBuf,
-    #[arg(
-        long,
-        default_value = "auto",
-        help = "auto or a hex color like #E0E0E0"
-    )]
-    background: String,
-    #[arg(long, default_value_t = 30, help = "Per-channel background tolerance")]
-    tolerance: u16,
-    #[arg(long, default_value_t = 2, help = "Alpha feather radius in pixels")]
-    feather_radius: u32,
-    #[arg(
-        long,
-        default_value_t = 64,
-        help = "Drop connected subject islands smaller than this"
-    )]
-    min_component_area: usize,
-    #[arg(
-        long,
-        default_value_t = 96,
-        help = "Cut interior background-like holes at least this large"
-    )]
-    hole_min_area: usize,
-    #[arg(long, help = "Write black/white/deep QA previews to this directory")]
-    qa_dir: Option<PathBuf>,
-    #[arg(long, help = "Write JSON report to this path")]
-    report: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -471,24 +437,7 @@ fn run() -> Result<(), String> {
             "capture",
             json!({ "out": args.out.display().to_string(), "window": args.window }),
         ),
-        Command::Cutout(args) => {
-            let report = cutout::execute(cutout::CutoutRequest {
-                input: args.input,
-                output: args.output,
-                background: args.background,
-                tolerance: args.tolerance,
-                feather_radius: args.feather_radius,
-                min_component_area: args.min_component_area,
-                hole_min_area: args.hole_min_area,
-                qa_dir: args.qa_dir,
-                report: args.report,
-            })?;
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&report).map_err(|err| err.to_string())?
-            );
-            Ok(())
-        }
+        Command::Cutout(args) => cutout::handle(args),
         Command::Verify(args) => match args.profile {
             VerifyProfile::Readiness => send(
                 "state-query",
