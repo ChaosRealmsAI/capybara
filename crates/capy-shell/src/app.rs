@@ -13,6 +13,7 @@ use crate::capture;
 use crate::ipc::{self, IpcRequest, IpcResponse, error_response, ok_response};
 use crate::store::{CreateConversation, Provider, Store};
 
+mod canvas_tool;
 mod window;
 
 use window::{WindowManager, WindowStatus};
@@ -48,6 +49,10 @@ pub enum ShellEvent {
     },
     AgentRuntimeEvent {
         event: AgentRuntimeEvent,
+    },
+    CanvasToolEvent {
+        window_id: String,
+        event: Value,
     },
     IpcFromJs {
         window_id: String,
@@ -205,6 +210,9 @@ pub fn run() {
                 }
                 ShellEvent::AgentRuntimeEvent { event } => {
                     broadcast_agent_event(&manager, &event);
+                }
+                ShellEvent::CanvasToolEvent { window_id, event } => {
+                    send_canvas_tool_event(&manager, &window_id, event);
                 }
                 ShellEvent::IpcFromJs { window_id, body } => {
                     handle_js_ipc(&manager, Arc::clone(&store), &proxy, &window_id, &body);
@@ -541,7 +549,18 @@ fn handle_js_ipc(
         op: op.to_string(),
         params: value.get("params").cloned().unwrap_or_else(|| json!({})),
     };
-    let response = conversation_response(store, proxy, request);
+    let response = if op == "canvas-generate-image" {
+        response_from_result(
+            request.req_id.clone(),
+            canvas_tool::start_image_generation(
+                proxy.clone(),
+                window_id.to_string(),
+                request.params,
+            ),
+        )
+    } else {
+        conversation_response(store, proxy, request)
+    };
     send_frontend_rpc(manager, window_id, response);
 }
 
@@ -553,6 +572,19 @@ fn send_frontend_rpc(manager: &WindowManager, window_id: &str, response: IpcResp
         return;
     };
     let script = format!("window.__capyReceive && window.__capyReceive({payload});");
+    let _eval_result = webview.evaluate_script(&script);
+}
+
+fn send_canvas_tool_event(manager: &WindowManager, window_id: &str, event: Value) {
+    let Ok(webview) = manager.webview_by_id(window_id) else {
+        return;
+    };
+    let Ok(payload) = serde_json::to_string(&event) else {
+        return;
+    };
+    let script = format!(
+        "window.dispatchEvent(new CustomEvent('capy:canvas-tool-event', {{ detail: {payload} }}));"
+    );
     let _eval_result = webview.evaluate_script(&script);
 }
 

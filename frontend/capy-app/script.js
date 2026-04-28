@@ -1,4 +1,5 @@
 import initCanvas, {
+  add_image_asset_at,
   ai_snapshot,
   ai_snapshot_text,
   create_content_card,
@@ -50,6 +51,11 @@ const canvasStatusEl = document.querySelector("#canvas-status");
 const labelLayerEl = document.querySelector("#node-label-layer");
 const contextTitleEl = document.querySelector("#context-title");
 const contextMetaEl = document.querySelector("#context-meta");
+const imageToolPromptEl = document.querySelector("#image-tool-prompt");
+const imageToolDryRunEl = document.querySelector("#image-tool-dry-run");
+const imageToolLiveEl = document.querySelector("#image-tool-live");
+const imageToolStatusEl = document.querySelector("#image-tool-status");
+const imageToolMetaEl = document.querySelector("#image-tool-meta");
 
 let labelRefreshFrame = 0;
 let liveLabelRefreshFrame = 0;
@@ -78,11 +84,18 @@ const state = {
     context: null,
     contextText: "",
     lastOutboundPrompt: ""
+  },
+  canvasTool: {
+    status: "idle",
+    runId: null,
+    lastResult: null,
+    error: null
   }
 };
 
 window.CAPYBARA_STATE = state;
 window.capy = {
+  add_image_asset_at,
   ai_snapshot,
   ai_snapshot_text,
   create_content_card,
@@ -99,11 +112,15 @@ window.capyWorkbench = {
   composePromptWithContext,
   refreshPlannerContext,
   seedDemoCanvas,
+  createContentCard,
+  insertImageFromBase64,
   moveNodeById,
   selectNode,
   scheduleCanvasLabelRefresh,
   startLiveCanvasLabelRefresh,
   stateSnapshot,
+  startCanvasImageTool,
+  verifyCanvasImageTool,
   verifyLabelMoveSync
 };
 
@@ -142,6 +159,14 @@ window.addEventListener("capy:agent-event", (event) => {
     state.streaming.delete(detail.run_id);
     openConversation(state.activeId).catch((error) => renderError(error));
   }
+});
+
+window.addEventListener("capy:canvas-tool-event", (event) => {
+  handleCanvasToolEvent(event.detail).catch((error) => {
+    state.canvasTool.status = "error";
+    state.canvasTool.error = stringifyError(error);
+    renderCanvasToolStatus();
+  });
 });
 
 newChatEl?.addEventListener("click", async () => {
@@ -204,12 +229,29 @@ writeCodeEl?.addEventListener("change", () => {
   applyWriteCodeDefaults();
 });
 
+imageToolDryRunEl?.addEventListener("click", () => {
+  startCanvasImageTool({ live: false }).catch((error) => {
+    state.canvasTool.status = "error";
+    state.canvasTool.error = stringifyError(error);
+    renderCanvasToolStatus();
+  });
+});
+
+imageToolLiveEl?.addEventListener("click", () => {
+  startCanvasImageTool({ live: true }).catch((error) => {
+    state.canvasTool.status = "error";
+    state.canvasTool.error = stringifyError(error);
+    renderCanvasToolStatus();
+  });
+});
+
 init();
 
 async function init() {
   cwdEl.value = window.CAPYBARA_SESSION?.cwd || "/Users/Zhuanz/workspace/capybara";
   syncPolicyOptions();
   setRunStatus("idle");
+  renderCanvasToolStatus();
   renderMessages();
   await initCanvasWorkbench();
   try {
@@ -279,6 +321,199 @@ function moveNodeById(id, x, y) {
   const ok = move_node_by_id(numericId, nextX, nextY);
   refreshPlannerContext();
   return ok;
+}
+
+function createContentCard(kind, title, x, y) {
+  const nextX = Number(x);
+  const nextY = Number(y);
+  if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
+    return { ok: false, error: "invalid position" };
+  }
+  const idx = create_content_card(kind, title, nextX, nextY);
+  refreshPlannerContext();
+  return {
+    ok: true,
+    index: Number(idx),
+    selected_node: state.canvas.selectedNode,
+    snapshot: stateSnapshot()
+  };
+}
+
+async function insertImageFromBase64(base64, title, x, y, meta = {}) {
+  const bytes = base64ToBytes(base64);
+  const nextX = Number(x);
+  const nextY = Number(y);
+  if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
+    throw new Error("insertImageFromBase64 requires numeric x/y");
+  }
+  const idx = add_image_asset_at(
+    nextX,
+    nextY,
+    bytes,
+    title || "Generated image",
+    meta.sourcePath || "",
+    meta.provider || "",
+    meta.promptSummary || ""
+  );
+  refreshPlannerContext();
+  return {
+    ok: true,
+    index: Number(idx),
+    inserted_node: state.canvas.selectedNode,
+    node_count: state.canvas.nodeCount,
+    source_path: meta.sourcePath || null,
+    provider: meta.provider || null,
+    prompt_summary: meta.promptSummary || null
+  };
+}
+
+async function startCanvasImageTool({ live = false } = {}) {
+  const prompt = imageToolPromptEl?.value.trim() || defaultImagePrompt();
+  if (imageToolPromptEl && !imageToolPromptEl.value.trim()) {
+    imageToolPromptEl.value = prompt;
+  }
+  const placement = nextImagePlacement();
+  state.canvasTool.status = "running";
+  state.canvasTool.error = null;
+  state.canvasTool.lastResult = null;
+  renderCanvasToolStatus();
+  const data = await rpc("canvas-generate-image", {
+    prompt,
+    provider: "apimart-gpt-image-2",
+    size: "1:1",
+    resolution: "1k",
+    live,
+    x: placement.x,
+    y: placement.y,
+    title: live ? "Live generated image" : "Dry-run generated image",
+    name: live ? "desktop-live-image" : "desktop-dry-run-image"
+  });
+  state.canvasTool.runId = data.run_id || null;
+  state.canvasTool.lastResult = data;
+  renderCanvasToolStatus();
+  return data;
+}
+
+async function handleCanvasToolEvent(detail) {
+  if (!detail) return null;
+  const safeDetail = { ...detail };
+  delete safeDetail.image_base64;
+  state.canvasTool.runId = detail.run_id || state.canvasTool.runId;
+  state.canvasTool.lastResult = safeDetail;
+  if (detail.ok === false) {
+    state.canvasTool.status = "error";
+    state.canvasTool.error = detail.error?.message || "canvas image tool failed";
+    renderCanvasToolStatus();
+    return safeDetail;
+  }
+  const inserted = await insertImageFromBase64(
+    detail.image_base64,
+    detail.title,
+    detail.x,
+    detail.y,
+    {
+      sourcePath: detail.source_path,
+      provider: detail.provider,
+      promptSummary: detail.prompt_summary
+    }
+  );
+  state.canvasTool.status = "inserted";
+  state.canvasTool.error = null;
+  state.canvasTool.lastResult = { ...safeDetail, inserted };
+  renderCanvasToolStatus();
+  return state.canvasTool.lastResult;
+}
+
+function renderCanvasToolStatus() {
+  if (!imageToolStatusEl || !imageToolMetaEl) return;
+  imageToolStatusEl.textContent = state.canvasTool.status || "idle";
+  imageToolStatusEl.dataset.status = state.canvasTool.status || "idle";
+  const result = state.canvasTool.lastResult;
+  if (state.canvasTool.error) {
+    imageToolMetaEl.textContent = state.canvasTool.error;
+  } else if (result?.inserted?.inserted_node) {
+    const node = result.inserted.inserted_node;
+    imageToolMetaEl.textContent = `Inserted #${node.id} · ${node.source_path || "canvas image"}`;
+  } else if (state.canvasTool.runId) {
+    imageToolMetaEl.textContent = state.canvasTool.runId;
+  } else {
+    imageToolMetaEl.textContent = "Dry run does not spend credits. Live performs one provider call.";
+  }
+}
+
+function nextImagePlacement() {
+  const current = refreshPlannerContext();
+  const selected = current.canvas?.selectedNode;
+  const bounds = selected?.bounds || selected?.geometry || null;
+  if (bounds) {
+    return {
+      x: Number(bounds.x || 0) + Number(bounds.w || 220) + 48,
+      y: Number(bounds.y || 0)
+    };
+  }
+  const viewport = current.canvas?.viewport;
+  return {
+    x: Math.round((viewport?.visible_world?.x || 80) + 360),
+    y: Math.round((viewport?.visible_world?.y || 80) + 140)
+  };
+}
+
+function defaultImagePrompt() {
+  const selected = state.canvas.selectedNode;
+  const title = selected?.title || "Capybara design direction";
+  return [
+    "Scene: Warm studio product design board with soft natural light.",
+    `Subject: A polished hero image inspired by ${title}.`,
+    "Important details: premium visual direction, refined colors, clean composition.",
+    "Use case: Canvas image node for design exploration.",
+    "Constraints: No text, no watermark, no UI chrome."
+  ].join(" ");
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function verifyCanvasImageTool() {
+  return new Promise((resolve) => {
+    const before = refreshPlannerContext();
+    if (imageToolPromptEl) imageToolPromptEl.value = defaultImagePrompt();
+    startCanvasImageTool({ live: false }).catch((error) => {
+      resolve({ passed: false, reason: stringifyError(error), before });
+    });
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const current = refreshPlannerContext();
+      if (state.canvasTool.status === "inserted") {
+        clearInterval(timer);
+        const node = current.canvas?.selectedNode;
+        resolve({
+          passed: Boolean(node && node.content_kind === "image" && current.canvas.nodeCount > before.canvas.nodeCount),
+          before_count: before.canvas.nodeCount,
+          after_count: current.canvas.nodeCount,
+          selected_node: node,
+          tool: state.canvasTool,
+          pageErrors: window.__capyPageErrors || [],
+          consoleErrors: (window.__capyConsoleEvents || []).filter((event) => event.level === "error")
+        });
+      } else if (state.canvasTool.status === "error" || Date.now() - started > 20000) {
+        clearInterval(timer);
+        resolve({
+          passed: false,
+          before_count: before.canvas.nodeCount,
+          after_count: current.canvas.nodeCount,
+          status: state.canvasTool.status,
+          error: state.canvasTool.error,
+          pageErrors: window.__capyPageErrors || []
+        });
+      }
+    }, 250);
+  });
 }
 
 function refreshPlannerContext() {

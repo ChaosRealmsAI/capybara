@@ -80,6 +80,10 @@ pub struct CanvasMetadata {
     pub source_path: Option<String>,
     #[serde(default)]
     pub mime: Option<String>,
+    #[serde(default)]
+    pub generation_provider: Option<String>,
+    #[serde(default)]
+    pub generation_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,6 +109,8 @@ pub struct CanvasSelectionItem {
     pub editor_route: Option<String>,
     pub source_path: Option<String>,
     pub mime: Option<String>,
+    pub generation_provider: Option<String>,
+    pub generation_prompt: Option<String>,
     pub geometry: ShapeGeometry,
 }
 
@@ -498,6 +504,8 @@ impl Shape {
                 .mime
                 .clone()
                 .or_else(|| self.image.as_ref().map(|image| image.mime.clone())),
+            generation_provider: self.metadata.generation_provider.clone(),
+            generation_prompt: self.metadata.generation_prompt.clone(),
             geometry: ShapeGeometry {
                 x: self.x,
                 y: self.y,

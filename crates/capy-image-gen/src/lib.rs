@@ -2,6 +2,8 @@ mod apimart;
 mod prompt;
 mod types;
 
+use std::path::PathBuf;
+
 use serde_json::{Value, json};
 use thiserror::Error;
 
@@ -73,6 +75,38 @@ fn provider_request_body(request: &GenerateImageRequest) -> Value {
     body
 }
 
+pub fn find_downloaded_image_path(value: &Value) -> Option<PathBuf> {
+    let mut paths = Vec::new();
+    collect_image_paths(value, &mut paths);
+    paths.into_iter().find(|path| path.is_file())
+}
+
+fn collect_image_paths(value: &Value, paths: &mut Vec<PathBuf>) {
+    match value {
+        Value::String(text) => {
+            let lower = text.to_ascii_lowercase();
+            if lower.ends_with(".png")
+                || lower.ends_with(".jpg")
+                || lower.ends_with(".jpeg")
+                || lower.ends_with(".webp")
+            {
+                paths.push(PathBuf::from(text));
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_image_paths(item, paths);
+            }
+        }
+        Value::Object(object) => {
+            for item in object.values() {
+                collect_image_paths(item, paths);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +163,29 @@ mod tests {
                 .and_then(Value::as_str),
             Some("16:9")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn find_downloaded_image_path_recurses_into_provider_result()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let path = std::env::temp_dir().join(format!(
+            "capy-image-gen-path-test-{}.png",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"png")?;
+        let value = json!({
+            "ok": true,
+            "result": {
+                "images": [
+                    {
+                        "local_path": path.display().to_string()
+                    }
+                ]
+            }
+        });
+        assert_eq!(find_downloaded_image_path(&value), Some(path.clone()));
+        let _remove_result = std::fs::remove_file(path);
         Ok(())
     }
 }

@@ -50,6 +50,26 @@
           <div class="context-meta" id="context-meta">选择左侧节点后，Planner 会围绕该对象工作。</div>
         </section>
 
+        <section class="canvas-tool" data-section="canvas-image-tool" aria-label="Canvas image generation tool">
+          <div class="canvas-tool-head">
+            <div>
+              <div class="context-eyebrow">Canvas tool</div>
+              <div class="tool-title">生成图片并放到画布</div>
+            </div>
+            <span class="tool-status" id="image-tool-status">idle</span>
+          </div>
+          <textarea id="image-tool-prompt" rows="5" aria-label="Image prompt" placeholder="Scene: ...
+Subject: ...
+Important details: ...
+Use case: ...
+Constraints: ..."></textarea>
+          <div class="tool-actions">
+            <button class="tool-button secondary" id="image-tool-dry-run" type="button">Dry run</button>
+            <button class="tool-button primary" id="image-tool-live" type="button">Generate</button>
+          </div>
+          <div class="tool-meta" id="image-tool-meta">Dry run does not spend credits. Live performs one provider call.</div>
+        </section>
+
         <section class="chat-pane" aria-label="Chat">
           <div class="chat-header">
             <div>

@@ -296,16 +296,99 @@ button {
 .planner-shell {
   min-width: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
 }
 
-.planner-context {
+.planner-context,
+.canvas-tool {
   margin: 14px;
   padding: 16px;
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.56);
   box-shadow: inset 0 0 0 1px rgba(44, 37, 29, 0.08);
+}
+
+.canvas-tool {
+  margin-top: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.canvas-tool-head,
+.tool-actions {
+  display: flex;
+  align-items: center;
+}
+
+.canvas-tool-head {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tool-title {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.tool-status {
+  min-width: 72px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #7c3aed;
+  background: rgba(167, 139, 250, 0.16);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.tool-status[data-status="running"] {
+  color: #92400e;
+  background: rgba(251, 191, 36, 0.22);
+}
+
+.tool-status[data-status="inserted"] {
+  color: #047857;
+  background: rgba(52, 211, 153, 0.2);
+}
+
+.tool-status[data-status="error"] {
+  color: #b91c1c;
+  background: rgba(248, 113, 113, 0.18);
+}
+
+.canvas-tool textarea {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.tool-actions {
+  gap: 8px;
+}
+
+.tool-button {
+  height: 34px;
+  border-radius: 999px;
+  padding: 0 14px;
+  font-weight: 820;
+}
+
+.tool-button.primary {
+  color: white;
+  background: var(--purple);
+}
+
+.tool-button.secondary {
+  color: #4d453c;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(44, 37, 29, 0.1);
+}
+
+.tool-meta {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .context-eyebrow {

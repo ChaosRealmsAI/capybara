@@ -111,6 +111,42 @@ mod ai_context {
     }
 
     #[test]
+    fn imported_generated_image_exports_generation_metadata() {
+        let mut state = AppState::new();
+        let idx =
+            state.import_image_asset_bytes(capy_canvas_core::state_shapes::ImageAssetImport {
+                x: 10.0,
+                y: 20.0,
+                rgba: std::sync::Arc::new(vec![255, 0, 0, 255]),
+                width: 1,
+                height: 1,
+                mime: "image/png".to_string(),
+                title: Some("Hero generated".to_string()),
+                source_path: Some("/tmp/hero.png".to_string()),
+                generation_provider: Some("apimart-gpt-image-2".to_string()),
+                generation_prompt: Some("Scene: warm studio".to_string()),
+            });
+        state.selected = vec![idx];
+
+        let context = state.selected_context();
+        assert_eq!(context.items[0].title, "Hero generated");
+        assert_eq!(
+            context.items[0].source_path.as_deref(),
+            Some("/tmp/hero.png")
+        );
+        assert_eq!(
+            context.items[0].generation_provider.as_deref(),
+            Some("apimart-gpt-image-2")
+        );
+
+        let snapshot = state.ai_snapshot();
+        assert_eq!(
+            snapshot.nodes[0].generation_prompt.as_deref(),
+            Some("Scene: warm studio")
+        );
+    }
+
+    #[test]
     fn ai_snapshot_exports_layout_relationships_and_actions() {
         use capy_canvas_core::connector::create_connector;
 

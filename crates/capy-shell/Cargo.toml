@@ -11,7 +11,10 @@ name = "capy-shell"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
+capy-image-gen.workspace = true
 ctrlc.workspace = true
+image.workspace = true
 interprocess.workspace = true
 serde.workspace = true
 serde_json.workspace = true

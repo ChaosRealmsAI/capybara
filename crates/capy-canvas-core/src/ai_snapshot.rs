@@ -56,6 +56,8 @@ pub struct CanvasAiNode {
     pub editor_route: Option<String>,
     pub source_path: Option<String>,
     pub mime: Option<String>,
+    pub generation_provider: Option<String>,
+    pub generation_prompt: Option<String>,
     pub bounds: ShapeGeometry,
     pub center: CanvasPoint,
     pub area: f64,
@@ -193,6 +195,8 @@ impl AppState {
                         .mime
                         .clone()
                         .or_else(|| shape.image.as_ref().map(|image| image.mime.clone())),
+                    generation_provider: shape.metadata.generation_provider.clone(),
+                    generation_prompt: shape.metadata.generation_prompt.clone(),
                     area: bounds.w * bounds.h,
                     bounds,
                     center: CanvasPoint { x: cx, y: cy },

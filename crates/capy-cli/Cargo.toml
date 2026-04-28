@@ -11,6 +11,7 @@ name = "capy"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 capy-image-gen.workspace = true
 capy-scroll-media.workspace = true
 capy-shell = { path = "../capy-shell" }
