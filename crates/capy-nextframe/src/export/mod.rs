@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub use report::{ExportCompositionRequest, ExportError, ExportKind, ExportReport, ExportStatus};
 
 use self::report::{ExportFailure, ExportMode, ExportSuccess};
+use crate::config::NextFrameMode;
 
 pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
     let composition_path = absolute_path(&req.composition_path);
@@ -59,58 +60,87 @@ pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
 
     let duration_ms = embedded::read_duration_ms(&context.render_source_path).unwrap_or(0);
     let frame_count = embedded::frame_count(duration_ms, req.fps).unwrap_or(0);
-    match binary::export_with_binary(&context.render_source_path, &context.output_path, req.fps) {
-        binary::BinaryExport::Exported => {
-            metrics_success(context, duration_ms, frame_count, ExportMode::Binary)
+    let mode = match req.strict_binary {
+        true => Ok(NextFrameMode::Binary),
+        false => NextFrameMode::resolve(None),
+    };
+    let mode = match mode {
+        Ok(mode) => mode,
+        Err(err) => {
+            return failure(
+                context,
+                duration_ms,
+                frame_count,
+                None,
+                ExportError::new(
+                    err.body.code,
+                    "$.mode",
+                    err.body.message,
+                    format!("next step · {}", err.body.hint),
+                ),
+            );
         }
-        binary::BinaryExport::Failed(error) => failure(
-            context,
-            duration_ms,
-            frame_count,
-            Some(ExportMode::Binary),
-            error,
-        ),
-        binary::BinaryExport::Missing if req.strict_binary => failure(
-            context,
-            duration_ms,
-            frame_count,
-            None,
-            ExportError::new(
-                "NEXTFRAME_NOT_FOUND",
-                "$.binary",
-                "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
-                "next step · install nf-recorder or rerun without --strict-binary",
-            ),
-        ),
-        binary::BinaryExport::Missing => {
-            match embedded::export_embedded(
-                &context.render_source_path,
-                &context.output_path,
-                context.fps,
-                &context.job_id,
-            ) {
-                Ok(metrics) => ExportReport::success(ExportSuccess {
-                    trace_id: context.trace_id,
-                    job_id: context.job_id,
-                    composition_path: context.composition_path,
-                    render_source_path: context.render_source_path,
-                    output_path: context.output_path,
-                    kind: context.kind,
-                    duration_ms: metrics.duration_ms,
-                    fps: context.fps,
-                    frame_count: metrics.frame_count,
-                    byte_size: metrics.byte_size,
-                    export_mode: ExportMode::Embedded,
-                }),
-                Err(error) => failure(
+    };
+
+    if mode == NextFrameMode::Binary {
+        match binary::export_with_binary(&context.render_source_path, &context.output_path, req.fps)
+        {
+            binary::BinaryExport::Exported => {
+                return metrics_success(context, duration_ms, frame_count, ExportMode::Binary);
+            }
+            binary::BinaryExport::Failed(error) => {
+                return failure(
                     context,
                     duration_ms,
                     frame_count,
-                    Some(ExportMode::Embedded),
+                    Some(ExportMode::Binary),
                     error,
-                ),
+                );
             }
+            binary::BinaryExport::Missing if req.strict_binary => {
+                return failure(
+                    context,
+                    duration_ms,
+                    frame_count,
+                    None,
+                    ExportError::new(
+                        "NEXTFRAME_NOT_FOUND",
+                        "$.binary",
+                        "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
+                        "next step · install nf-recorder or rerun without --strict-binary",
+                    ),
+                );
+            }
+            binary::BinaryExport::Missing => {}
         }
+    }
+
+    match embedded::export_embedded(
+        &context.render_source_path,
+        &context.output_path,
+        context.fps,
+        &context.job_id,
+    ) {
+        Ok(metrics) => ExportReport::success(ExportSuccess {
+            trace_id: context.trace_id,
+            job_id: context.job_id,
+            composition_path: context.composition_path,
+            render_source_path: context.render_source_path,
+            output_path: context.output_path,
+            kind: context.kind,
+            duration_ms: metrics.duration_ms,
+            fps: context.fps,
+            frame_count: metrics.frame_count,
+            byte_size: metrics.byte_size,
+            export_mode: ExportMode::Embedded,
+        }),
+        Err(error) => failure(
+            context,
+            duration_ms,
+            frame_count,
+            Some(ExportMode::Embedded),
+            error,
+        ),
     }
 }
 

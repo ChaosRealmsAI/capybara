@@ -30,7 +30,7 @@ fn nextframe_doctor_reports_happy_path_json() -> Result<(), Box<dyn std::error::
     let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(value["ok"], true);
     assert_eq!(value["stage"], "doctor");
-    assert_eq!(value["mode"], "binary");
+    assert_eq!(value["mode"], "crate");
     assert_eq!(value["nf"]["found"], true);
     assert_eq!(value["nf_recorder"]["found"], true);
     assert_eq!(value["config"]["discovery"], "FLAG");
@@ -41,6 +41,7 @@ fn nextframe_doctor_reports_happy_path_json() -> Result<(), Box<dyn std::error::
 #[test]
 fn nextframe_doctor_reports_missing_json() -> Result<(), Box<dyn std::error::Error>> {
     let output = capy_command()?
+        .env("CAPY_NEXTFRAME_MODE", "binary")
         .args([
             "nextframe",
             "doctor",
@@ -299,7 +300,7 @@ fn nextframe_validate_strict_binary_requires_nf() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-fn nextframe_compile_writes_render_source_embedded() -> Result<(), Box<dyn std::error::Error>> {
+fn nextframe_compile_writes_render_source_crate() -> Result<(), Box<dyn std::error::Error>> {
     let dir = unique_dir("compile-happy")?;
     let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
     let compose = capy_command()?
@@ -328,7 +329,7 @@ fn nextframe_compile_writes_render_source_embedded() -> Result<(), Box<dyn std::
     let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(value["ok"], true);
     assert_eq!(value["stage"], "compile");
-    assert_eq!(value["compile_mode"], "embedded");
+    assert_eq!(value["compile_mode"], "crate");
     assert_eq!(value["render_source_schema"], "nf.render_source.v1");
     let render_source_path = value["render_source_path"]
         .as_str()
@@ -604,7 +605,7 @@ fn nextframe_verify_export_writes_evidence_index() -> Result<(), Box<dyn std::er
     assert_eq!(value["stage"], "verify-export");
     assert_eq!(value["verdict"], "passed");
     assert_eq!(value["stages"]["validate"]["ok"], true);
-    assert_eq!(value["stages"]["compile"]["compile_mode"], "embedded");
+    assert_eq!(value["stages"]["compile"]["compile_mode"], "crate");
     assert_eq!(value["stages"]["snapshot"]["ok"], true);
     assert_eq!(value["stages"]["export"]["ok"], true);
     let index_path = value["evidence_index_html"]

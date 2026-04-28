@@ -186,6 +186,7 @@ fn doctor(args: NextFrameDoctorArgs) -> Result<(), String> {
         nf_bin: args.nf,
         recorder_bin: args.recorder,
         home: args.home,
+        mode: None,
     });
     print_json(&report)
 }

@@ -219,6 +219,7 @@ mod tests {
             nf_bin: Some("/definitely/not/nf".into()),
             recorder_bin: Some("/definitely/not/nf-recorder".into()),
             home: None,
+            mode: None,
         });
 
         let err = match result {

@@ -9,6 +9,7 @@ authors.workspace = true
 [dependencies]
 capy-poster.workspace = true
 image.workspace = true
+nf-project = { path = "../../external/NextFrame/crates/nf-project" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use crate::adapter::binary::BinaryAdapter;
-use crate::config::NextFrameConfig;
+use crate::adapter::crate_adapter::CrateAdapter;
+use crate::config::{NextFrameConfig, NextFrameMode};
 use crate::error::nextframe_setup_hint;
 use crate::ports::{CompositionArtifact, NextFrameProjectPort};
 use crate::validate::report::{BinaryPassthroughResult, ValidationError, ValidationReport};
@@ -14,8 +15,12 @@ pub fn append_binary_passthrough(report: &mut ValidationReport, strict_binary: b
     }
 
     let config = NextFrameConfig::default();
-    let resolved = match config.resolve() {
-        Ok(resolved) => resolved,
+    let mode_result = match strict_binary {
+        true => Ok(NextFrameMode::Binary),
+        false => NextFrameMode::resolve(config.mode),
+    };
+    let mode = match mode_result {
+        Ok(mode) => mode,
         Err(err) => {
             if strict_binary {
                 report.push_error(error_from_body(
@@ -29,29 +34,51 @@ pub fn append_binary_passthrough(report: &mut ValidationReport, strict_binary: b
         }
     };
 
-    if !resolved.nf.found {
-        if strict_binary {
-            report.push_error(nextframe_not_found_error());
+    let result = match mode {
+        NextFrameMode::Crate => {
+            validate_with_port(&CrateAdapter::new(config), &report.composition_path)
         }
-        return;
-    }
+        NextFrameMode::Binary => {
+            let resolved = match config.resolve() {
+                Ok(resolved) => resolved,
+                Err(err) => {
+                    if strict_binary {
+                        report.push_error(error_from_body(
+                            "$.binary_passthrough",
+                            err.body.code,
+                            err.body.message,
+                            err.body.hint,
+                        ));
+                    }
+                    return;
+                }
+            };
 
-    let adapter = match BinaryAdapter::new(config) {
-        Ok(adapter) => adapter,
-        Err(err) => {
-            if strict_binary {
-                report.push_error(error_from_body(
-                    "$.binary_passthrough",
-                    err.body.code,
-                    err.body.message,
-                    err.body.hint,
-                ));
+            if !resolved.nf.found {
+                if strict_binary {
+                    report.push_error(nextframe_not_found_error());
+                }
+                return;
             }
-            return;
+
+            let adapter = match BinaryAdapter::new(config) {
+                Ok(adapter) => adapter,
+                Err(err) => {
+                    if strict_binary {
+                        report.push_error(error_from_body(
+                            "$.binary_passthrough",
+                            err.body.code,
+                            err.body.message,
+                            err.body.hint,
+                        ));
+                    }
+                    return;
+                }
+            };
+            validate_with_port(&adapter, &report.composition_path)
         }
     };
 
-    let result = validate_with_port(&adapter, &report.composition_path);
     if strict_binary && !result.ok {
         if let Some(error) = result.error.clone() {
             report.push_error(error);
@@ -73,7 +100,14 @@ pub fn validate_with_port(
             stdout_json: serde_json::from_str::<Value>(&report.stdout).ok(),
             stdout: report.stdout,
             stderr: report.stderr,
-            error: None,
+            error: (!report.ok).then(|| {
+                ValidationError::new(
+                    "COMPOSITION_INVALID",
+                    "$.binary_passthrough",
+                    "NextFrame project adapter rejected the composition",
+                    "next step · inspect adapter stdout and rerun capy nextframe validate",
+                )
+            }),
         },
         Err(err) => BinaryPassthroughResult {
             ok: false,

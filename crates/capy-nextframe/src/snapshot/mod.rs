@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub use report::{SnapshotError, SnapshotMode, SnapshotReport, SnapshotRequest};
 
 use self::report::{SnapshotFailure, SnapshotSuccess};
+use crate::config::NextFrameMode;
 
 pub fn snapshot(req: SnapshotRequest) -> SnapshotReport {
     let trace_id = trace_id();
@@ -50,16 +51,83 @@ pub fn snapshot(req: SnapshotRequest) -> SnapshotReport {
         );
     }
 
-    match binary::snapshot_with_binary(&render_source_path, &snapshot_path, req.frame_ms) {
-        binary::BinarySnapshot::Snapshotted => metrics_success(
+    let mode = match req.strict_binary {
+        true => Ok(NextFrameMode::Binary),
+        false => NextFrameMode::resolve(None),
+    };
+    let mode = match mode {
+        Ok(mode) => mode,
+        Err(err) => {
+            return failure(
+                trace_id,
+                composition_path,
+                render_source_path,
+                snapshot_path,
+                req.frame_ms,
+                SnapshotError::new(
+                    err.body.code,
+                    "$.mode",
+                    err.body.message,
+                    format!("next step · {}", err.body.hint),
+                ),
+            );
+        }
+    };
+
+    if mode == NextFrameMode::Binary {
+        match binary::snapshot_with_binary(&render_source_path, &snapshot_path, req.frame_ms) {
+            binary::BinarySnapshot::Snapshotted => {
+                return metrics_success(
+                    trace_id,
+                    composition_path,
+                    render_source_path,
+                    snapshot_path,
+                    req.frame_ms,
+                    SnapshotMode::Binary,
+                );
+            }
+            binary::BinarySnapshot::Failed(error) => {
+                return failure(
+                    trace_id,
+                    composition_path,
+                    render_source_path,
+                    snapshot_path,
+                    req.frame_ms,
+                    error,
+                );
+            }
+            binary::BinarySnapshot::Missing if req.strict_binary => {
+                return failure(
+                    trace_id,
+                    composition_path,
+                    render_source_path,
+                    snapshot_path,
+                    req.frame_ms,
+                    SnapshotError::new(
+                        "NEXTFRAME_NOT_FOUND",
+                        "$.binary",
+                        "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
+                        "next step · install nf-recorder or rerun without --strict-binary",
+                    ),
+                );
+            }
+            binary::BinarySnapshot::Missing => {}
+        }
+    }
+
+    match embedded::snapshot_embedded(&render_source_path, &snapshot_path) {
+        Ok(metrics) => SnapshotReport::success(SnapshotSuccess {
             trace_id,
             composition_path,
             render_source_path,
             snapshot_path,
-            req.frame_ms,
-            SnapshotMode::Binary,
-        ),
-        binary::BinarySnapshot::Failed(error) => failure(
+            frame_ms: req.frame_ms,
+            snapshot_mode: SnapshotMode::Embedded,
+            width: metrics.width,
+            height: metrics.height,
+            byte_size: metrics.byte_size,
+        }),
+        Err(error) => failure(
             trace_id,
             composition_path,
             render_source_path,
@@ -67,42 +135,6 @@ pub fn snapshot(req: SnapshotRequest) -> SnapshotReport {
             req.frame_ms,
             error,
         ),
-        binary::BinarySnapshot::Missing if req.strict_binary => failure(
-            trace_id,
-            composition_path,
-            render_source_path,
-            snapshot_path,
-            req.frame_ms,
-            SnapshotError::new(
-                "NEXTFRAME_NOT_FOUND",
-                "$.binary",
-                "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
-                "next step · install nf-recorder or rerun without --strict-binary",
-            ),
-        ),
-        binary::BinarySnapshot::Missing => {
-            match embedded::snapshot_embedded(&render_source_path, &snapshot_path) {
-                Ok(metrics) => SnapshotReport::success(SnapshotSuccess {
-                    trace_id,
-                    composition_path,
-                    render_source_path,
-                    snapshot_path,
-                    frame_ms: req.frame_ms,
-                    snapshot_mode: SnapshotMode::Embedded,
-                    width: metrics.width,
-                    height: metrics.height,
-                    byte_size: metrics.byte_size,
-                }),
-                Err(error) => failure(
-                    trace_id,
-                    composition_path,
-                    render_source_path,
-                    snapshot_path,
-                    req.frame_ms,
-                    error,
-                ),
-            }
-        }
     }
 }
 

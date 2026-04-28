@@ -79,6 +79,7 @@ pub struct CompileSuccess {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompileMode {
     Binary,
+    Crate,
     Embedded,
 }
 
@@ -86,6 +87,7 @@ impl CompileMode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Binary => "binary",
+            Self::Crate => "crate",
             Self::Embedded => "embedded",
         }
     }

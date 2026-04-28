@@ -9,6 +9,7 @@ members = [
     "crates/capy-poster",
     "crates/capy-scroll-media",
     "crates/capy-shell",
+    "external/NextFrame/crates/nf-project",
 ]
 
 [workspace.package]
@@ -17,6 +18,7 @@ edition = "2024"
 rust-version = "1.86"
 license = "MIT"
 authors = ["Capybara Contributors"]
+repository = "https://github.com/capybara-ai/capybara"
 
 [workspace.dependencies]
 anyhow = "1"
@@ -44,6 +46,9 @@ capy-nextframe = { path = "crates/capy-nextframe" }
 capy-poster = { path = "crates/capy-poster" }
 capy-scroll-media = { path = "crates/capy-scroll-media" }
 which = "7"
+directories = "6"
+once_cell = "1"
+regex = "1"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

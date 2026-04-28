@@ -158,7 +158,7 @@ mod tests {
         assert_eq!(report.stage, "verify-export");
         assert_eq!(report.verdict, "passed");
         assert_eq!(report.stages.validate.track_count, 1);
-        assert_eq!(report.stages.compile.compile_mode, "embedded");
+        assert_eq!(report.stages.compile.compile_mode, "crate");
         assert!(report.stages.snapshot.snapshot_path.is_file());
         assert!(report.stages.export.output_path.is_file());
         assert!(report.evidence_index_html.is_file());
@@ -270,6 +270,11 @@ mod tests {
         dir: &Path,
         value: serde_json::Value,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        fs::create_dir_all(dir.join("components"))?;
+        fs::write(
+            dir.join("components/html.capy-poster.js"),
+            "export function mount() {}\nexport function update() {}\nexport function destroy() {}\n",
+        )?;
         let path = dir.join("composition.json");
         fs::write(path.clone(), serde_json::to_string_pretty(&value)?)?;
         Ok(path)

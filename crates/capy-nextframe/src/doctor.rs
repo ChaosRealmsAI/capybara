@@ -38,9 +38,10 @@ pub fn doctor(config: NextFrameConfig) -> DoctorReport {
     let trace_id = trace_id();
     match config.resolve() {
         Ok(resolved) => {
+            let mode = resolved.mode;
             let nf = enrich_version(resolved.nf, &["--version"]);
             let recorder = enrich_version(resolved.recorder, &["--version"]);
-            let ok = nf.found && recorder.found;
+            let ok = mode == crate::config::NextFrameMode::Crate || (nf.found && recorder.found);
             let error = if ok {
                 None
             } else {
@@ -59,7 +60,7 @@ pub fn doctor(config: NextFrameConfig) -> DoctorReport {
                 },
                 nf: BinaryReport::from(nf),
                 nf_recorder: BinaryReport::from(recorder),
-                mode: "binary",
+                mode: mode.as_str(),
                 error,
             }
         }
@@ -136,7 +137,7 @@ impl From<ResolvedBinary> for BinaryReport {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::NextFrameConfig;
+    use crate::config::{NextFrameConfig, NextFrameMode};
     use crate::doctor::doctor;
 
     #[test]
@@ -145,6 +146,7 @@ mod tests {
             nf_bin: Some("/definitely/not/nf".into()),
             recorder_bin: Some("/definitely/not/nf-recorder".into()),
             home: None,
+            mode: Some(NextFrameMode::Binary),
         });
 
         assert!(!report.ok);
