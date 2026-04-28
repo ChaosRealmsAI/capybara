@@ -1,0 +1,48 @@
+[package]
+name = "capy-canvas-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+capy-canvas-core.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = "0.1"
+js-sys = "0.3"
+vello = "0.6"
+winit = { workspace = true }
+web-time = "1"
+idb = "0.6"
+image.workspace = true
+futures-channel = "0.3"
+serde-wasm-bindgen = "0.6"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "HtmlAnchorElement",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+    "console",
+    "Performance",
+]
+
+[lints.clippy]
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "allow"
+unreachable = "allow"
+todo = "allow"
+wildcard_imports = "allow"

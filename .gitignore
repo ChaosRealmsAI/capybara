@@ -42,3 +42,7 @@ spec/
 
 # Claude Code session state
 .claude/
+
+# wasm-pack output
+crates/capy-canvas-web/pkg/
+frontend/capy-app/canvas-pkg/

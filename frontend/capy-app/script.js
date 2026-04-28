@@ -1,6 +1,16 @@
-import { STATE } from "./mock.js";
-
-window.CAPYBARA_STATE = STATE;
+import initCanvas, {
+  ai_snapshot,
+  ai_snapshot_text,
+  create_content_card,
+  current_tool,
+  dark_mode,
+  list_shapes,
+  select_node,
+  selected_context,
+  selected_context_text,
+  shape_count,
+  start as startCanvas
+} from "./canvas-pkg/capy_canvas_web.js";
 
 const topbar = document.querySelector(".topbar");
 const listEl = document.querySelector("#conversation-list");
@@ -34,6 +44,10 @@ const bareEl = document.querySelector("#bare");
 const searchEl = document.querySelector("#search");
 const writeCodeEl = document.querySelector("#write-code");
 const runtimeFootEl = document.querySelector("#runtime-foot");
+const canvasStatusEl = document.querySelector("#canvas-status");
+const labelLayerEl = document.querySelector("#node-label-layer");
+const contextTitleEl = document.querySelector("#context-title");
+const contextMetaEl = document.querySelector("#context-meta");
 
 const pending = new Map();
 const state = {
@@ -41,7 +55,44 @@ const state = {
   activeId: null,
   messages: [],
   streaming: new Map(),
-  dbPath: null
+  dbPath: null,
+  selectedId: null,
+  blocks: [],
+  canvas: {
+    ready: false,
+    nodeCount: 0,
+    selectedNode: null,
+    currentTool: "select",
+    snapshotText: "",
+    darkMode: false,
+    error: null
+  },
+  planner: {
+    context: null,
+    contextText: "",
+    lastOutboundPrompt: ""
+  }
+};
+
+window.CAPYBARA_STATE = state;
+window.capy = {
+  ai_snapshot,
+  ai_snapshot_text,
+  create_content_card,
+  current_tool,
+  dark_mode,
+  list_shapes,
+  select_node,
+  selected_context,
+  selected_context_text,
+  shape_count
+};
+window.capyWorkbench = {
+  composePromptWithContext,
+  refreshPlannerContext,
+  seedDemoCanvas,
+  selectNode,
+  stateSnapshot
 };
 
 topbar?.addEventListener("mousedown", (event) => {
@@ -77,43 +128,64 @@ window.addEventListener("capy:agent-event", (event) => {
     renderMessages();
   } else if (detail.kind === "assistant_done" || detail.kind === "error") {
     state.streaming.delete(detail.run_id);
-    openConversation(state.activeId);
+    openConversation(state.activeId).catch((error) => renderError(error));
   }
 });
 
 newChatEl?.addEventListener("click", async () => {
-  await createConversation();
+  try {
+    await createConversation();
+  } catch (error) {
+    renderError(error);
+  }
 });
 
 stopEl?.addEventListener("click", async () => {
   if (!state.activeId) return;
-  await rpc("conversation-stop", { id: state.activeId });
-  await openConversation(state.activeId);
+  try {
+    await rpc("conversation-stop", { id: state.activeId });
+    await openConversation(state.activeId);
+  } catch (error) {
+    renderError(error);
+  }
 });
 
 formEl?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const prompt = promptEl.value.trim();
   if (!prompt) return;
-  if (!state.activeId) {
-    await createConversation();
+  try {
+    if (!state.activeId) {
+      await createConversation();
+    }
+    if (!state.activeId) return;
+    promptEl.value = "";
+    await updateConversationConfig();
+    const outboundPrompt = composePromptWithContext(prompt);
+    state.planner.lastOutboundPrompt = outboundPrompt;
+    state.messages.push({
+      id: `local-${Date.now()}`,
+      role: "user",
+      content: prompt
+    });
+    renderMessages();
+    setRunStatus("running");
+    await rpc("conversation-send", {
+      id: state.activeId,
+      prompt: outboundPrompt,
+      config: currentConfig(),
+      model: modelEl.value.trim() || null
+    });
+  } catch (error) {
+    setRunStatus("error");
+    renderError(error);
   }
-  if (!state.activeId) return;
-  promptEl.value = "";
-  await updateConversationConfig();
-  state.messages.push({
-    id: `local-${Date.now()}`,
-    role: "user",
-    content: prompt
-  });
-  renderMessages();
-  setRunStatus("running");
-  await rpc("conversation-send", { id: state.activeId, prompt, config: currentConfig(), model: modelEl.value.trim() || null });
 });
 
 providerEl?.addEventListener("change", () => {
   syncPolicyOptions();
   applyWriteCodeDefaults();
+  renderRuntimeFoot();
 });
 
 writeCodeEl?.addEventListener("change", () => {
@@ -125,6 +197,9 @@ init();
 async function init() {
   cwdEl.value = window.CAPYBARA_SESSION?.cwd || "/Users/Zhuanz/workspace/capybara";
   syncPolicyOptions();
+  setRunStatus("idle");
+  renderMessages();
+  await initCanvasWorkbench();
   try {
     const data = await rpc("conversation-list", {});
     state.dbPath = data.db_path || null;
@@ -133,12 +208,116 @@ async function init() {
     renderRuntimeFoot();
     if (state.conversations[0]) {
       await openConversation(state.conversations[0].id);
-    } else {
-      renderMessages();
     }
   } catch (error) {
     renderError(error);
   }
+}
+
+async function initCanvasWorkbench() {
+  try {
+    await initCanvas();
+    startCanvas("capy-canvas");
+    state.canvas.ready = true;
+    updateCanvasStatus("Canvas ready");
+    await nextFrame();
+    seedDemoCanvas();
+    refreshPlannerContext();
+    window.setInterval(refreshPlannerContext, 450);
+  } catch (error) {
+    state.canvas.ready = false;
+    state.canvas.error = stringifyError(error);
+    updateCanvasStatus("Canvas unavailable");
+    renderError(error);
+  }
+}
+
+function seedDemoCanvas() {
+  if (state.blocks.length > 0 || state.canvas.nodeCount > 0) {
+    return state.blocks;
+  }
+  create_content_card("brand", "Brand Kit", 110, 105);
+  create_content_card("image", "主视觉候选 A", 410, 96);
+  create_content_card("web", "Landing Draft", 650, 322);
+  create_content_card("video", "Storyboard", 222, 392);
+  refreshPlannerContext();
+  const preferred = state.blocks.find((node) => node.title === "主视觉候选 A") || state.blocks[0];
+  if (preferred) {
+    selectNode(preferred.id);
+  }
+  return state.blocks;
+}
+
+function selectNode(id) {
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId)) return false;
+  const ok = select_node(numericId);
+  refreshPlannerContext();
+  return ok;
+}
+
+function refreshPlannerContext() {
+  const snapshot = normalizeValue(ai_snapshot()) || {};
+  const context = normalizeValue(selected_context()) || { selected_count: 0, items: [] };
+  const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
+  const selectedItem = Array.isArray(context.items) ? context.items[0] || null : null;
+  state.blocks = nodes;
+  state.selectedId = selectedItem?.id || null;
+  state.canvas.ready = true;
+  state.canvas.nodeCount = Number(shape_count()) || nodes.length;
+  state.canvas.selectedNode = selectedItem;
+  state.canvas.currentTool = current_tool();
+  state.canvas.darkMode = Boolean(dark_mode());
+  state.canvas.snapshotText = ai_snapshot_text();
+  state.planner.context = context;
+  state.planner.contextText = selected_context_text();
+  renderNodeLabels(nodes, state.selectedId);
+  renderPlannerContext(selectedItem);
+  updateCanvasStatus(`${state.canvas.nodeCount} nodes · ${state.canvas.currentTool}`);
+  return stateSnapshot();
+}
+
+function renderNodeLabels(nodes, selectedId) {
+  if (!labelLayerEl) return;
+  labelLayerEl.innerHTML = "";
+  for (const node of nodes) {
+    if (!node || !node.bounds) continue;
+    const label = document.createElement("button");
+    label.type = "button";
+    label.className = `node-label${String(node.id) === String(selectedId) ? " is-selected" : ""}`;
+    label.dataset.nodeId = String(node.id);
+    label.style.left = `${Math.round(node.bounds.x)}px`;
+    label.style.top = `${Math.round(node.bounds.y)}px`;
+    label.style.width = `${Math.max(150, Math.min(210, Math.round(node.bounds.w || 180)))}px`;
+    label.innerHTML = `<strong></strong><span></span>`;
+    label.querySelector("strong").textContent = node.title || `Node ${node.id}`;
+    label.querySelector("span").textContent = `${contentKindLabel(node.content_kind)} · ${node.next_action || "ready"}`;
+    label.addEventListener("click", () => selectNode(node.id));
+    labelLayerEl.append(label);
+  }
+}
+
+function renderPlannerContext(item) {
+  if (!contextTitleEl || !contextMetaEl) return;
+  if (!item) {
+    contextTitleEl.textContent = "No selection";
+    contextMetaEl.textContent = "选择左侧节点后，Planner 会围绕该对象工作。";
+    return;
+  }
+  contextTitleEl.textContent = item.title || `Node ${item.id}`;
+  const detail = [
+    contentKindLabel(item.content_kind),
+    item.next_action,
+    item.editor_route
+  ].filter(Boolean).join(" · ");
+  contextMetaEl.textContent = detail || "Planner context is ready.";
+}
+
+function composePromptWithContext(prompt) {
+  const context = state.planner.contextText || selected_context_text();
+  const trimmed = prompt.trim();
+  if (!context.trim()) return trimmed;
+  return `${trimmed}\n\n[Canvas selection]\n${context}`;
 }
 
 async function createConversation() {
@@ -161,6 +340,7 @@ async function refreshList() {
 }
 
 async function openConversation(id) {
+  if (!id) return;
   const detail = await rpc("conversation-open", { id });
   state.activeId = detail.conversation.id;
   state.messages = detail.messages || [];
@@ -220,7 +400,7 @@ function renderConversations() {
     `;
     button.querySelector(".title").textContent = item.title;
     button.querySelector(".meta").textContent = `${item.provider} · ${item.status}`;
-    button.addEventListener("click", () => openConversation(item.id));
+    button.addEventListener("click", () => openConversation(item.id).catch((error) => renderError(error)));
     listEl.append(button);
   }
 }
@@ -230,7 +410,7 @@ function renderMessages() {
   if (state.messages.length === 0 && state.streaming.size === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "Create a chat, choose Claude or Codex, then send a task.";
+    empty.textContent = "Select a canvas node, then ask Planner what to do next.";
     messagesEl.append(empty);
     return;
   }
@@ -238,7 +418,7 @@ function renderMessages() {
     messagesEl.append(messageNode(message.role, message.content));
   }
   for (const content of state.streaming.values()) {
-    messagesEl.append(messageNode("assistant", content || "…"));
+    messagesEl.append(messageNode("assistant", content || "..."));
   }
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -259,7 +439,7 @@ function messageNode(role, content) {
 function renderError(error) {
   state.messages = [{
     role: "system",
-    content: typeof error === "string" ? error : JSON.stringify(error, null, 2)
+    content: stringifyError(error)
   }];
   renderMessages();
 }
@@ -330,6 +510,51 @@ function setRunStatus(status) {
 function renderRuntimeFoot() {
   const provider = providerEl.value === "claude" ? "Claude Code" : "Codex CLI";
   runtimeFootEl.textContent = `${provider} · ${state.dbPath || "SQLite store pending"}`;
+}
+
+function updateCanvasStatus(text) {
+  if (canvasStatusEl) canvasStatusEl.textContent = text;
+}
+
+function contentKindLabel(value) {
+  return String(value || "shape").replace(/_/g, " ");
+}
+
+function normalizeValue(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "bigint") return Number(value);
+  if (Array.isArray(value)) return value.map(normalizeValue);
+  if (typeof value === "object") {
+    const normalized = {};
+    for (const [key, inner] of Object.entries(value)) {
+      normalized[key] = normalizeValue(inner);
+    }
+    return normalized;
+  }
+  return value;
+}
+
+function stateSnapshot() {
+  return normalizeValue({
+    canvas: state.canvas,
+    selectedId: state.selectedId,
+    blocks: state.blocks,
+    planner: state.planner
+  });
+}
+
+function nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function stringifyError(error) {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.stack || error.message;
+  try {
+    return JSON.stringify(error, null, 2);
+  } catch (_err) {
+    return String(error);
+  }
 }
 
 function rpc(op, params) {

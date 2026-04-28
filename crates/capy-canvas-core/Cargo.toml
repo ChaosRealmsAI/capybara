@@ -1,0 +1,23 @@
+[package]
+name = "capy-canvas-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+vello.workspace = true
+skrifa.workspace = true
+winit.workspace = true
+web-time = "1"
+
+[lints.clippy]
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "allow"
+unreachable = "allow"
+todo = "allow"
+wildcard_imports = "allow"

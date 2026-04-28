@@ -7,140 +7,122 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <main class="app-shell" aria-label="Capybara">
-    <header class="topbar" data-native-drag="true">
-      <nav class="tabs" aria-label="Projects">
-        <button class="tab active" type="button">Agent</button>
-        <button class="tab add" type="button" aria-label="New tab">+</button>
-      </nav>
-    </header>
-    <section class="agent-stage" aria-label="Agent conversations">
-      <aside class="conversation-rail" aria-label="Conversations">
-        <button class="new-chat" id="new-chat" type="button">New chat</button>
-        <div class="conversation-list" id="conversation-list"></div>
-      </aside>
-      <section class="chat-pane" aria-label="Chat">
-        <div class="chat-header">
-          <div>
-            <div class="chat-title" id="chat-title">Capybara Agent</div>
-            <div class="chat-subtitle" id="chat-subtitle">Claude Code / Codex CLI</div>
-          </div>
-          <div class="run-controls">
-            <span class="run-status" id="run-status">idle</span>
-            <button class="stop-run" id="stop-run" type="button">Stop</button>
-          </div>
+  <main class="app-shell" aria-label="Capybara Workbench">
+    <header class="topbar" data-native-drag="true" data-section="top-chrome">
+      <div class="brand-lockup">
+        <div class="brand-stamp" aria-hidden="true">C</div>
+        <div>
+          <div class="brand-title">Capybara</div>
+          <div class="brand-subtitle">Demo Project / Canvas</div>
         </div>
-        <div class="message-list" id="message-list"></div>
-        <form class="composer" id="composer">
-          <textarea id="prompt" rows="3" placeholder="Ask Claude or Codex to work in this directory"></textarea>
-          <div class="composer-actions">
-            <div class="runtime-config">
-              <select id="provider" aria-label="Provider">
-                <option value="claude">Claude</option>
-                <option value="codex">Codex</option>
-              </select>
-              <input id="cwd" aria-label="Working directory" placeholder="/Users/Zhuanz/workspace/capybara">
-              <input id="model" aria-label="Model" placeholder="model">
-              <select id="effort" aria-label="Effort">
-                <option value="">effort</option>
-                <option value="minimal">minimal</option>
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="xhigh">xhigh</option>
-              </select>
-              <select id="policy" aria-label="Permission policy">
-                <option value="">policy</option>
-                <option value="default">default</option>
-                <option value="acceptEdits">accept edits</option>
-                <option value="plan">plan</option>
-                <option value="on-request">on request</option>
-                <option value="never">never</option>
-              </select>
-              <select id="sandbox" aria-label="Sandbox">
-                <option value="">sandbox</option>
-                <option value="read-only">read only</option>
-                <option value="workspace-write">workspace write</option>
-                <option value="danger-full-access">danger full access</option>
-              </select>
-              <label class="write-code-inline">
-                <input id="write-code" type="checkbox">
-                <span>Write code</span>
-              </label>
-              <input id="service-tier" aria-label="Service tier" placeholder="service tier">
-            </div>
-            <button class="send" type="submit">Send</button>
-          </div>
-          <details class="advanced-config">
-            <summary>Runtime options</summary>
-            <div class="advanced-grid">
-              <label>
-                System
-                <textarea id="system-prompt" rows="2" placeholder="Claude system prompt override"></textarea>
-              </label>
-              <label>
-                Append system
-                <textarea id="append-system-prompt" rows="2" placeholder="Append instructions"></textarea>
-              </label>
-              <label>
-                Developer
-                <textarea id="developer-instructions" rows="2" placeholder="Codex developer instructions"></textarea>
-              </label>
-              <label>
-                Add dirs
-                <input id="add-dirs" placeholder="/path/a, /path/b">
-              </label>
-              <label>
-                Allowed tools
-                <input id="allowed-tools" placeholder="Bash(git *) Read">
-              </label>
-              <label>
-                Disallowed tools
-                <input id="disallowed-tools" placeholder="Write">
-              </label>
-              <label>
-                MCP config
-                <input id="mcp-config" placeholder="/path/mcp.json">
-              </label>
-              <label>
-                Codex provider
-                <input id="model-provider" placeholder="openai">
-              </label>
-              <label>
-                Approval reviewer
-                <select id="approvals-reviewer" aria-label="Approval reviewer">
-                  <option value="">reviewer</option>
-                  <option value="user">user</option>
-                  <option value="auto_review">auto review</option>
-                </select>
-              </label>
-              <label>
-                Reasoning summary
-                <select id="reasoning-summary" aria-label="Reasoning summary">
-                  <option value="">summary</option>
-                  <option value="auto">auto</option>
-                  <option value="concise">concise</option>
-                  <option value="detailed">detailed</option>
-                  <option value="none">none</option>
-                </select>
-              </label>
-              <label>
-                Output schema
-                <input id="output-schema" placeholder='{"type":"object"}'>
-              </label>
-              <label class="toggle">
-                <input id="bare" type="checkbox">
-                <span>Claude bare mode</span>
-              </label>
-              <label class="toggle">
-                <input id="search" type="checkbox">
-                <span>Codex web search</span>
-              </label>
-            </div>
-          </details>
-          <div class="runtime-foot" id="runtime-foot">SQLite store: waiting for shell</div>
-        </form>
+      </div>
+      <nav class="project-tabs" aria-label="Project views">
+        <button class="view-tab active" type="button">画布</button>
+        <button class="view-tab" type="button">主视觉</button>
+        <button class="view-tab" type="button">网页</button>
+        <button class="view-tab" type="button">Brand Kit</button>
+      </nav>
+      <div class="top-actions">
+        <button class="icon-action" type="button" aria-label="Command">⌘K</button>
+        <button class="icon-action" type="button" aria-label="Evidence">✓</button>
+      </div>
+    </header>
+
+    <section class="workbench" data-section="workbench">
+      <section class="canvas-panel canvas" data-section="canvas-host" aria-label="Canvas host">
+        <div class="canvas-toolbar" data-component="canvas-toolbar">
+          <span class="tool-pill active">Select</span>
+          <span class="tool-pill">Node</span>
+          <span class="tool-pill">Link</span>
+          <span class="tool-pill muted" id="canvas-status">Canvas loading</span>
+        </div>
+        <canvas id="capy-canvas" data-component="canvas-runtime" tabindex="0"></canvas>
+        <div id="node-label-layer" class="node-label-layer" data-component="node-label-layer"></div>
+        <div class="mini-map" data-component="mini-map">
+          <span></span><span></span><span></span>
+        </div>
       </section>
+
+      <aside class="planner planner-shell" data-section="planner-chat" aria-label="Planner chat">
+        <section class="planner-context" data-section="planner-context" id="planner-context">
+          <div class="context-eyebrow">当前画布上下文</div>
+          <div class="context-title" id="context-title">No selection</div>
+          <div class="context-meta" id="context-meta">选择左侧节点后，Planner 会围绕该对象工作。</div>
+        </section>
+
+        <section class="chat-pane" aria-label="Chat">
+          <div class="chat-header">
+            <div>
+              <div class="chat-title" id="chat-title">Capybara Planner</div>
+              <div class="chat-subtitle" id="chat-subtitle">Claude Code / Codex CLI</div>
+            </div>
+            <div class="run-controls">
+              <span class="run-status" id="run-status">idle</span>
+              <button class="stop-run" id="stop-run" type="button">Stop</button>
+            </div>
+          </div>
+          <div class="conversation-strip" data-component="conversation-strip">
+            <button class="new-chat" id="new-chat" type="button">New chat</button>
+            <div class="conversation-list" id="conversation-list"></div>
+          </div>
+          <div class="message-list" id="message-list"></div>
+          <form class="composer" id="composer">
+            <textarea id="prompt" rows="3" placeholder="Ask Planner about the selected canvas node"></textarea>
+            <div class="composer-actions">
+              <div class="runtime-config">
+                <select id="provider" aria-label="Provider">
+                  <option value="claude">Claude</option>
+                  <option value="codex">Codex</option>
+                </select>
+                <input id="cwd" aria-label="Working directory" placeholder="/Users/Zhuanz/workspace/capybara">
+                <input id="model" aria-label="Model" placeholder="model">
+                <select id="effort" aria-label="Effort">
+                  <option value="">effort</option>
+                  <option value="minimal">minimal</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="xhigh">xhigh</option>
+                </select>
+                <select id="policy" aria-label="Permission policy">
+                  <option value="">policy</option>
+                </select>
+                <select id="sandbox" aria-label="Sandbox">
+                  <option value="">sandbox</option>
+                  <option value="read-only">read only</option>
+                  <option value="workspace-write">workspace write</option>
+                  <option value="danger-full-access">danger full access</option>
+                </select>
+                <label class="write-code-inline">
+                  <input id="write-code" type="checkbox">
+                  <span>Write code</span>
+                </label>
+              </div>
+              <button class="send" type="submit">Send</button>
+            </div>
+            <details class="advanced-config">
+              <summary>Runtime options</summary>
+              <div class="advanced-grid">
+                <label>System<textarea id="system-prompt" rows="2"></textarea></label>
+                <label>Append system<textarea id="append-system-prompt" rows="2"></textarea></label>
+                <label>Developer<textarea id="developer-instructions" rows="2"></textarea></label>
+                <label>Add dirs<input id="add-dirs"></label>
+                <label>Allowed tools<input id="allowed-tools"></label>
+                <label>Disallowed tools<input id="disallowed-tools"></label>
+                <label>MCP config<input id="mcp-config"></label>
+                <label>Codex provider<input id="model-provider"></label>
+                <label>Approval reviewer<select id="approvals-reviewer"><option value="">reviewer</option><option value="user">user</option><option value="auto_review">auto review</option></select></label>
+                <label>Reasoning summary<select id="reasoning-summary"><option value="">summary</option><option value="auto">auto</option><option value="concise">concise</option><option value="detailed">detailed</option><option value="none">none</option></select></label>
+                <label>Output schema<input id="output-schema"></label>
+                <label class="toggle"><input id="bare" type="checkbox"><span>Claude bare mode</span></label>
+                <label class="toggle"><input id="search" type="checkbox"><span>Codex web search</span></label>
+                <input id="service-tier" aria-label="Service tier" placeholder="service tier">
+              </div>
+            </details>
+            <div class="runtime-foot" id="runtime-foot">SQLite store: waiting for shell</div>
+          </form>
+        </section>
+      </aside>
     </section>
   </main>
   <script type="module" src="./script.js"></script>

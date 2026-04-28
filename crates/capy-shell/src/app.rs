@@ -674,10 +674,18 @@ fn state_script(key: &str) -> String {
   function reply(value) {{ return JSON.stringify(value); }}
   const key = {key_json};
   const state = window.CAPYBARA_STATE || {{}};
+  const canvas = state.canvas || {{}};
+  const planner = state.planner || {{}};
   let value = null;
-  if (key === "canvas.selected-id") value = state.selectedId || null;
+  if (key === "canvas.ready") value = !!canvas.ready;
+  else if (key === "canvas.nodeCount") value = Number(canvas.nodeCount || (Array.isArray(state.blocks) ? state.blocks.length : 0));
+  else if (key === "canvas.selectedNode") value = canvas.selectedNode || null;
+  else if (key === "canvas.selected-id") value = state.selectedId || null;
   else if (key === "canvas.block-count") value = Array.isArray(state.blocks) ? state.blocks.length : 0;
-  else if (key === "planner.status") value = "stub";
+  else if (key === "canvas.currentTool") value = canvas.currentTool || null;
+  else if (key === "canvas.snapshotText") value = canvas.snapshotText || "";
+  else if (key === "planner.context") value = planner.context || null;
+  else if (key === "planner.status") value = planner.contextText ? "context-ready" : "idle";
   else return reply({{ ok: false, error: "unknown state key: " + key }});
   return reply({{ ok: true, key, value }});
 }})()"#
@@ -686,8 +694,8 @@ fn state_script(key: &str) -> String {
 
 fn screenshot_probe_script(region: &str) -> String {
     let selector = match region {
-        "canvas" => ".canvas",
-        "planner" => ".planner",
+        "canvas" => "[data-section=\"canvas-host\"]",
+        "planner" => "[data-section=\"planner-chat\"]",
         "topbar" => ".topbar",
         _ => "",
     };
