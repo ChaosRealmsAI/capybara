@@ -32,12 +32,14 @@
       <section class="canvas-panel canvas" data-section="canvas-host" aria-label="Canvas host">
         <div class="canvas-toolbar" data-component="canvas-toolbar">
           <span class="tool-pill active">Select</span>
+          <button class="tool-pill region-toggle" id="region-mode" type="button" aria-pressed="false">Region</button>
           <span class="tool-pill">Node</span>
           <span class="tool-pill">Link</span>
           <span class="tool-pill muted" id="canvas-status">Canvas loading</span>
         </div>
         <canvas id="capy-canvas" data-component="canvas-runtime" tabindex="0"></canvas>
         <div id="node-label-layer" class="node-label-layer" data-component="node-label-layer"></div>
+        <div id="context-region-layer" class="context-region-layer" data-component="context-region-layer"></div>
         <div class="mini-map" data-component="mini-map">
           <span></span><span></span><span></span>
         </div>
@@ -48,6 +50,7 @@
           <div class="context-eyebrow">当前画布上下文</div>
           <div class="context-title" id="context-title">No selection</div>
           <div class="context-meta" id="context-meta">选择左侧节点后，Planner 会围绕该对象工作。</div>
+          <div class="context-attachments" id="context-attachments"></div>
         </section>
 
         <section class="canvas-tool" data-section="canvas-image-tool" aria-label="Canvas image generation tool">

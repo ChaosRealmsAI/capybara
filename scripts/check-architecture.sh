@@ -23,6 +23,7 @@ for path in \
   crates/capy-scroll-media/src/lib.rs \
   scripts/image-provider-apimart.mjs \
   scripts/build-canvas-for-app.sh \
+  scripts/verify-canvas-context-interface.mjs \
   scripts/verify-agent-canvas-image-placement.mjs \
   crates/capy-shell/Cargo.toml \
   crates/capy-shell/src/browser.rs \
@@ -60,6 +61,9 @@ rg -q '^capy-image-gen\.workspace = true' crates/capy-cli/Cargo.toml || fail "ca
 rg -q '^capy-image-gen\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must use capy-image-gen for desktop canvas tool calls"
 rg -q '^capy-scroll-media\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-scroll-media through the workspace boundary"
 rg -q 'CanvasCommand::GenerateImage' crates/capy-cli/src/canvas.rs || fail "capy canvas generate-image command must exist"
+rg -q 'CanvasCommand::Context' crates/capy-cli/src/canvas.rs || fail "capy canvas context export command must exist"
+rg -q 'context export --selected' crates/capy-shell/src/agent_tools.rs scripts/verify-canvas-context-interface.mjs || fail "agent canvas context contract must require context export"
+rg -q 'canvas_context' crates/capy-cli/src/main.rs crates/capy-shell/src/app.rs crates/capy-shell/src/agent.rs frontend/capy-app/script.js || fail "chat messages must persist canvas_context metadata"
 rg -q 'canvas-generate-image' crates/capy-shell/src/app.rs || fail "desktop canvas image tool RPC must exist"
 rg -q 'capyCanvasTools' crates/capy-cli/src/main.rs crates/capy-shell/src/agent.rs frontend/capy-app/script.js || fail "agent canvas CLI tool contract must be wired for chat runtimes"
 rg -q 'CAPY_TOOL_CALL_LOG' crates/capy-cli/src/canvas.rs crates/capy-shell/src/agent.rs || fail "agent canvas CLI calls must support JSONL evidence logging"

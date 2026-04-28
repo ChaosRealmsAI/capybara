@@ -39,6 +39,12 @@ fn capy_canvas_tool_contract() -> &'static str {
 
 When the user asks you to create, place, move, or inspect canvas content, use shell commands against the project-local CLI. Do not use browser devtools, arbitrary JavaScript, DOM mutation, or direct provider SDK calls for canvas changes.
 
+Required workflow for understanding the user's selected image or selected region:
+1. Run `target/debug/capy canvas snapshot` and inspect `canvas.selectedNode`.
+2. For whole-image context, run `target/debug/capy canvas context export --selected --out <output-dir>`.
+3. For a user-selected local area, run `target/debug/capy canvas context export --region <x,y,w,h> --out <output-dir>` if the prompt gives coordinates; otherwise use the live UI region by omitting `--region`.
+4. Read `<output-dir>/context.json` before answering. Reference the `context_id`, source node id, and relevant attachment paths in your reply.
+
 Required workflow for generated images:
 1. Run `target/debug/capy canvas snapshot` and inspect the selected node.
 2. If a selected node exists, place the new image at `x = selected.geometry.x + selected.geometry.w + 48` and `y = selected.geometry.y`.

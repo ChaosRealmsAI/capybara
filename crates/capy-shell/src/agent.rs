@@ -54,6 +54,7 @@ pub fn spawn_turn(
     proxy: EventLoopProxy<ShellEvent>,
     conversation: Conversation,
     prompt: String,
+    canvas_context: Value,
 ) -> Result<String, String> {
     if store
         .running_run_for_conversation(&conversation.id)?
@@ -66,7 +67,7 @@ pub fn spawn_turn(
         &conversation.id,
         "user",
         &prompt,
-        json!({ "source": "capybara" }),
+        message_event_json(&canvas_context),
     )?;
     store.update_title_if_default(&conversation.id, &prompt)?;
     store.update_status(&conversation.id, "running")?;
@@ -129,6 +130,17 @@ pub fn spawn_turn(
     });
 
     Ok(run.id)
+}
+
+fn message_event_json(canvas_context: &Value) -> Value {
+    if canvas_context.is_null() {
+        json!({ "source": "capybara" })
+    } else {
+        json!({
+            "source": "capybara",
+            "canvas_context": canvas_context
+        })
+    }
 }
 
 pub fn stop_running(store: &Store, conversation_id: &str) -> Result<Value, String> {
