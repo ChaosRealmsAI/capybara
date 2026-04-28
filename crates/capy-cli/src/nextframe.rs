@@ -23,6 +23,8 @@ enum NextFrameCommand {
     Validate(NextFrameValidateArgs),
     #[command(about = "Compile a NextFrame composition JSON document")]
     Compile(NextFrameCompileArgs),
+    #[command(about = "Render a single PNG snapshot from a compiled NextFrame composition")]
+    Snapshot(NextFrameSnapshotArgs),
     #[command(about = "Attach a NextFrame composition to a live canvas node")]
     Attach(NextFrameAttachArgs),
     #[command(about = "Read live NextFrame attachment state from capy-shell")]
@@ -72,6 +74,18 @@ struct NextFrameCompileArgs {
 }
 
 #[derive(Debug, Args)]
+struct NextFrameSnapshotArgs {
+    #[arg(long)]
+    composition: PathBuf,
+    #[arg(long, default_value_t = 0)]
+    frame: u64,
+    #[arg(long)]
+    out: Option<PathBuf>,
+    #[arg(long)]
+    strict_binary: bool,
+}
+
+#[derive(Debug, Args)]
 struct NextFrameAttachArgs {
     #[arg(long)]
     canvas_node: u64,
@@ -101,6 +115,7 @@ pub fn handle(args: NextFrameArgs) -> Result<(), String> {
         NextFrameCommand::ComposePoster(args) => compose_poster(args),
         NextFrameCommand::Validate(args) => validate(args),
         NextFrameCommand::Compile(args) => compile(args),
+        NextFrameCommand::Snapshot(args) => snapshot(args),
         NextFrameCommand::Attach(args) => attach(args),
         NextFrameCommand::State(args) => state(args),
         NextFrameCommand::Open(args) => open(args),
@@ -149,6 +164,21 @@ fn validate(args: NextFrameValidateArgs) -> Result<(), String> {
 fn compile(args: NextFrameCompileArgs) -> Result<(), String> {
     let report = capy_nextframe::compile_composition(capy_nextframe::CompileCompositionRequest {
         composition_path: args.composition,
+        strict_binary: args.strict_binary,
+    });
+    print_json(&report)?;
+    if report.ok {
+        Ok(())
+    } else {
+        std::process::exit(1);
+    }
+}
+
+fn snapshot(args: NextFrameSnapshotArgs) -> Result<(), String> {
+    let report = capy_nextframe::snapshot::snapshot(capy_nextframe::snapshot::SnapshotRequest {
+        composition_path: args.composition,
+        frame_ms: args.frame,
+        out: args.out,
         strict_binary: args.strict_binary,
     });
     print_json(&report)?;

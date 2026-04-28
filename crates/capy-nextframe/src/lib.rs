@@ -5,6 +5,7 @@ pub mod config;
 pub mod doctor;
 pub mod error;
 pub mod ports;
+pub mod snapshot;
 pub mod validate;
 
 pub use adapter::binary::BinaryAdapter;

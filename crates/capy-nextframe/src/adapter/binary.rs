@@ -22,6 +22,14 @@ impl BinaryAdapter {
         Ok(Self { resolved })
     }
 
+    pub fn new_recorder(config: NextFrameConfig) -> Result<Self, NextFrameError> {
+        let resolved = config.resolve()?;
+        if !resolved.recorder.found {
+            return Err(NextFrameError::not_found("nf-recorder was not found"));
+        }
+        Ok(Self { resolved })
+    }
+
     pub fn resolved(&self) -> &ResolvedNextFrameConfig {
         &self.resolved
     }
