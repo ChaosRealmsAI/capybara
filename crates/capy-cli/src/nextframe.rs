@@ -13,6 +13,8 @@ pub struct NextFrameArgs {
 enum NextFrameCommand {
     #[command(about = "Check NextFrame binary adapter availability")]
     Doctor(NextFrameDoctorArgs),
+    #[command(about = "Compose Poster JSON into a NextFrame composition project")]
+    ComposePoster(NextFrameComposePosterArgs),
 }
 
 #[derive(Debug, Args)]
@@ -25,9 +27,24 @@ struct NextFrameDoctorArgs {
     home: Option<PathBuf>,
 }
 
+#[derive(Debug, Args)]
+struct NextFrameComposePosterArgs {
+    #[arg(long)]
+    input: PathBuf,
+    #[arg(long)]
+    out: Option<PathBuf>,
+    #[arg(long)]
+    project: Option<String>,
+    #[arg(long)]
+    composition: Option<String>,
+    #[arg(long, default_value_t = 1000)]
+    duration_ms: u64,
+}
+
 pub fn handle(args: NextFrameArgs) -> Result<(), String> {
     match args.command {
         NextFrameCommand::Doctor(args) => doctor(args),
+        NextFrameCommand::ComposePoster(args) => compose_poster(args),
     }
 }
 
@@ -38,6 +55,23 @@ fn doctor(args: NextFrameDoctorArgs) -> Result<(), String> {
         home: args.home,
     });
     print_json(&report)
+}
+
+fn compose_poster(args: NextFrameComposePosterArgs) -> Result<(), String> {
+    let request = capy_nextframe::ComposePosterRequest {
+        poster_path: args.input,
+        project_slug: args.project,
+        composition_id: args.composition,
+        output_dir: args.out,
+        duration_ms: args.duration_ms,
+    };
+    match capy_nextframe::compose_poster(request) {
+        Ok(report) => print_json(&report),
+        Err(err) => {
+            print_json(&capy_nextframe::compose::failure(err))?;
+            std::process::exit(1);
+        }
+    }
 }
 
 fn print_json<T: Serialize>(data: &T) -> Result<(), String> {

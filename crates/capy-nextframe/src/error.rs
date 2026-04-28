@@ -6,6 +6,9 @@ use thiserror::Error;
 pub enum NextFrameErrorCode {
     NextframeNotFound,
     NextframeVersionUnsupported,
+    PosterInvalid,
+    PosterNotFound,
+    OutDirWriteFailed,
     CompositionInvalid,
     ComponentMissing,
     ComponentAbiInvalid,
@@ -24,6 +27,9 @@ impl NextFrameErrorCode {
         match self {
             Self::NextframeNotFound => "NEXTFRAME_NOT_FOUND",
             Self::NextframeVersionUnsupported => "NEXTFRAME_VERSION_UNSUPPORTED",
+            Self::PosterInvalid => "POSTER_INVALID",
+            Self::PosterNotFound => "POSTER_NOT_FOUND",
+            Self::OutDirWriteFailed => "OUT_DIR_WRITE_FAILED",
             Self::CompositionInvalid => "COMPOSITION_INVALID",
             Self::ComponentMissing => "COMPONENT_MISSING",
             Self::ComponentAbiInvalid => "COMPONENT_ABI_INVALID",

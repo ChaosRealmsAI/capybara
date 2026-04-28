@@ -62,9 +62,76 @@ fn nextframe_doctor_reports_missing_json() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+#[test]
+fn nextframe_compose_poster_writes_composition_json() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("compose-poster")?;
+    let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
+    let output = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--out",
+            &dir.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["components"][0], "html.capy-poster");
+    assert_eq!(value["layers"], 6);
+    let composition_path = value["composition_path"]
+        .as_str()
+        .ok_or("composition_path should be a string")?;
+    assert!(Path::new(composition_path).exists());
+
+    let composition_text = fs::read_to_string(composition_path)?;
+    assert!(composition_text.contains("\"html.capy-poster\""));
+    let composition: serde_json::Value = serde_json::from_str(&composition_text)?;
+    assert_eq!(composition["tracks"].as_array().map(Vec::len), Some(1));
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn nextframe_compose_poster_reports_invalid_json() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("compose-invalid")?;
+    let input = dir.join("invalid.json");
+    fs::write(&input, "{")?;
+    let out = dir.join("out");
+    let output = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--out",
+            &out.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["error"]["code"], "POSTER_INVALID");
+    assert!(output.stderr.is_empty());
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
 fn capy_command() -> Result<Command, Box<dyn std::error::Error>> {
     let path = std::env::var("CARGO_BIN_EXE_capy")?;
     Ok(Command::new(path))
+}
+
+fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("workspace root should exist")?
+        .to_path_buf())
 }
 
 fn unique_dir(label: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {

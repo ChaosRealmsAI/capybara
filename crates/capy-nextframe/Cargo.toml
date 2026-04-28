@@ -7,12 +7,13 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+capy-poster.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 which.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 
 [lints]
 workspace = true
