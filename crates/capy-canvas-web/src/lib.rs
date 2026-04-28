@@ -1,30 +1,5 @@
-//! capy-canvas-web · winit-web event loop + canvas mount + IndexedDB persistence.
-//!
-//! v0.4 milestone: keyboard input + IndexedDB save/load. WebApp now handles
-//! `KeyboardInput` and `ModifiersChanged` (mirroring native), and after each
-//! redraw drains `state.pending_save_request` / `state.pending_load_request`
-//! into IndexedDB. Cmd+S persists the canvas, page reload + Cmd+O restores it.
-//!
-//! Two paths exist for triggering save/load:
-//! 1. Keyboard: Cmd+S / Cmd+O via `input::handle_key` set the pending flags;
-//!    `RedrawRequested` drains them via `spawn_local`.
-//! 2. JS-callable exports: `#[wasm_bindgen] save() / load()` skip the flag
-//!    plumbing and do the IDB I/O directly. This exists because some browsers
-//!    intercept Cmd+S as "Save Page As" before the canvas sees the keydown,
-//!    and it's the path Playwright drives during verification.
-//!
-//! Lock discipline (the load path is the one that bites):
-//! - save: lock → `to_json_string()` → drop → spawn_local IDB put
-//! - load: spawn_local IDB get → re-lock → `load_from_json_str` → drop →
-//!   request_redraw via the ready slot
-//! - never `.await` while holding the `Mutex` (wasm32 is single-threaded but
-//!   `std::sync::Mutex` will still happily deadlock if you try)
-//!
-//! State sharing: `thread_local!` stashes `Arc<Mutex<AppState>>` and the ready
-//! slot. `start()` populates them; `save()` / `load()` exports read them.
-//!
-//! On non-wasm targets the entire body is `#[cfg]` away so the workspace
-//! `cargo build` stays green.
+//! capy-canvas-web · winit-web canvas mount, IndexedDB persistence, and
+//! JS-callable canvas bridges for the desktop shell.
 
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
