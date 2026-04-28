@@ -6,21 +6,23 @@ Private product specs, roadmap, research, concept assets, and evidence live at `
 
 ## Current State
 
-`v0.2` mac shell baseline:
+`v0.4` has a runnable CEF/Chromium + tao mac shell POC. `v0.2` remains the legacy wry/tao baseline and rollback reference.
 
 - `crates/capy-cli` - `capy` CLI and AI verification entrypoint.
-- `crates/capy-shell` - wry/tao macOS shell, custom protocol, Unix socket IPC, native capture, traffic light alignment, SQLite store, and agent runtime adapters.
-- `frontend/capy-app` - native HTML/CSS/JS webview UI.
+- `crates/capy-shell` - CEF/Chromium + tao shell, Unix socket IPC, native capture, traffic light alignment, SQLite store, and agent runtime adapters.
+- `frontend/capy-app` - native HTML/CSS/JS desktop UI.
 
 ## Commands
 
 ```bash
 scripts/check-project.sh
+CAPYBARA_SOCKET=/tmp/capybara-cef-v0.4-$(id -u).sock scripts/verify-cef-shell.sh --keep-open
+cargo wef build -p capy-shell
 cargo run -p capy-cli -- --help
-cargo run -p capy-cli -- shell
 target/debug/capy open --project=demo
 target/debug/capy ps
 target/debug/capy state --key=app.ready
+target/debug/capy devtools --eval='document.documentElement.dataset.capyBrowser'
 target/debug/capy devtools --query=.topbar --get=bounding-rect
 target/debug/capy screenshot --out=tmp/capy-dom.png
 target/debug/capy capture --out=tmp/capy-window.png
@@ -28,11 +30,14 @@ target/debug/capy verify
 target/debug/capy quit
 ```
 
+Use the same `CAPYBARA_SOCKET` value for both shell and CLI when multiple worktrees are running.
+
 ## Public Repo Rules
 
 - Do not commit `spec/`.
 - Do not add Electron or a heavy desktop framework.
 - Do not add React, Vue, Next.js, Tailwind, or shadcn.
+- Future desktop shell work must target CEF/Chromium + tao, not deeper system WebView/wry expansion. Keep wry only as legacy baseline/rollback unless private architecture spec changes.
 - Keep the frontend native HTML/CSS/JS unless the private architecture spec changes.
 - Keep user-facing AI-operability through `capy` commands.
 - Do not share a design preview, local HTML URL, browser UI, or desktop UI as usable until it has real visible verification: screenshot/capture, DOM or state checks, one interaction check, and console/error checks with evidence saved under private `spec/`.

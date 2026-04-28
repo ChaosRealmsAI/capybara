@@ -62,7 +62,9 @@ struct StateArgs {
 #[derive(Debug, Args)]
 struct DevtoolsArgs {
     #[arg(long)]
-    query: String,
+    query: Option<String>,
+    #[arg(long)]
+    eval: Option<String>,
     #[arg(long, default_value = "outerHTML")]
     get: String,
     #[arg(long)]
@@ -313,10 +315,22 @@ fn run() -> Result<(), String> {
             "state-query",
             json!({ "key": args.key, "window": args.window }),
         ),
-        Command::Devtools(args) => send(
-            "devtools-query",
-            json!({ "query": args.query, "get": args.get, "window": args.window }),
-        ),
+        Command::Devtools(args) => {
+            if let Some(script) = args.eval {
+                send(
+                    "devtools-eval",
+                    json!({ "eval": script, "window": args.window }),
+                )
+            } else {
+                let query = args
+                    .query
+                    .ok_or_else(|| "missing --query or --eval for devtools".to_string())?;
+                send(
+                    "devtools-query",
+                    json!({ "query": query, "get": args.get, "window": args.window }),
+                )
+            }
+        }
         Command::Screenshot(args) => send(
             "screenshot",
             json!({

@@ -24,7 +24,8 @@ tao = "0.35"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "io-util"] }
 uuid = { version = "1", features = ["v4"] }
-wry = "0.55"
+wef = "0.6"
+raw-window-handle = "0.6"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
@@ -33,3 +34,6 @@ panic = "deny"
 unreachable = "deny"
 todo = "deny"
 wildcard_imports = "deny"
+
+[patch.crates-io]
+wef = { path = "vendor/wef" }
