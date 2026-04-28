@@ -514,6 +514,21 @@ body {
   font-weight: 780;
 }
 
+.node-label[data-capy-component-kind="nextframe-composition"] iframe[data-capy-nextframe-preview] {
+  position: absolute;
+  inset: 32px 8px 8px;
+  width: calc(100% - 16px);
+  height: calc(100% - 40px);
+  border: 0;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(209, 250, 229, 0.68));
+  box-shadow:
+    inset 0 0 0 1px rgba(6, 95, 70, 0.12),
+    0 10px 24px rgba(6, 95, 70, 0.12);
+  pointer-events: auto;
+}
+
 .node-head {
   display: flex; align-items: center; gap: 7px;
 }

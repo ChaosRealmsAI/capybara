@@ -17,6 +17,8 @@ use crate::store::Store;
 mod canvas_tool;
 mod conversation;
 pub mod nextframe;
+mod nextframe_host;
+mod nextframe_preview;
 mod nextframe_state;
 mod window;
 
@@ -55,6 +57,10 @@ pub enum ShellEvent {
         request: IpcRequest,
         ack: oneshot::Sender<IpcResponse>,
     },
+    NextFrameOpen {
+        request: IpcRequest,
+        ack: oneshot::Sender<IpcResponse>,
+    },
     AgentRuntimeEvent {
         event: AgentRuntimeEvent,
     },
@@ -76,6 +82,7 @@ pub struct ShellState {
     windows: Mutex<Vec<WindowStatus>>,
     canvas_nodes: Mutex<BTreeSet<u64>>,
     nextframe_nodes: Mutex<BTreeMap<u64, nextframe::AttachedCanvasNode>>,
+    nextframe_preview: nextframe_preview::NextFramePreviewServer,
 }
 
 impl Default for ShellState {
@@ -84,6 +91,7 @@ impl Default for ShellState {
             windows: Mutex::new(Vec::new()),
             canvas_nodes: Mutex::new(BTreeSet::from([0])),
             nextframe_nodes: Mutex::new(BTreeMap::new()),
+            nextframe_preview: nextframe_preview::NextFramePreviewServer::start(),
         }
     }
 }
@@ -129,6 +137,11 @@ impl ShellState {
         nextframe::state_response(req_id, self, request.params)
     }
 
+    pub fn nextframe_open_query(&self, request: IpcRequest) -> IpcResponse {
+        let req_id = request.req_id.clone();
+        nextframe::open_response(req_id, self, request.params)
+    }
+
     pub(crate) fn has_canvas_node(&self, id: u64) -> bool {
         self.canvas_nodes
             .lock()
@@ -157,6 +170,26 @@ impl ShellState {
             .lock()
             .map_err(|_| "nextframe state lock failed".to_string())?;
         Ok(nodes.iter().map(|(id, node)| (*id, node.clone())).collect())
+    }
+
+    pub(crate) fn nextframe_node(
+        &self,
+        id: u64,
+    ) -> Result<Option<nextframe::AttachedCanvasNode>, String> {
+        let nodes = self
+            .nextframe_nodes
+            .lock()
+            .map_err(|_| "nextframe state lock failed".to_string())?;
+        Ok(nodes.get(&id).cloned())
+    }
+
+    pub(crate) fn register_nextframe_preview(
+        &self,
+        canvas_node_id: u64,
+        composition_path: &Path,
+    ) -> Result<String, String> {
+        self.nextframe_preview
+            .register(canvas_node_id, composition_path)
     }
 
     fn sync_from_manager(&self, manager: &WindowManager) {
@@ -270,7 +303,11 @@ pub fn run() {
                     let _send_result = ack.send(response);
                 }
                 ShellEvent::NextFrameAttach { request, ack } => {
-                    let response = nextframe_attach(&manager, &state, request);
+                    let response = nextframe_host::attach(&manager, &state, request);
+                    let _send_result = ack.send(response);
+                }
+                ShellEvent::NextFrameOpen { request, ack } => {
+                    let response = nextframe_host::open(&manager, &state, request);
                     let _send_result = ack.send(response);
                 }
                 ShellEvent::AgentRuntimeEvent { event } => {
@@ -470,35 +507,6 @@ fn capture_window(manager: &mut WindowManager, request: IpcRequest) -> IpcRespon
     response_from_result(request.req_id, result)
 }
 
-fn nextframe_attach(
-    manager: &WindowManager,
-    state: &ShellState,
-    request: IpcRequest,
-) -> IpcResponse {
-    let req_id = request.req_id.clone();
-    match nextframe::attach_node(state, request.params) {
-        Ok(data) => {
-            if let Some(event) = data.get("event") {
-                broadcast_canvas_node_attached(manager, event);
-            }
-            IpcResponse {
-                req_id,
-                ok: true,
-                data: data.get("report").cloned().or(Some(data)),
-                error: None,
-            }
-        }
-        Err(error) => IpcResponse {
-            req_id,
-            ok: false,
-            data: None,
-            error: serde_json::from_str(&error)
-                .ok()
-                .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
-        },
-    }
-}
-
 fn handle_js_ipc(
     manager: &WindowManager,
     state: Arc<ShellState>,
@@ -560,9 +568,11 @@ fn handle_js_ipc(
             ),
         )
     } else if op == "nextframe-attach" {
-        nextframe_attach(manager, &state, request)
+        nextframe_host::attach(manager, &state, request)
     } else if op == "nextframe-state" {
         state.nextframe_state_query(request)
+    } else if op == "nextframe-open" {
+        nextframe_host::open(manager, &state, request)
     } else {
         conversation::response(store, proxy, request)
     };
@@ -591,18 +601,6 @@ fn send_canvas_tool_event(manager: &WindowManager, window_id: &str, event: Value
         "window.dispatchEvent(new CustomEvent('capy:canvas-tool-event', {{ detail: {payload} }}));"
     );
     let _eval_result = webview.evaluate_script(&script);
-}
-
-fn broadcast_canvas_node_attached(manager: &WindowManager, event: &Value) {
-    let Ok(payload) = serde_json::to_string(event) else {
-        return;
-    };
-    let script = format!(
-        "window.dispatchEvent(new CustomEvent('capy:canvas-node-attached', {{ detail: {payload} }}));"
-    );
-    for webview in manager.webviews.values() {
-        let _eval_result = webview.evaluate_script(&script);
-    }
 }
 
 fn broadcast_agent_event(manager: &WindowManager, event: &AgentRuntimeEvent) {

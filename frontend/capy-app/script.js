@@ -174,6 +174,7 @@ window.capyWorkbench = {
   startLiveCanvasLabelRefresh,
   stateSnapshot,
   attachNextFrameComposition,
+  openNextFrameComposition,
   startCanvasImageTool,
   verifyCanvasImageTool,
   verifyLabelMoveSync,
@@ -224,6 +225,10 @@ window.addEventListener("capy:canvas-tool-event", (event) => {
 
 window.addEventListener("capy:canvas-node-attached", (event) => {
   handleCanvasNodeAttached(event.detail);
+});
+
+window.addEventListener("capy:nextframe-opened", (event) => {
+  handleNextFrameOpened(event.detail);
 });
 
 /* ─── form / button listeners ─── */
@@ -1278,6 +1283,14 @@ async function attachNextFrameComposition(canvasNodeId, compositionPath) {
   });
 }
 
+async function openNextFrameComposition(canvasNodeId) {
+  const report = await rpc("nextframe-open", {
+    canvas_node_id: Number(canvasNodeId)
+  });
+  mountNextFramePreview(String(canvasNodeId), report.preview_url);
+  return report;
+}
+
 function handleCanvasNodeAttached(detail) {
   if (!detail) return;
   const nodeId = String(detail.canvas_node_id);
@@ -1300,6 +1313,31 @@ function handleCanvasNodeAttached(detail) {
     if (meta) meta.textContent = detail.state || "preview-ready";
   }
   scheduleCanvasLabelRefresh();
+}
+
+function handleNextFrameOpened(detail) {
+  if (!detail) return;
+  mountNextFramePreview(String(detail.canvas_node_id), detail.preview_url);
+}
+
+function mountNextFramePreview(nodeId, previewUrl) {
+  if (!labelLayerEl || !previewUrl) return null;
+  const escapedNodeId = window.CSS?.escape ? CSS.escape(nodeId) : nodeId.replace(/"/g, '\\"');
+  const label = labelLayerEl.querySelector(`[data-node-id="${escapedNodeId}"]`);
+  if (!label) return null;
+  label.dataset.capyComponentKind = "nextframe-composition";
+  if (!label.dataset.capyNextframeState) label.dataset.capyNextframeState = "preview-ready";
+  let iframe = label.querySelector("iframe[data-capy-nextframe-preview]");
+  if (!iframe) {
+    iframe = document.createElement("iframe");
+    iframe.dataset.capyNextframePreview = "";
+    iframe.title = `NextFrame preview ${nodeId}`;
+    iframe.loading = "lazy";
+    iframe.sandbox = "allow-scripts allow-same-origin";
+    label.append(iframe);
+  }
+  iframe.src = previewUrl;
+  return iframe;
 }
 
 function applyNextFrameAttachments(nodes) {

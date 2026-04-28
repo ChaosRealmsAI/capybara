@@ -197,6 +197,64 @@ pub fn state_nodes(state: &ShellState, params: Value) -> Result<Value, String> {
     }))
 }
 
+pub fn open_node(state: &ShellState, params: Value) -> Result<Value, String> {
+    let request = OpenRequest::from_params(params)?;
+    if !state.has_canvas_node(request.canvas_node_id) {
+        return Err(attach_error(
+            "CANVAS_NODE_NOT_FOUND",
+            format!("canvas node {} was not found", request.canvas_node_id),
+            "next step · run capy canvas snapshot",
+        ));
+    }
+    let node = state
+        .nextframe_node(request.canvas_node_id)?
+        .ok_or_else(|| {
+            attach_error(
+                "CANVAS_NODE_NOT_FOUND",
+                format!(
+                    "canvas node {} has no attached NextFrame composition",
+                    request.canvas_node_id
+                ),
+                "next step · run capy nextframe attach",
+            )
+        })?;
+    if node.state != NextFrameNodeState::PreviewReady {
+        return Err(attach_error(
+            "NOT_PREVIEW_READY",
+            format!(
+                "canvas node {} NextFrame state is {}",
+                request.canvas_node_id,
+                node.state.label()
+            ),
+            "next step · run capy nextframe attach",
+        ));
+    }
+    let preview_url = state.register_nextframe_preview(
+        request.canvas_node_id,
+        Path::new(&node.composition_ref.path),
+    )?;
+    Ok(open_report(request.canvas_node_id, preview_url))
+}
+
+pub(crate) fn open_response(req_id: String, state: &ShellState, params: Value) -> IpcResponse {
+    match open_node(state, params) {
+        Ok(data) => IpcResponse {
+            req_id,
+            ok: true,
+            data: Some(data),
+            error: None,
+        },
+        Err(error) => IpcResponse {
+            req_id,
+            ok: false,
+            data: None,
+            error: serde_json::from_str(&error)
+                .ok()
+                .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
+        },
+    }
+}
+
 pub(crate) fn state_response(req_id: String, state: &ShellState, params: Value) -> IpcResponse {
     match state_nodes(state, params) {
         Ok(data) => IpcResponse {
@@ -214,6 +272,20 @@ pub(crate) fn state_response(req_id: String, state: &ShellState, params: Value) 
                 .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
         },
     }
+}
+
+fn open_report(canvas_node_id: u64, preview_url: String) -> Value {
+    json!({
+        "ok": true,
+        "trace_id": open_trace_id(),
+        "stage": "open",
+        "canvas_node_id": canvas_node_id,
+        "preview_url": preview_url,
+        "selectors": {
+            "preview": format!("[data-capy-component-kind='nextframe-composition'][data-canvas-node-id='{canvas_node_id}'] [data-capy-nextframe-preview]"),
+            "state": format!("[data-capy-component-kind='nextframe-composition'][data-canvas-node-id='{canvas_node_id}'][data-capy-nextframe-state]")
+        }
+    })
 }
 
 pub(crate) fn event_detail(canvas_node_id: u64, node: &AttachedCanvasNode) -> Value {
@@ -336,6 +408,27 @@ impl StateRequest {
     }
 }
 
+#[derive(Debug)]
+struct OpenRequest {
+    canvas_node_id: u64,
+}
+
+impl OpenRequest {
+    fn from_params(params: Value) -> Result<Self, String> {
+        let canvas_node_id = params
+            .get("canvas_node_id")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| {
+                attach_error(
+                    "IPC_ERROR",
+                    "missing required parameter: canvas_node_id",
+                    "next step · run capy nextframe open --help",
+                )
+            })?;
+        Ok(Self { canvas_node_id })
+    }
+}
+
 fn absolute_path(path: &Path) -> Result<PathBuf, String> {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
@@ -383,4 +476,144 @@ fn state_trace_id() -> String {
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
     format!("state-{millis}-{}", std::process::id())
+}
+
+fn open_trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("open-{millis}-{}", std::process::id())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+
+    use serde_json::{Value, json};
+
+    use super::{open_node, state_nodes};
+    use crate::app::ShellState;
+
+    #[test]
+    fn open_happy_path_returns_preview_url_and_selectors() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = unique_dir("open-happy")?;
+        let path = write_composition(&dir, compilable_composition())?;
+        let state = ShellState::default();
+        super::attach_node(
+            &state,
+            json!({"canvas_node_id": 0, "composition_path": path}),
+        )?;
+
+        let value = open_node(&state, json!({"canvas_node_id": 0}))?;
+
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["stage"], "open");
+        assert_eq!(value["canvas_node_id"], 0);
+        assert!(
+            value["preview_url"]
+                .as_str()
+                .unwrap_or("")
+                .starts_with("http://127.0.0.1:")
+        );
+        assert_eq!(
+            value["selectors"]["preview"],
+            "[data-capy-component-kind='nextframe-composition'][data-canvas-node-id='0'] [data-capy-nextframe-preview]"
+        );
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn open_rejects_not_preview_ready_node() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_dir("open-not-ready")?;
+        let path = write_composition(&dir, json!({"tracks": []}))?;
+        let state = ShellState::default();
+        let _error = super::attach_node(
+            &state,
+            json!({"canvas_node_id": 0, "composition_path": path}),
+        )
+        .expect_err("invalid composition should create error-state attachment");
+
+        let error = open_node(&state, json!({"canvas_node_id": 0}))
+            .expect_err("error-state attachment is not preview-ready");
+        let value: Value = serde_json::from_str(&error)?;
+
+        assert_eq!(value["code"], "NOT_PREVIEW_READY");
+        assert_eq!(
+            state_nodes(&state, json!({"canvas_node_id": 0}))?["attachments"][0]["state"]["error"]
+                ["code"],
+            "COMPOSITION_INVALID"
+        );
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn open_reports_canvas_node_not_found() -> Result<(), Box<dyn std::error::Error>> {
+        let state = ShellState::default();
+
+        let error = open_node(&state, json!({"canvas_node_id": 99}))
+            .expect_err("unknown canvas node should fail");
+        let value: Value = serde_json::from_str(&error)?;
+
+        assert_eq!(value["code"], "CANVAS_NODE_NOT_FOUND");
+        Ok(())
+    }
+
+    fn write_composition(
+        dir: &PathBuf,
+        value: Value,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        fs::create_dir_all(dir.join("components"))?;
+        let path = dir.join("composition.json");
+        fs::write(&path, serde_json::to_string_pretty(&value)?)?;
+        fs::write(
+            dir.join("components").join("html.capy-poster.js"),
+            "export function mount(root) { root.textContent = 'ok'; }\nexport function update() {}\n",
+        )?;
+        Ok(path)
+    }
+
+    fn compilable_composition() -> Value {
+        json!({
+            "schema": "nextframe.composition.v2",
+            "schema_version": "capy.composition.v1",
+            "id": "poster-snapshot",
+            "title": "Poster Snapshot",
+            "name": "Poster Snapshot",
+            "duration_ms": 1000,
+            "duration": "1000ms",
+            "viewport": {"w": 1920, "h": 1080, "ratio": "16:9"},
+            "theme": "default",
+            "tracks": [{
+                "id": "track-poster",
+                "kind": "component",
+                "component": "html.capy-poster",
+                "z": 10,
+                "time": {"start": "0ms", "end": "1000ms"},
+                "duration_ms": 1000,
+                "params": {"poster": {
+                    "version": "capy-poster-v0.1",
+                    "type": "poster",
+                    "canvas": {"width": 1920, "height": 1080, "aspectRatio": "16:9", "background": "#fff"},
+                    "assets": {},
+                    "layers": [{"id": "title", "type": "text", "x": 10, "y": 10, "width": 400, "height": 100, "z": 1, "text": "Hello", "style": {"fontSize": 48, "color": "#111"}}]
+                }}
+            }],
+            "assets": []
+        })
+    }
+
+    fn unique_dir(label: &str) -> Result<PathBuf, std::time::SystemTimeError> {
+        Ok(std::env::temp_dir().join(format!(
+            "capy-shell-nextframe-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_millis()
+        )))
+    }
 }

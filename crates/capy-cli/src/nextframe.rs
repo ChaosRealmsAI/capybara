@@ -27,6 +27,8 @@ enum NextFrameCommand {
     Attach(NextFrameAttachArgs),
     #[command(about = "Read live NextFrame attachment state from capy-shell")]
     State(NextFrameStateArgs),
+    #[command(about = "Open a live NextFrame composition preview in the desktop host")]
+    Open(NextFrameOpenArgs),
 }
 
 #[derive(Debug, Args)]
@@ -85,6 +87,14 @@ struct NextFrameStateArgs {
     canvas_node: Option<u64>,
 }
 
+#[derive(Debug, Args)]
+struct NextFrameOpenArgs {
+    #[arg(long)]
+    canvas_node: u64,
+    #[arg(long)]
+    socket: Option<PathBuf>,
+}
+
 pub fn handle(args: NextFrameArgs) -> Result<(), String> {
     match args.command {
         NextFrameCommand::Doctor(args) => doctor(args),
@@ -93,6 +103,7 @@ pub fn handle(args: NextFrameArgs) -> Result<(), String> {
         NextFrameCommand::Compile(args) => compile(args),
         NextFrameCommand::Attach(args) => attach(args),
         NextFrameCommand::State(args) => state(args),
+        NextFrameCommand::Open(args) => open(args),
     }
 }
 
@@ -248,6 +259,60 @@ fn state(args: NextFrameStateArgs) -> Result<(), String> {
     }
 }
 
+fn open(args: NextFrameOpenArgs) -> Result<(), String> {
+    let socket = args.socket.unwrap_or_else(ipc_client::socket_path);
+    let request = ipc_client::request(
+        "nextframe-open",
+        json!({
+            "canvas_node_id": args.canvas_node
+        }),
+    );
+    match ipc_client::send_to(request, socket.clone()) {
+        Ok(response) if response.ok => {
+            let mut report = response.data.unwrap_or(Value::Null);
+            report["ipc_socket"] = json!(socket.display().to_string());
+            print_json(&report)
+        }
+        Ok(response) => {
+            let report = open_failure(
+                args.canvas_node,
+                &socket,
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("code"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("IPC_ERROR"),
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("message"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("capy-shell nextframe open failed"),
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("hint"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("next step · run capy nextframe open --help"),
+            );
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+        Err(error) => {
+            let report = open_failure(
+                args.canvas_node,
+                &socket,
+                "SHELL_UNAVAILABLE",
+                error,
+                "next step · run capy shell",
+            );
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+    }
+}
+
 fn print_json<T: Serialize>(data: &T) -> Result<(), String> {
     println!(
         "{}",
@@ -297,6 +362,29 @@ fn attach_failure(
     })
 }
 
+fn open_failure(
+    canvas_node_id: u64,
+    socket: &std::path::Path,
+    code: &str,
+    message: impl Into<String>,
+    hint: &str,
+) -> Value {
+    let error = json!({
+        "code": code,
+        "message": message.into(),
+        "hint": hint
+    });
+    json!({
+        "ok": false,
+        "trace_id": open_trace_id(),
+        "stage": "open",
+        "canvas_node_id": canvas_node_id,
+        "ipc_socket": socket.display().to_string(),
+        "code": code,
+        "errors": [error]
+    })
+}
+
 fn absolute_path(path: PathBuf) -> Result<PathBuf, String> {
     if path.is_absolute() {
         return Ok(path);
@@ -320,4 +408,12 @@ fn state_trace_id() -> String {
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
     format!("state-{millis}-{}", std::process::id())
+}
+
+fn open_trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("open-{millis}-{}", std::process::id())
 }
