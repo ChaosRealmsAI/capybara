@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::ShellState;
+use super::nextframe_state::{ExportJob, ExportJobStatus, NextFrameTransition, iso_now};
 pub use super::nextframe_state::{NextFrameNodeAction, NextFrameNodeState};
-use super::nextframe_state::{NextFrameTransition, iso_now};
 use crate::ipc::IpcResponse;
 
 const KIND_NEXTFRAME_COMPOSITION: &str = "nextframe-composition";
@@ -36,6 +36,7 @@ pub(crate) struct AttachedCanvasNode {
     pub kind: String,
     pub state: NextFrameNodeState,
     pub composition_ref: NextFrameCompositionRef,
+    pub export_jobs: Vec<ExportJob>,
     pub history: Vec<NextFrameTransition>,
 }
 
@@ -72,6 +73,7 @@ pub fn attach_node(state: &ShellState, params: Value) -> Result<Value, String> {
             track_count: validation.track_count,
             asset_count: validation.asset_count,
         },
+        export_jobs: Vec::new(),
         history: Vec::new(),
     };
     if !validation.ok {
@@ -236,8 +238,103 @@ pub fn open_node(state: &ShellState, params: Value) -> Result<Value, String> {
     Ok(open_report(request.canvas_node_id, preview_url))
 }
 
+pub fn export_status(state: &ShellState, params: Value) -> Result<Value, String> {
+    let request = ExportJobRequest::from_params(params, "status")?;
+    let job = find_export_job(state, &request.job_id)?.ok_or_else(|| {
+        attach_error(
+            "EXPORT_JOB_NOT_FOUND",
+            format!("export job {} was not found", request.job_id),
+            "next step · run capy nextframe export",
+        )
+    })?;
+    Ok(json!({
+        "ok": true,
+        "trace_id": export_status_trace_id(),
+        "stage": "status",
+        "job": job
+    }))
+}
+
+pub fn export_cancel(state: &ShellState, params: Value) -> Result<Value, String> {
+    let request = ExportJobRequest::from_params(params, "cancel")?;
+    let mut nodes = state.nextframe_nodes()?;
+    let mut cancelled = None;
+    for (canvas_node_id, mut node) in nodes.drain(..) {
+        if let Some(job) = node
+            .export_jobs
+            .iter_mut()
+            .find(|job| job.job_id == request.job_id)
+        {
+            job.status = ExportJobStatus::Cancelled;
+            job.progress = job.progress.min(99);
+            cancelled = Some(job.clone());
+            state.attach_nextframe_node(canvas_node_id, node)?;
+            break;
+        }
+    }
+    let job = cancelled.ok_or_else(|| {
+        attach_error(
+            "EXPORT_JOB_NOT_FOUND",
+            format!("export job {} was not found", request.job_id),
+            "next step · run capy nextframe export",
+        )
+    })?;
+    Ok(json!({
+        "ok": true,
+        "trace_id": export_cancel_trace_id(),
+        "stage": "cancel",
+        "job": job
+    }))
+}
+
 pub(crate) fn open_response(req_id: String, state: &ShellState, params: Value) -> IpcResponse {
     match open_node(state, params) {
+        Ok(data) => IpcResponse {
+            req_id,
+            ok: true,
+            data: Some(data),
+            error: None,
+        },
+        Err(error) => IpcResponse {
+            req_id,
+            ok: false,
+            data: None,
+            error: serde_json::from_str(&error)
+                .ok()
+                .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
+        },
+    }
+}
+
+pub(crate) fn export_status_response(
+    req_id: String,
+    state: &ShellState,
+    params: Value,
+) -> IpcResponse {
+    match export_status(state, params) {
+        Ok(data) => IpcResponse {
+            req_id,
+            ok: true,
+            data: Some(data),
+            error: None,
+        },
+        Err(error) => IpcResponse {
+            req_id,
+            ok: false,
+            data: None,
+            error: serde_json::from_str(&error)
+                .ok()
+                .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
+        },
+    }
+}
+
+pub(crate) fn export_cancel_response(
+    req_id: String,
+    state: &ShellState,
+    params: Value,
+) -> IpcResponse {
+    match export_cancel(state, params) {
         Ok(data) => IpcResponse {
             req_id,
             ok: true,
@@ -346,8 +443,17 @@ fn attachment_json(canvas_node_id: u64, node: &AttachedCanvasNode) -> Value {
         "schema_version": node.composition_ref.schema_version,
         "track_count": node.composition_ref.track_count,
         "asset_count": node.composition_ref.asset_count,
+        "export_jobs": node.export_jobs,
         "history": node.history
     })
+}
+
+fn find_export_job(state: &ShellState, job_id: &str) -> Result<Option<ExportJob>, String> {
+    Ok(state
+        .nextframe_nodes()?
+        .into_iter()
+        .flat_map(|(_, node)| node.export_jobs)
+        .find(|job| job.job_id == job_id))
 }
 
 #[derive(Debug)]
@@ -411,6 +517,30 @@ impl StateRequest {
 #[derive(Debug)]
 struct OpenRequest {
     canvas_node_id: u64,
+}
+
+#[derive(Debug)]
+struct ExportJobRequest {
+    job_id: String,
+}
+
+impl ExportJobRequest {
+    fn from_params(params: Value, command: &str) -> Result<Self, String> {
+        let job_id = params
+            .get("job_id")
+            .or_else(|| params.get("job"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .map(ToString::to_string)
+            .ok_or_else(|| {
+                attach_error(
+                    "IPC_ERROR",
+                    "missing required parameter: job_id",
+                    format!("next step · run capy nextframe {command} --job <job_id>").as_str(),
+                )
+            })?;
+        Ok(Self { job_id })
+    }
 }
 
 impl OpenRequest {
@@ -486,6 +616,22 @@ fn open_trace_id() -> String {
     format!("open-{millis}-{}", std::process::id())
 }
 
+fn export_status_trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("export-status-{millis}-{}", std::process::id())
+}
+
+fn export_cancel_trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("export-cancel-{millis}-{}", std::process::id())
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -493,7 +639,7 @@ mod tests {
 
     use serde_json::{Value, json};
 
-    use super::{open_node, state_nodes};
+    use super::{ExportJob, ExportJobStatus, open_node, state_nodes};
     use crate::app::ShellState;
 
     #[test]
@@ -560,6 +706,36 @@ mod tests {
         let value: Value = serde_json::from_str(&error)?;
 
         assert_eq!(value["code"], "CANVAS_NODE_NOT_FOUND");
+        Ok(())
+    }
+
+    #[test]
+    fn export_status_and_cancel_read_tracked_jobs() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_dir("export-job")?;
+        let path = write_composition(&dir, compilable_composition())?;
+        let state = ShellState::default();
+        super::attach_node(
+            &state,
+            json!({"canvas_node_id": 0, "composition_path": path}),
+        )?;
+        let mut node = state
+            .nextframe_node(0)?
+            .ok_or("attached node should be present")?;
+        node.export_jobs.push(ExportJob {
+            job_id: "exp-test".to_string(),
+            status: ExportJobStatus::Running,
+            progress: 50,
+            output_path: Some(dir.join("out.mp4").display().to_string()),
+            started_at: "1970-01-01T00:00:00Z".to_string(),
+        });
+        state.attach_nextframe_node(0, node)?;
+
+        let status = super::export_status(&state, json!({"job_id": "exp-test"}))?;
+        assert_eq!(status["job"]["status"], "running");
+        let cancel = super::export_cancel(&state, json!({"job_id": "exp-test"}))?;
+        assert_eq!(cancel["job"]["status"], "cancelled");
+
+        fs::remove_dir_all(dir)?;
         Ok(())
     }
 

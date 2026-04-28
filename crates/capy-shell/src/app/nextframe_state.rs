@@ -26,6 +26,7 @@ impl NextFrameNodeState {
             (Self::Draft, NextFrameNodeAction::ValidateOk) => Self::Valid,
             (Self::Valid, NextFrameNodeAction::CompileOk) => Self::Compiled,
             (Self::Compiled, NextFrameNodeAction::PreviewReady) => Self::PreviewReady,
+            (Self::Compiled, NextFrameNodeAction::ExportOk) => Self::Exported,
             (Self::PreviewReady, NextFrameNodeAction::ExportOk) => Self::Exported,
             (
                 _,
@@ -144,6 +145,25 @@ fn civil_from_days(days_since_unix_epoch: i64) -> (i64, u32, u32) {
     (year, m as u32, d as u32)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportJob {
+    pub job_id: String,
+    pub status: ExportJobStatus,
+    pub progress: u8,
+    pub output_path: Option<String>,
+    pub started_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportJobStatus {
+    Queued,
+    Running,
+    Done,
+    Failed,
+    Cancelled,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{NextFrameNodeAction, NextFrameNodeState, iso_from_unix};
@@ -156,6 +176,20 @@ mod tests {
         let state = state.transition(NextFrameNodeAction::PreviewReady)?;
 
         assert_eq!(state, NextFrameNodeState::PreviewReady);
+        Ok(())
+    }
+
+    #[test]
+    fn transition_allows_export_from_compiled_or_preview_ready()
+    -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            NextFrameNodeState::Compiled.transition(NextFrameNodeAction::ExportOk)?,
+            NextFrameNodeState::Exported
+        );
+        assert_eq!(
+            NextFrameNodeState::PreviewReady.transition(NextFrameNodeAction::ExportOk)?,
+            NextFrameNodeState::Exported
+        );
         Ok(())
     }
 

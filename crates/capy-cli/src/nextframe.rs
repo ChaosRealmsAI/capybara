@@ -25,10 +25,16 @@ enum NextFrameCommand {
     Compile(NextFrameCompileArgs),
     #[command(about = "Render a single PNG snapshot from a compiled NextFrame composition")]
     Snapshot(NextFrameSnapshotArgs),
+    #[command(about = "Export MP4 from a compiled NextFrame composition")]
+    Export(NextFrameExportArgs),
     #[command(about = "Attach a NextFrame composition to a live canvas node")]
     Attach(NextFrameAttachArgs),
     #[command(about = "Read live NextFrame attachment state from capy-shell")]
     State(NextFrameStateArgs),
+    #[command(about = "Read a live NextFrame export job from capy-shell")]
+    Status(NextFrameStatusArgs),
+    #[command(about = "Cancel a live NextFrame export job tracked by capy-shell")]
+    Cancel(NextFrameCancelArgs),
     #[command(about = "Open a live NextFrame composition preview in the desktop host")]
     Open(NextFrameOpenArgs),
 }
@@ -86,6 +92,20 @@ struct NextFrameSnapshotArgs {
 }
 
 #[derive(Debug, Args)]
+struct NextFrameExportArgs {
+    #[arg(long)]
+    composition: PathBuf,
+    #[arg(long, default_value = "mp4")]
+    kind: String,
+    #[arg(long)]
+    out: Option<PathBuf>,
+    #[arg(long, default_value_t = 30)]
+    fps: u32,
+    #[arg(long)]
+    strict_binary: bool,
+}
+
+#[derive(Debug, Args)]
 struct NextFrameAttachArgs {
     #[arg(long)]
     canvas_node: u64,
@@ -99,6 +119,18 @@ struct NextFrameAttachArgs {
 struct NextFrameStateArgs {
     #[arg(long)]
     canvas_node: Option<u64>,
+}
+
+#[derive(Debug, Args)]
+struct NextFrameStatusArgs {
+    #[arg(long)]
+    job: String,
+}
+
+#[derive(Debug, Args)]
+struct NextFrameCancelArgs {
+    #[arg(long)]
+    job: String,
 }
 
 #[derive(Debug, Args)]
@@ -116,8 +148,11 @@ pub fn handle(args: NextFrameArgs) -> Result<(), String> {
         NextFrameCommand::Validate(args) => validate(args),
         NextFrameCommand::Compile(args) => compile(args),
         NextFrameCommand::Snapshot(args) => snapshot(args),
+        NextFrameCommand::Export(args) => export(args),
         NextFrameCommand::Attach(args) => attach(args),
         NextFrameCommand::State(args) => state(args),
+        NextFrameCommand::Status(args) => status(args),
+        NextFrameCommand::Cancel(args) => cancel(args),
         NextFrameCommand::Open(args) => open(args),
     }
 }
@@ -179,6 +214,34 @@ fn snapshot(args: NextFrameSnapshotArgs) -> Result<(), String> {
         composition_path: args.composition,
         frame_ms: args.frame,
         out: args.out,
+        strict_binary: args.strict_binary,
+    });
+    print_json(&report)?;
+    if report.ok {
+        Ok(())
+    } else {
+        std::process::exit(1);
+    }
+}
+
+fn export(args: NextFrameExportArgs) -> Result<(), String> {
+    let kind = match args.kind.as_str() {
+        "mp4" => capy_nextframe::ExportKind::Mp4,
+        _ => {
+            let report = export_failure(
+                "UNSUPPORTED_EXPORT_KIND",
+                format!("unsupported export kind: {}", args.kind),
+                "next step · pass --kind mp4",
+            );
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+    };
+    let report = capy_nextframe::export_composition(capy_nextframe::ExportCompositionRequest {
+        composition_path: args.composition,
+        kind,
+        out: args.out,
+        fps: args.fps,
         strict_binary: args.strict_binary,
     });
     print_json(&report)?;
@@ -283,6 +346,71 @@ fn state(args: NextFrameStateArgs) -> Result<(), String> {
         }
         Err(error) => {
             let report = state_failure("SHELL_UNAVAILABLE", error, "next step · run capy shell");
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+    }
+}
+
+fn status(args: NextFrameStatusArgs) -> Result<(), String> {
+    nextframe_job_ipc(
+        "nextframe-export-status",
+        &args.job,
+        "status",
+        "next step · run capy shell",
+    )
+}
+
+fn cancel(args: NextFrameCancelArgs) -> Result<(), String> {
+    nextframe_job_ipc(
+        "nextframe-export-cancel",
+        &args.job,
+        "cancel",
+        "next step · run capy shell",
+    )
+}
+
+fn nextframe_job_ipc(op: &str, job_id: &str, stage: &str, shell_hint: &str) -> Result<(), String> {
+    let socket = ipc_client::socket_path();
+    let request = ipc_client::request(op, json!({ "job_id": job_id }));
+    match ipc_client::send_to(request, socket.clone()) {
+        Ok(response) if response.ok => print_json(&response.data.unwrap_or(Value::Null)),
+        Ok(response) => {
+            let report = job_failure(
+                stage,
+                job_id,
+                &socket,
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("code"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("IPC_ERROR"),
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("message"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("capy-shell nextframe export job op failed"),
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("hint"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("next step · run capy nextframe status --help"),
+            );
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+        Err(error) => {
+            let report = job_failure(
+                stage,
+                job_id,
+                &socket,
+                "SHELL_UNAVAILABLE",
+                error,
+                shell_hint,
+            );
             print_json(&report)?;
             std::process::exit(1);
         }
@@ -415,6 +543,46 @@ fn open_failure(
     })
 }
 
+fn export_failure(code: &str, message: impl Into<String>, hint: &str) -> Value {
+    let error = json!({
+        "code": code,
+        "message": message.into(),
+        "hint": hint
+    });
+    json!({
+        "ok": false,
+        "trace_id": export_trace_id(),
+        "stage": "export",
+        "status": "failed",
+        "code": code,
+        "errors": [error]
+    })
+}
+
+fn job_failure(
+    stage: &str,
+    job_id: &str,
+    socket: &std::path::Path,
+    code: &str,
+    message: impl Into<String>,
+    hint: &str,
+) -> Value {
+    let error = json!({
+        "code": code,
+        "message": message.into(),
+        "hint": hint
+    });
+    json!({
+        "ok": false,
+        "trace_id": job_trace_id(stage),
+        "stage": stage,
+        "job_id": job_id,
+        "ipc_socket": socket.display().to_string(),
+        "code": code,
+        "errors": [error]
+    })
+}
+
 fn absolute_path(path: PathBuf) -> Result<PathBuf, String> {
     if path.is_absolute() {
         return Ok(path);
@@ -446,4 +614,20 @@ fn open_trace_id() -> String {
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
     format!("open-{millis}-{}", std::process::id())
+}
+
+fn export_trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("export-{millis}-{}", std::process::id())
+}
+
+fn job_trace_id(stage: &str) -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("{stage}-{millis}-{}", std::process::id())
 }

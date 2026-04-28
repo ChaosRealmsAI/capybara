@@ -133,13 +133,19 @@ impl ShellState {
     }
 
     pub fn nextframe_state_query(&self, request: IpcRequest) -> IpcResponse {
-        let req_id = request.req_id.clone();
-        nextframe::state_response(req_id, self, request.params)
+        nextframe::state_response(request.req_id.clone(), self, request.params)
     }
 
     pub fn nextframe_open_query(&self, request: IpcRequest) -> IpcResponse {
-        let req_id = request.req_id.clone();
-        nextframe::open_response(req_id, self, request.params)
+        nextframe::open_response(request.req_id.clone(), self, request.params)
+    }
+
+    pub fn nextframe_export_status_query(&self, request: IpcRequest) -> IpcResponse {
+        nextframe::export_status_response(request.req_id.clone(), self, request.params)
+    }
+
+    pub fn nextframe_export_cancel_query(&self, request: IpcRequest) -> IpcResponse {
+        nextframe::export_cancel_response(request.req_id.clone(), self, request.params)
     }
 
     pub(crate) fn has_canvas_node(&self, id: u64) -> bool {
@@ -571,6 +577,10 @@ fn handle_js_ipc(
         nextframe_host::attach(manager, &state, request)
     } else if op == "nextframe-state" {
         state.nextframe_state_query(request)
+    } else if op == "nextframe-export-status" {
+        state.nextframe_export_status_query(request)
+    } else if op == "nextframe-export-cancel" {
+        state.nextframe_export_cancel_query(request)
     } else if op == "nextframe-open" {
         nextframe_host::open(manager, &state, request)
     } else {

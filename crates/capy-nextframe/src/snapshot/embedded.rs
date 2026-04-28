@@ -18,6 +18,12 @@ pub fn snapshot_embedded(
     render_source_path: &Path,
     out: &Path,
 ) -> Result<SnapshotMetrics, SnapshotError> {
+    let image = render_frame(render_source_path)?;
+    write_png(&image, out)?;
+    read_png_metrics(out)
+}
+
+pub fn render_frame(render_source_path: &Path) -> Result<RgbaImage, SnapshotError> {
     let source = read_source(render_source_path)?;
     let viewport = viewport(&source);
     let poster = poster_from_source(&source)?;
@@ -29,8 +35,7 @@ pub fn snapshot_embedded(
         .unwrap_or(Rgba([255, 255, 255, 255]));
     let mut image = ImageBuffer::from_pixel(viewport.0, viewport.1, background);
     render_layers(&mut image, &poster, render_source_path);
-    write_png(&image, out)?;
-    read_png_metrics(out)
+    Ok(image)
 }
 
 pub fn read_png_metrics(path: &Path) -> Result<SnapshotMetrics, SnapshotError> {
@@ -205,7 +210,7 @@ fn render_image_layer(image: &mut RgbaImage, poster: &Value, layer: &Value, sour
     overlay(image, &resized.to_rgba8(), rect.x, rect.y);
 }
 
-fn write_png(image: &RgbaImage, out: &Path) -> Result<(), SnapshotError> {
+pub fn write_png(image: &RgbaImage, out: &Path) -> Result<(), SnapshotError> {
     if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
         fs::create_dir_all(parent).map_err(|err| {
             SnapshotError::new(

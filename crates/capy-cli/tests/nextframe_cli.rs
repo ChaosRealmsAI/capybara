@@ -367,6 +367,89 @@ fn nextframe_compile_strict_binary_requires_nf() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+#[test]
+#[ignore = "requires ffmpeg on PATH"]
+fn nextframe_export_writes_mp4_embedded() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("export-happy")?;
+    let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
+    let compose = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--out",
+            &dir.display().to_string(),
+            "--duration-ms",
+            "200",
+        ])
+        .output()?;
+    assert!(compose.status.success());
+    let composed: serde_json::Value = serde_json::from_slice(&compose.stdout)?;
+    let composition_path = composed["composition_path"]
+        .as_str()
+        .ok_or("composition_path should be a string")?;
+    let compile = capy_command()?
+        .args(["nextframe", "compile", "--composition", composition_path])
+        .output()?;
+    assert!(compile.status.success());
+    let out = dir.join("export.mp4");
+
+    let output = capy_command()?
+        .env("CAPY_NF_RECORDER", "/definitely/not/nf-recorder")
+        .args([
+            "nextframe",
+            "export",
+            "--composition",
+            composition_path,
+            "--kind",
+            "mp4",
+            "--fps",
+            "10",
+            "--out",
+            &out.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["stage"], "export");
+    assert_eq!(value["status"], "done");
+    assert_eq!(value["kind"], "mp4");
+    assert_eq!(value["fps"], 10);
+    assert_eq!(value["frame_count"], 2);
+    assert_eq!(value["export_mode"], "embedded");
+    assert!(out.is_file());
+    assert!(value["byte_size"].as_u64().unwrap_or(0) > 0);
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn nextframe_export_reports_missing_render_source() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("export-missing-source")?;
+    let composition = dir.join("composition.json");
+    fs::write(&composition, "{}")?;
+
+    let output = capy_command()?
+        .args([
+            "nextframe",
+            "export",
+            "--composition",
+            &composition.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["status"], "failed");
+    assert_eq!(value["errors"][0]["code"], "RENDER_SOURCE_MISSING");
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
 fn capy_command() -> Result<Command, Box<dyn std::error::Error>> {
     let path = std::env::var("CARGO_BIN_EXE_capy")?;
     Ok(Command::new(path))

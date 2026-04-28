@@ -152,6 +152,8 @@ async fn dispatch(
     match req.op.as_str() {
         "state-query" if state.can_answer_directly(&req) => state.state_query(req),
         "nextframe-state" => state.nextframe_state_query(req),
+        "nextframe-export-status" => state.nextframe_export_status_query(req),
+        "nextframe-export-cancel" => state.nextframe_export_cancel_query(req),
         "state-query" => {
             send_event(req, proxy, |request, ack| ShellEvent::StateQuery {
                 request,
