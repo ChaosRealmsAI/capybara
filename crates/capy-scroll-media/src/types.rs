@@ -97,6 +97,29 @@ pub struct ScrollPackRequest {
     pub dry_run: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct StoryPackRequest {
+    pub manifest: PathBuf,
+    pub out_dir: PathBuf,
+    pub poster_width: u32,
+    pub default_preset: ClipPreset,
+    pub fallback_preset: ClipPreset,
+    pub hq_preset: ClipPreset,
+    pub verify: bool,
+    pub overwrite: bool,
+    pub dry_run: bool,
+}
+
+impl StoryPackRequest {
+    pub fn presets(&self) -> [ClipPreset; 3] {
+        [
+            self.default_preset.clone(),
+            self.fallback_preset.clone(),
+            self.hq_preset.clone(),
+        ]
+    }
+}
+
 impl ScrollPackRequest {
     pub fn presets(&self) -> [ClipPreset; 3] {
         [
@@ -105,6 +128,33 @@ impl ScrollPackRequest {
             self.hq_preset.clone(),
         ]
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorySourceManifest {
+    pub schema_version: u32,
+    pub title: String,
+    #[serde(default)]
+    pub eyebrow: String,
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default = "default_story_theme")]
+    pub theme: String,
+    pub chapters: Vec<StorySourceChapter>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorySourceChapter {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub kicker: String,
+    pub body: String,
+    pub video: PathBuf,
+}
+
+fn default_story_theme() -> String {
+    "watch".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,6 +173,32 @@ pub struct ScrollPackManifest {
     pub hq_clip: String,
     pub runtime: RuntimeFiles,
     pub requires: ManifestRequirements,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoryPackManifest {
+    pub schema_version: u32,
+    pub kind: String,
+    pub title: String,
+    pub eyebrow: String,
+    pub summary: String,
+    pub theme: String,
+    pub chapters: Vec<StoryPackChapter>,
+    pub runtime: RuntimeFiles,
+    pub requires: ManifestRequirements,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoryPackChapter {
+    pub id: String,
+    pub title: String,
+    pub kicker: String,
+    pub body: String,
+    pub poster: String,
+    pub default_clip: String,
+    pub fallback_clip: String,
+    pub hq_clip: String,
+    pub source: SourceMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +255,18 @@ pub struct ScrollPackReport {
     pub verification: Option<VerificationSummary>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoryPackReport {
+    pub ok: bool,
+    pub dry_run: bool,
+    pub input: String,
+    pub output_dir: String,
+    pub manifest_path: String,
+    pub manifest: Option<StoryPackManifest>,
+    pub files: Vec<PackFile>,
+    pub verification: Option<VerificationSummary>,
+}
+
 impl ScrollPackManifest {
     pub fn from_source(
         name: String,
@@ -204,6 +292,25 @@ impl ScrollPackManifest {
             runtime: RuntimeFiles {
                 js: "runtime/scroll-video.js".to_string(),
                 css: "runtime/scroll-video.css".to_string(),
+            },
+            requires: ManifestRequirements { http_range: true },
+        }
+    }
+}
+
+impl StoryPackManifest {
+    pub fn from_source(source: StorySourceManifest, chapters: Vec<StoryPackChapter>) -> Self {
+        Self {
+            schema_version: 1,
+            kind: "capy-multi-video-scroll-story".to_string(),
+            title: source.title,
+            eyebrow: source.eyebrow,
+            summary: source.summary,
+            theme: source.theme,
+            chapters,
+            runtime: RuntimeFiles {
+                js: "runtime/multi-video-story.js".to_string(),
+                css: "runtime/multi-video-story.css".to_string(),
             },
             requires: ManifestRequirements { http_range: true },
         }
@@ -250,6 +357,50 @@ mod tests {
         assert_eq!(value["kind"], "capy-scroll-media-pack");
         assert_eq!(value["requires"]["http_range"], true);
         assert_eq!(value["runtime"]["js"], "runtime/scroll-video.js");
+        Ok(())
+    }
+
+    #[test]
+    fn story_manifest_shape_is_stable() -> Result<(), ScrollMediaError> {
+        let source = StorySourceManifest {
+            schema_version: 1,
+            title: "Watch Story".to_string(),
+            eyebrow: "Prototype".to_string(),
+            summary: "Three clips".to_string(),
+            theme: "watch".to_string(),
+            chapters: vec![StorySourceChapter {
+                id: "hero".to_string(),
+                title: "Hero".to_string(),
+                kicker: "Opening".to_string(),
+                body: "The first clip.".to_string(),
+                video: PathBuf::from("hero.mp4"),
+            }],
+        };
+        let manifest = StoryPackManifest::from_source(
+            source,
+            vec![StoryPackChapter {
+                id: "hero".to_string(),
+                title: "Hero".to_string(),
+                kicker: "Opening".to_string(),
+                body: "The first clip.".to_string(),
+                poster: "posters/hero-1280.jpg".to_string(),
+                default_clip: "clips/hero-720-crf23-allkey.mp4".to_string(),
+                fallback_clip: "clips/hero-720-crf27-allkey.mp4".to_string(),
+                hq_clip: "clips/hero-1080-crf24-allkey.mp4".to_string(),
+                source: SourceMetadata {
+                    width: 1280,
+                    height: 720,
+                    duration: 8.042,
+                    fps: 24.0,
+                    frame_count: 193,
+                },
+            }],
+        );
+        let value = serde_json::to_value(manifest)
+            .map_err(|err| ScrollMediaError::Message(err.to_string()))?;
+        assert_eq!(value["kind"], "capy-multi-video-scroll-story");
+        assert_eq!(value["chapters"][0]["id"], "hero");
+        assert_eq!(value["runtime"]["js"], "runtime/multi-video-story.js");
         Ok(())
     }
 }

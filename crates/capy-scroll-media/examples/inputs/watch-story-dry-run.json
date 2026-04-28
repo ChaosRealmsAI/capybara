@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "title": "Dry Run Watch Story",
+  "eyebrow": "Capybara Scroll Media",
+  "summary": "Small fixture manifest for validating the multi-video story-pack CLI path without encoding.",
+  "theme": "watch",
+  "chapters": [
+    {
+      "id": "card",
+      "title": "Hero Position",
+      "kicker": "Opening angle",
+      "body": "The first chapter establishes the object and starts the normalized scroll playhead.",
+      "video": "card-pan-2s.mp4"
+    },
+    {
+      "id": "wipe",
+      "title": "Exploded Detail",
+      "kicker": "Mechanical reveal",
+      "body": "The second chapter swaps to another clip while the DOM copy fades in place.",
+      "video": "color-wipe-2s.mp4"
+    },
+    {
+      "id": "reveal",
+      "title": "Reassembly",
+      "kicker": "Final form",
+      "body": "The last chapter proves one package can coordinate several all-keyframe videos.",
+      "video": "vertical-reveal-2s.mp4"
+    }
+  ]
+}

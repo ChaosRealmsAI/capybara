@@ -23,7 +23,16 @@ if ! grep -q '"scroll-hq.html"' <<<"$media_dry_run"; then
   echo "project check failed: scroll media dry-run must include scroll-hq.html" >&2
   exit 1
 fi
+story_dry_run="$(cargo run -p capy-cli -- media story-pack \
+  --manifest crates/capy-scroll-media/examples/inputs/watch-story-dry-run.json \
+  --out target/capy-scroll-story-dry-run \
+  --dry-run)"
+if ! grep -q '"story.html"' <<<"$story_dry_run"; then
+  echo "project check failed: scroll story dry-run must include story.html" >&2
+  exit 1
+fi
 test -f crates/capy-scroll-media/README.md
+test -f crates/capy-scroll-media/examples/inputs/watch-story-dry-run.json
 test -f crates/capy-scroll-media/examples/inputs/card-pan-2s.mp4
 test -f crates/capy-scroll-media/examples/outputs/card-pan-2s/scroll-hq.html
 test -f crates/capy-scroll-media/examples/outputs/card-pan-2s/manifest.json

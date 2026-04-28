@@ -137,7 +137,7 @@ fn validate_request(request: &ScrollPackRequest) -> Result<()> {
     Ok(())
 }
 
-fn prepare_output_dir(path: &Path, overwrite: bool) -> Result<()> {
+pub(crate) fn prepare_output_dir(path: &Path, overwrite: bool) -> Result<()> {
     if path.exists() {
         if !overwrite {
             return Err(ScrollMediaError::Message(format!(
@@ -153,7 +153,7 @@ fn prepare_output_dir(path: &Path, overwrite: bool) -> Result<()> {
         .map_err(|err| ScrollMediaError::Message(format!("create output dir failed: {err}")))
 }
 
-fn read_source_metadata(input: &Path) -> Result<SourceMetadata> {
+pub(crate) fn read_source_metadata(input: &Path) -> Result<SourceMetadata> {
     let output = run_command(
         "ffprobe",
         &[
@@ -243,7 +243,8 @@ fn round3(value: f64) -> f64 {
     (value * 1000.0).round() / 1000.0
 }
 
-fn write_poster(input: &Path, output: &Path, poster_width: u32) -> Result<()> {
+pub(crate) fn write_poster(input: &Path, output: &Path, poster_width: u32) -> Result<()> {
+    create_parent_dir(output)?;
     run_command(
         "ffmpeg",
         &[
@@ -265,7 +266,13 @@ fn write_poster(input: &Path, output: &Path, poster_width: u32) -> Result<()> {
     Ok(())
 }
 
-fn encode_all_keyframe_clip(input: &Path, output: &Path, height: u32, crf: u8) -> Result<()> {
+pub(crate) fn encode_all_keyframe_clip(
+    input: &Path,
+    output: &Path,
+    height: u32,
+    crf: u8,
+) -> Result<()> {
+    create_parent_dir(output)?;
     run_command(
         "ffmpeg",
         &[
@@ -336,7 +343,13 @@ fn write_report(path: &Path, report: &ScrollPackReport) -> Result<()> {
     write_text(path, &raw)
 }
 
-fn write_text(path: &Path, contents: &str) -> Result<()> {
+pub(crate) fn write_text(path: &Path, contents: &str) -> Result<()> {
+    create_parent_dir(path)?;
+    fs::write(path, contents)
+        .map_err(|err| ScrollMediaError::Message(format!("write {} failed: {err}", path.display())))
+}
+
+fn create_parent_dir(path: &Path) -> Result<()> {
     if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -345,8 +358,7 @@ fn write_text(path: &Path, contents: &str) -> Result<()> {
             ScrollMediaError::Message(format!("create parent directory failed: {err}"))
         })?;
     }
-    fs::write(path, contents)
-        .map_err(|err| ScrollMediaError::Message(format!("write {} failed: {err}", path.display())))
+    Ok(())
 }
 
 fn verify_clips(out_dir: &Path, manifest: &ScrollPackManifest) -> Result<VerificationSummary> {
@@ -372,7 +384,7 @@ fn verify_clips(out_dir: &Path, manifest: &ScrollPackManifest) -> Result<Verific
     })
 }
 
-fn verify_all_keyframes(path: &Path) -> Result<ClipVerification> {
+pub(crate) fn verify_all_keyframes(path: &Path) -> Result<ClipVerification> {
     let output = run_command(
         "ffprobe",
         &[
