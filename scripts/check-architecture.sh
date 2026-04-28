@@ -19,6 +19,10 @@ for path in \
   crates/capy-canvas-web/Cargo.toml \
   crates/capy-image-gen/Cargo.toml \
   crates/capy-image-gen/src/lib.rs \
+  crates/capy-poster/Cargo.toml \
+  crates/capy-poster/src/lib.rs \
+  crates/capy-poster/src/component.rs \
+  fixtures/poster/v0.1/sample-poster.json \
   crates/capy-scroll-media/Cargo.toml \
   crates/capy-scroll-media/src/lib.rs \
   scripts/image-provider-apimart.mjs \
@@ -55,8 +59,10 @@ rg -q 'data-capy-browser", "cef"' crates/capy-shell/src/browser/assets.rs || fai
 rg -q '"crates/capy-canvas-core"' Cargo.toml || fail "canvas core crate must be a workspace member"
 rg -q '"crates/capy-canvas-web"' Cargo.toml || fail "canvas web crate must be a workspace member"
 rg -q '"crates/capy-image-gen"' Cargo.toml || fail "image generation crate must be a workspace member"
+rg -q '"crates/capy-poster"' Cargo.toml || fail "poster adapter crate must be a workspace member"
 rg -q '"crates/capy-scroll-media"' Cargo.toml || fail "scroll media crate must be a workspace member"
 rg -q '^capy-image-gen\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-image-gen through the workspace boundary"
+rg -q '^capy-poster\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-poster through the workspace boundary"
 rg -q '^capy-image-gen\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must use capy-image-gen for desktop canvas tool calls"
 rg -q '^capy-scroll-media\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-scroll-media through the workspace boundary"
 rg -q 'CanvasCommand::GenerateImage' crates/capy-cli/src/canvas.rs || fail "capy canvas generate-image command must exist"
@@ -70,6 +76,12 @@ rg -q 'http_range' crates/capy-scroll-media/src/types.rs || fail "scroll media m
 rg -q '206' crates/capy-scroll-media/src/range_server.rs || fail "scroll media server must support HTTP 206 Partial Content"
 rg -q 'capy-multi-video-scroll-story' crates/capy-scroll-media/src/types.rs || fail "multi-video story manifest kind must be explicit"
 rg -q 'StoryPack' crates/capy-cli/src/media.rs || fail "capy media story-pack CLI must remain wired"
+rg -q 'Poster\(poster::PosterArgs\)' crates/capy-cli/src/main.rs || fail "capy poster CLI must remain wired"
+rg -q 'nf.render_source.v1' crates/capy-poster/src/render_source.rs || fail "poster adapter must compile to NextFrame render_source.v1"
+rg -q 'capy.poster-document' crates/capy-poster/src/component.rs crates/capy-poster/src/render_source.rs || fail "poster adapter must use an explicit poster component id"
+if rg -n '/Users/Zhuanz/workspace/NextFrame|NextFrame/target/debug/nf-recorder' crates fixtures; then
+  fail "poster adapter must not hardcode a local NextFrame checkout or recorder path"
+fi
 
 active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"
 [[ -n "$active_version" ]] || fail "spec active_version is missing"
