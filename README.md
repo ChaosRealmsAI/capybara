@@ -9,6 +9,7 @@ The open-source core is a thin Rust desktop shell with a CLI-first control surfa
 `v0.4` is the desktop foundation: bundled CEF/Chromium + tao is merged on `main`. `v0.2` remains only as the legacy wry/tao baseline and rollback reference.
 
 - `capy` CLI for AI-friendly operation.
+- `capy-image-gen` provider-neutral image generation tool module.
 - `capy-shell` CEF/Chromium + tao desktop shell POC.
 - Unix socket NDJSON IPC.
 - Native macOS window capture.
@@ -21,6 +22,7 @@ The open-source core is a thin Rust desktop shell with a CLI-first control surfa
 
 ```text
 crates/capy-cli/      CLI entrypoint
+crates/capy-image-gen/ Image generation provider contract and adapters
 crates/capy-shell/    CEF desktop shell, IPC, capture, store, agent runtime
 frontend/capy-app/    native HTML/CSS/JS UI loaded by the shell
 scripts/              local developer gates
@@ -42,6 +44,9 @@ target/debug/capy state --key=app.ready
 target/debug/capy devtools --eval='document.documentElement.dataset.capyBrowser'
 target/debug/capy devtools --query=.topbar --get=bounding-rect
 target/debug/capy verify
+target/debug/capy image providers
+target/debug/capy image doctor
+target/debug/capy image generate --dry-run 'Scene: Warm studio. Subject: One ceramic cup centered. Important details: Product photo, soft light. Use case: Hero card. Constraints: No text, no watermark.'
 target/debug/capy capture --out=tmp/capy-window.png
 target/debug/capy quit
 ```
@@ -59,6 +64,7 @@ capy devtools
 capy screenshot
 capy capture
 capy verify
+capy image
 capy chat
 capy agent doctor
 capy quit

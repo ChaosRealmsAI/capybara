@@ -399,6 +399,7 @@ fn mime_for_path(path: &Path) -> &'static str {
         Some("css") => "text/css; charset=utf-8",
         Some("js") => "text/javascript; charset=utf-8",
         Some("json") => "application/json; charset=utf-8",
+        Some("wasm") => "application/wasm",
         Some("png") => "image/png",
         Some("svg") => "image/svg+xml",
         _ => "application/octet-stream",
@@ -420,6 +421,14 @@ mod tests {
         assert_eq!(
             url,
             "http://127.0.0.1:1/index.html?project=demo%20project/alpha&dpr=2.000"
+        );
+    }
+
+    #[test]
+    fn wasm_assets_use_wasm_mime_type() {
+        assert_eq!(
+            mime_for_path(Path::new("capy_canvas_web_bg.wasm")),
+            "application/wasm"
         );
     }
 

@@ -92,6 +92,7 @@ stage_frontend_assets() {
 }
 
 if [[ "$SKIP_BUILD" == "0" ]]; then
+  scripts/build-canvas-for-app.sh
   cargo wef build -p capy-shell
   cargo build -p capy-cli
 fi

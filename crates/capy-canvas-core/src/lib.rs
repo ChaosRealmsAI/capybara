@@ -1,0 +1,32 @@
+//! capy-canvas-core: pure canvas state, input, UI, and render scene builders.
+
+pub mod ai_snapshot;
+pub mod command;
+pub mod connector;
+pub mod input;
+pub mod input_keys;
+pub mod input_tools;
+pub mod line_edit;
+pub mod line_geometry;
+pub mod minimap;
+pub mod mouse;
+pub mod render;
+pub mod render_line_ui;
+pub mod render_lines;
+pub mod render_overlay;
+pub mod render_shapes;
+pub mod render_text;
+pub mod render_ui;
+pub mod shape;
+pub mod state;
+pub mod state_serial;
+pub mod state_shapes;
+pub mod state_ui;
+pub mod text;
+pub mod text_edit;
+pub mod ui;
+pub mod ui_panels;
+pub mod ui_status;
+pub mod ui_style_panel;
+pub mod ui_style_panel_draw;
+pub mod ui_style_panel_logic;
