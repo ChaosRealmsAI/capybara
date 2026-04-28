@@ -4,6 +4,7 @@ members = [
     "crates/capy-cli",
     "crates/capy-canvas-core",
     "crates/capy-canvas-web",
+    "crates/capy-image-gen",
     "crates/capy-shell",
 ]
 
@@ -34,6 +35,7 @@ skrifa = "0.22"
 winit = "0.30"
 wasm-bindgen = "0.2"
 capy-canvas-core = { path = "crates/capy-canvas-core" }
+capy-image-gen = { path = "crates/capy-image-gen" }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

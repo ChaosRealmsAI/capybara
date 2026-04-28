@@ -17,6 +17,9 @@ for path in \
   Cargo.toml \
   crates/capy-canvas-core/Cargo.toml \
   crates/capy-canvas-web/Cargo.toml \
+  crates/capy-image-gen/Cargo.toml \
+  crates/capy-image-gen/src/lib.rs \
+  scripts/image-provider-apimart.mjs \
   scripts/build-canvas-for-app.sh \
   crates/capy-shell/Cargo.toml \
   crates/capy-shell/src/browser.rs \
@@ -32,7 +35,9 @@ for path in \
   spec/versions/v0.4-cef-shell-poc/bdd.json \
   spec/versions/v0.4-cef-shell-poc/status.json \
   spec/versions/v0.6-canvas-chat-workbench/bdd.json \
-  spec/versions/v0.6-canvas-chat-workbench/status.json
+  spec/versions/v0.6-canvas-chat-workbench/status.json \
+  spec/versions/v0.6.1-image-generation-tool/bdd.json \
+  spec/versions/v0.6.1-image-generation-tool/status.json
 do
   require_file "$path"
 done
@@ -42,6 +47,10 @@ rg -q '^wef\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell 
 rg -q 'data-capy-browser", "cef"' crates/capy-shell/src/browser/assets.rs || fail "CEF browser identity marker missing"
 rg -q '"crates/capy-canvas-core"' Cargo.toml || fail "canvas core crate must be a workspace member"
 rg -q '"crates/capy-canvas-web"' Cargo.toml || fail "canvas web crate must be a workspace member"
+rg -q '"crates/capy-image-gen"' Cargo.toml || fail "image generation crate must be a workspace member"
+rg -q '^capy-image-gen\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-image-gen through the workspace boundary"
+rg -q 'provider-adapter' crates/capy-image-gen/src/apimart.rs || fail "first image provider must remain an adapter, not the top-level abstraction"
+rg -q 'default_no_spend_gate: true' crates/capy-image-gen/src/apimart.rs || fail "image provider must expose no-spend default gate metadata"
 
 active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"
 [[ -n "$active_version" ]] || fail "spec active_version is missing"
@@ -51,7 +60,7 @@ jq -e '.versions[] | select(.id == "v0.4-cef-shell-poc" and .status == "merged-v
   spec/versions/REGISTRY.json >/dev/null || fail "v0.4 CEF foundation must remain registered as merged-verified"
 jq -e --arg active "$active_version" '
   .versions[] | select(.id == $active) |
-  (.id == "v0.4-cef-shell-poc" or ((.depends_on // []) | index("v0.4-cef-shell-poc") != null) or ((.depends_on // []) | index("v0.5-desktop-foundation-hardening") != null))
+  (.id == "v0.4-cef-shell-poc" or ((.depends_on // []) | index("v0.4-cef-shell-poc") != null) or ((.depends_on // []) | index("v0.5-desktop-foundation-hardening") != null) or ((.depends_on // []) | index("v0.6-canvas-chat-workbench") != null))
 ' spec/versions/REGISTRY.json >/dev/null || fail "active version must be v0.4 CEF foundation or depend on the CEF desktop foundation chain"
 
 if rg -n '\bwry\b|objc2-web-kit|javascriptcore|WKWebView|WebKit' \

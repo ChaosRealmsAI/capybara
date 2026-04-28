@@ -367,6 +367,7 @@ dependencies = [
 name = "capy-cli"
 version = "0.2.0"
 dependencies = [
+ "capy-image-gen",
  "capy-shell",
  "clap",
  "interprocess",
@@ -375,6 +376,15 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "capy-image-gen"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
