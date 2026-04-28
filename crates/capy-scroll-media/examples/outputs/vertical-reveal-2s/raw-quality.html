@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Raw Quality Check</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html,body{margin:0;min-height:100%;background:#fff}body{overscroll-behavior:none}.scrub{height:520vh}.stage{position:sticky;top:0;width:100%;height:100vh;overflow:hidden;background:#fff}video{display:block;width:100%;height:100%;object-fit:contain;background:#fff}
+    </style>
+  </head>
+  <body data-playhead="0" data-frame="1">
+    <main class="scrub" data-scrub>
+      <div class="stage">
+        <video data-video muted playsinline preload="auto" disablepictureinpicture></video>
+      </div>
+    </main>
+    <script>
+      const video=document.querySelector("[data-video]");const scrub=document.querySelector("[data-scrub]");let manifest={fps:24,frame_count:1,duration:1,hq_clip:""};let playhead=0;let targetPlayhead=0;let raf=0;let lastFrame=0;const seekSamples=[];window.__rawQuality={seekSamples,overlays:false};function clamp(v,min,max){return Math.max(min,Math.min(max,v))}function progress(){const rect=scrub.getBoundingClientRect();const max=scrub.offsetHeight-innerHeight;return max>0?clamp(-rect.top/max,0,1):0}function render(value){playhead=clamp(value,0,1);const fps=Number(manifest.fps||24);const frames=Number(manifest.frame_count||Math.round(Number(manifest.duration||0)*fps));const frame=Math.max(1,Math.min(frames,Math.round(playhead*(frames-1)+1)));document.body.dataset.playhead=playhead.toFixed(4);document.body.dataset.frame=String(frame);if(video.readyState<HTMLMediaElement.HAVE_METADATA||frame===lastFrame)return;lastFrame=frame;const target=clamp((frame-1)/fps,0,Number(manifest.duration||video.duration||0));const started=performance.now();video.addEventListener("seeked",()=>{const done=(mediaTime=video.currentTime)=>{seekSamples.push({frame,targetTime:Number(target.toFixed(3)),actualTime:Number(video.currentTime.toFixed(3)),paintedMediaTime:Number(mediaTime.toFixed(3)),latencyMs:Number((performance.now()-started).toFixed(1))});if(seekSamples.length>24)seekSamples.shift()};if("requestVideoFrameCallback"in video){video.requestVideoFrameCallback((_,metadata)=>done(metadata.mediaTime))}else{requestAnimationFrame(()=>done())}},{once:true});video.currentTime=target}function tick(){const distance=targetPlayhead-playhead;if(Math.abs(distance)<0.0008){render(targetPlayhead);raf=0;return}render(playhead+distance*0.28);raf=requestAnimationFrame(tick)}function setTarget(value){targetPlayhead=clamp(value,0,1);if(!raf)raf=requestAnimationFrame(tick)}video.addEventListener("loadedmetadata",()=>{video.pause();render(0)});addEventListener("scroll",()=>setTarget(progress()),{passive:true});addEventListener("resize",()=>{targetPlayhead=progress();render(targetPlayhead)});fetch("manifest.json").then((res)=>res.json()).then((data)=>{manifest=data;video.poster=data.poster;const source=document.createElement("source");source.src=data.hq_clip;source.type="video/mp4";video.append(source);video.load();window.__rawQuality.manifest=data;render(0)});
+    </script>
+  </body>
+</html>

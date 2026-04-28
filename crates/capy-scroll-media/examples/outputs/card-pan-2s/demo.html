@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capy Scroll Media Demo</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="runtime/scroll-video.css" />
+    <style>
+      body{margin:0;background:#fff;color:#18181b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+      .hero,.outro{min-height:80vh;display:grid;align-items:center;width:min(1080px,calc(100% - 40px));margin:0 auto}
+      h1{font-size:clamp(42px,7vw,88px);line-height:1;margin:0}
+      p{font-size:20px;line-height:1.6;color:#52525b;max-width:680px}
+    </style>
+  </head>
+  <body>
+    <section class="hero">
+      <div>
+        <h1>Capy Scroll Media</h1>
+        <p>Scroll down. The video below is driven by a normalized playhead and all-keyframe MP4.</p>
+      </div>
+    </section>
+    <section class="capy-scroll-story">
+      <div data-capy-scroll-video data-manifest="manifest.json"></div>
+    </section>
+    <section class="outro">
+      <p>Use this package from any static HTML page that can serve MP4 byte ranges.</p>
+    </section>
+    <script src="runtime/scroll-video.js"></script>
+  </body>
+</html>

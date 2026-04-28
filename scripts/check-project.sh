@@ -23,6 +23,12 @@ if ! grep -q '"scroll-hq.html"' <<<"$media_dry_run"; then
   echo "project check failed: scroll media dry-run must include scroll-hq.html" >&2
   exit 1
 fi
+test -f crates/capy-scroll-media/README.md
+test -f crates/capy-scroll-media/examples/inputs/card-pan-2s.mp4
+test -f crates/capy-scroll-media/examples/outputs/card-pan-2s/scroll-hq.html
+test -f crates/capy-scroll-media/examples/outputs/card-pan-2s/manifest.json
+cargo run -p capy-cli -- media inspect \
+  --manifest crates/capy-scroll-media/examples/outputs/card-pan-2s/manifest.json >/dev/null
 cargo run -p capy-cli -- image generate --dry-run \
   "Scene: Warm studio tabletop. Subject: One ceramic cup centered, 40% frame height. Important details: Product photo, soft key light from upper left, cream and lavender palette. Use case: Hero card, 1:1 crop-safe. Constraints: No text, no watermark, no extra objects." \
   --size 1:1 --resolution 1k >/dev/null

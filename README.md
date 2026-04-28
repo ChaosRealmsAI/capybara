@@ -10,6 +10,7 @@ The open-source core is a thin Rust desktop shell with a CLI-first control surfa
 
 - `capy` CLI for AI-friendly operation.
 - `capy-image-gen` provider-neutral image generation tool module.
+- `capy-scroll-media` video-to-scroll-HTML packager with small committed examples.
 - `capy-shell` CEF/Chromium + tao desktop shell POC.
 - Unix socket NDJSON IPC.
 - Native macOS window capture.
@@ -23,6 +24,7 @@ The open-source core is a thin Rust desktop shell with a CLI-first control surfa
 ```text
 crates/capy-cli/      CLI entrypoint
 crates/capy-image-gen/ Image generation provider contract and adapters
+crates/capy-scroll-media/ Video in, scroll HTML package out
 crates/capy-shell/    CEF desktop shell, IPC, capture, store, agent runtime
 frontend/capy-app/    native HTML/CSS/JS UI loaded by the shell
 scripts/              local developer gates
@@ -47,6 +49,8 @@ target/debug/capy verify
 target/debug/capy image providers
 target/debug/capy image doctor
 target/debug/capy image generate --dry-run 'Scene: Warm studio. Subject: One ceramic cup centered. Important details: Product photo, soft light. Use case: Hero card. Constraints: No text, no watermark.'
+crates/capy-scroll-media/examples/build-examples.sh
+target/debug/capy media serve --root crates/capy-scroll-media/examples/outputs/card-pan-2s --port 5202
 target/debug/capy capture --out=tmp/capy-window.png
 target/debug/capy quit
 ```
@@ -65,6 +69,7 @@ capy screenshot
 capy capture
 capy verify
 capy image
+capy media
 capy chat
 capy agent doctor
 capy quit

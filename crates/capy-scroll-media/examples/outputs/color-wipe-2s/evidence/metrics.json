@@ -1,0 +1,113 @@
+{
+  "ok": true,
+  "dry_run": false,
+  "input": "crates/capy-scroll-media/examples/inputs/color-wipe-2s.mp4",
+  "output_dir": "crates/capy-scroll-media/examples/outputs/color-wipe-2s",
+  "manifest_path": "crates/capy-scroll-media/examples/outputs/color-wipe-2s/manifest.json",
+  "source": {
+    "width": 320,
+    "height": 180,
+    "duration": 2,
+    "fps": 24,
+    "frame_count": 48
+  },
+  "manifest": {
+    "schema_version": 1,
+    "kind": "capy-scroll-media-pack",
+    "name": "color-wipe-2s",
+    "duration": 2,
+    "fps": 24,
+    "frame_count": 48,
+    "width": 320,
+    "height": 180,
+    "poster": "poster-320.jpg",
+    "default_clip": "scrub-180-crf28-allkey.mp4",
+    "fallback_clip": "scrub-120-crf32-allkey.mp4",
+    "hq_clip": "scrub-240-crf26-allkey.mp4",
+    "runtime": {
+      "js": "runtime/scroll-video.js",
+      "css": "runtime/scroll-video.css"
+    },
+    "requires": {
+      "http_range": true
+    }
+  },
+  "files": [
+    {
+      "role": "manifest",
+      "path": "manifest.json",
+      "bytes": 485
+    },
+    {
+      "role": "poster",
+      "path": "poster-320.jpg",
+      "bytes": 1253
+    },
+    {
+      "role": "default",
+      "path": "scrub-180-crf28-allkey.mp4",
+      "bytes": 10292
+    },
+    {
+      "role": "fallback",
+      "path": "scrub-120-crf32-allkey.mp4",
+      "bytes": 7838
+    },
+    {
+      "role": "hq",
+      "path": "scrub-240-crf26-allkey.mp4",
+      "bytes": 16168
+    },
+    {
+      "role": "runtime-js",
+      "path": "runtime/scroll-video.js",
+      "bytes": 7309
+    },
+    {
+      "role": "runtime-css",
+      "path": "runtime/scroll-video.css",
+      "bytes": 340
+    },
+    {
+      "role": "demo",
+      "path": "demo.html",
+      "bytes": 1237
+    },
+    {
+      "role": "scroll-hq",
+      "path": "scroll-hq.html",
+      "bytes": 630
+    },
+    {
+      "role": "raw-quality",
+      "path": "raw-quality.html",
+      "bytes": 3153
+    },
+    {
+      "role": "metrics",
+      "path": "evidence/metrics.json",
+      "bytes": 2745
+    }
+  ],
+  "verification": {
+    "checked": true,
+    "all_keyframe_clips": true,
+    "clips": [
+      {
+        "path": "crates/capy-scroll-media/examples/outputs/color-wipe-2s/scrub-180-crf28-allkey.mp4",
+        "keyframe_count": 48,
+        "non_keyframe_count": 0
+      },
+      {
+        "path": "crates/capy-scroll-media/examples/outputs/color-wipe-2s/scrub-120-crf32-allkey.mp4",
+        "keyframe_count": 48,
+        "non_keyframe_count": 0
+      },
+      {
+        "path": "crates/capy-scroll-media/examples/outputs/color-wipe-2s/scrub-240-crf26-allkey.mp4",
+        "keyframe_count": 48,
+        "non_keyframe_count": 0
+      }
+    ]
+  }
+}

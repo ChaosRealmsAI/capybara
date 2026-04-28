@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "kind": "capy-scroll-media-pack",
+  "name": "vertical-reveal-2s",
+  "duration": 2.0,
+  "fps": 24.0,
+  "frame_count": 48,
+  "width": 180,
+  "height": 320,
+  "poster": "poster-320.jpg",
+  "default_clip": "scrub-180-crf28-allkey.mp4",
+  "fallback_clip": "scrub-120-crf32-allkey.mp4",
+  "hq_clip": "scrub-240-crf26-allkey.mp4",
+  "runtime": {
+    "js": "runtime/scroll-video.js",
+    "css": "runtime/scroll-video.css"
+  },
+  "requires": {
+    "http_range": true
+  }
+}
