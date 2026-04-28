@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en" data-page="watchmaker-scroll-story">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calibre Souverain | Watchmaker Scroll Story</title>
+    <meta
+      name="description"
+      content="A high-end watchmaker landing page with scroll-linked transparent mechanical layers assembling into a complete calibre."
+    />
+    <link rel="preload" href="./assets/watch/hero-tilted.png" as="image" />
+    <link rel="preload" href="./assets/watch/base-plate.png" as="image" />
+    <link rel="preload" href="./assets/watch/gear-train.png" as="image" />
+    <link rel="preload" href="./assets/watch/tourbillon.png" as="image" />
+    <link rel="preload" href="./assets/watch/moonphase.png" as="image" />
+    <link rel="preload" href="./assets/watch/case-ring.png" as="image" />
+    <link rel="preload" href="./assets/watch/hands.png" as="image" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="Maison Veyrat home">
+        <span class="brand-mark">MV</span>
+        <span class="brand-name">Maison Veyrat</span>
+      </a>
+      <nav class="site-nav">
+        <a href="#movement">The calibre</a>
+        <a href="#private">Viewing</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">Geneva / Grande complication</p>
+          <h1 id="hero-title">Calibre Souverain</h1>
+          <p class="hero-summary">
+            A rose-gold open-worked movement revealed through six mechanical
+            planes, tuned for a slow editorial scroll.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button primary" href="#movement">Enter the movement</a>
+            <a class="button secondary" href="#private">Request a viewing</a>
+          </div>
+        </div>
+
+        <div class="hero-watch" aria-hidden="true">
+          <img
+            class="hero-watch-image"
+            src="./assets/watch/hero-tilted.png"
+            width="1672"
+            height="941"
+            fetchpriority="high"
+            alt=""
+          />
+        </div>
+      </section>
+
+      <section class="assembly-story" id="movement" aria-labelledby="movement-title">
+        <div class="assembly-visual" aria-hidden="true">
+          <div class="ambient-line one"></div>
+          <div class="ambient-line two"></div>
+          <div class="watch-stage">
+            <div class="stage-glass"></div>
+            <img class="watch-layer" data-layer="0" src="./assets/watch/base-plate.png" width="1254" height="1254" alt="" />
+            <img class="watch-layer" data-layer="1" src="./assets/watch/gear-train.png" width="1254" height="1254" alt="" />
+            <img class="watch-layer" data-layer="2" src="./assets/watch/tourbillon.png" width="1254" height="1254" alt="" />
+            <img class="watch-layer" data-layer="3" src="./assets/watch/moonphase.png" width="1254" height="1254" alt="" />
+            <img class="watch-layer" data-layer="4" src="./assets/watch/case-ring.png" width="1254" height="1254" alt="" />
+            <img class="watch-layer" data-layer="5" src="./assets/watch/hands.png" width="1254" height="1254" alt="" />
+          </div>
+        </div>
+
+        <div class="chapters" aria-label="Movement chapters">
+          <article class="chapter left" data-step="0">
+            <div class="chapter-heading">
+              <span class="chapter-number">01</span>
+              <h2 id="movement-title">Foundation</h2>
+            </div>
+            <p class="chapter-subtitle">Skeletonized main plate</p>
+            <p>
+              The calibre opens with a rhodium architecture: sharp bridges,
+              jewel seats, polished bevels, and negative space that makes the
+              movement legible before it becomes ornate.
+            </p>
+          </article>
+
+          <article class="chapter right" data-step="1">
+            <div class="chapter-heading">
+              <span class="chapter-number">02</span>
+              <h2>Transmission</h2>
+            </div>
+            <p class="chapter-subtitle">Train of time</p>
+            <p>
+              Wheels settle into the central axis with measured spacing. The
+              visual rhythm is dense, but each bridge keeps the mechanics clean.
+            </p>
+          </article>
+
+          <article class="chapter left" data-step="2">
+            <div class="chapter-heading">
+              <span class="chapter-number">03</span>
+              <h2>Regulation</h2>
+            </div>
+            <p class="chapter-subtitle">Lower cage</p>
+            <p>
+              The regulating cage anchors the composition low in the aperture,
+              balancing polished steel, rose-gold arms, and deep shadow.
+            </p>
+          </article>
+
+          <article class="chapter right" data-step="3">
+            <div class="chapter-heading">
+              <span class="chapter-number">04</span>
+              <h2>Astronomy</h2>
+            </div>
+            <p class="chapter-subtitle">Moonphase register</p>
+            <p>
+              A dark celestial register interrupts the metallic field, adding a
+              traditional complication without crowding the open-worked dial.
+            </p>
+          </article>
+
+          <article class="chapter left" data-step="4">
+            <div class="chapter-heading">
+              <span class="chapter-number">05</span>
+              <h2>Casework</h2>
+            </div>
+            <p class="chapter-subtitle">Rose-gold perimeter</p>
+            <p>
+              The case ring gathers the movement into a formal silhouette. Warm
+              metal gives the technical stack a precise, ceremonial edge.
+            </p>
+          </article>
+
+          <article class="chapter right" data-step="5">
+            <div class="chapter-heading">
+              <span class="chapter-number">06</span>
+              <h2>Indication</h2>
+            </div>
+            <p class="chapter-subtitle">Blued-steel hands</p>
+            <p>
+              The final hand set lands lightly over the mechanics, turning a
+              visible machine into an instrument for reading time.
+            </p>
+          </article>
+
+          <article class="chapter left final" data-step="6">
+            <div class="chapter-heading">
+              <span class="chapter-number">07</span>
+              <h2>Assembly</h2>
+            </div>
+            <p class="chapter-subtitle">One controlled reveal</p>
+            <p>
+              The layers hold together in a single calm view: technical depth
+              without theatrical clutter, ready for a private appointment.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="private-viewing" id="private" aria-labelledby="private-title">
+        <div>
+          <p class="eyebrow">Private salon</p>
+          <h2 id="private-title">A quieter way to inspect complexity.</h2>
+        </div>
+        <p>
+          Every visual decision in this prototype is replaceable by owned
+          Capybara-generated layers while preserving the scroll behavior and
+          page contract.
+        </p>
+        <a class="button primary dark" href="#top">Return to the calibre</a>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
+
