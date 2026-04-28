@@ -92,14 +92,14 @@ fn validate_request(request: &StoryPackRequest) -> Result<()> {
     Ok(())
 }
 
-fn read_story_source(path: &Path) -> Result<StorySourceManifest> {
+pub(crate) fn read_story_source(path: &Path) -> Result<StorySourceManifest> {
     let raw = fs::read_to_string(path)
         .map_err(|err| ScrollMediaError::Message(format!("read story manifest failed: {err}")))?;
     serde_json::from_str(&raw)
         .map_err(|err| ScrollMediaError::Message(format!("parse story manifest failed: {err}")))
 }
 
-fn validate_story_source(source: &StorySourceManifest) -> Result<()> {
+pub(crate) fn validate_story_source(source: &StorySourceManifest) -> Result<()> {
     if source.schema_version != 1 {
         return Err(ScrollMediaError::Message(format!(
             "unsupported story schema_version {}; expected 1",

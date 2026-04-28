@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::compile::report::CompileError;
-use crate::compose::{CompositionDocument, POSTER_COMPONENT_ID};
+use crate::compose::{CompositionDocument, POSTER_COMPONENT_ID, SCROLL_CHAPTER_COMPONENT_ID};
 
 pub const RENDER_SOURCE_SCHEMA: &str = "nf.render_source.v1";
 const COMPONENT_ID: &str = "capy.poster-document";
@@ -134,6 +134,13 @@ pub fn compile_embedded(
     composition: &CompositionDocument,
     out: &Path,
 ) -> Result<EmbeddedRenderSourceReport, CompileError> {
+    if composition
+        .tracks
+        .iter()
+        .any(|track| track.component == SCROLL_CHAPTER_COMPONENT_ID)
+    {
+        return compile_scroll_chapters(composition, out);
+    }
     let poster_value = poster_param(composition)?;
     let poster: PosterDocument =
         serde_json::from_value(poster_value.clone()).map_err(invalid_poster_error)?;
@@ -141,6 +148,37 @@ pub fn compile_embedded(
     let report = render_source(composition, &poster, poster_value);
     write_source(out, &report.source)?;
     Ok(report)
+}
+
+fn compile_scroll_chapters(
+    composition: &CompositionDocument,
+    out: &Path,
+) -> Result<EmbeddedRenderSourceReport, CompileError> {
+    let duration_ms = composition.duration_ms.max(1);
+    let viewport = EmbeddedRenderViewport {
+        w: composition.viewport.w,
+        h: composition.viewport.h,
+        ratio: composition.viewport.ratio.clone(),
+    };
+    let component_js = read_scroll_component(out)?;
+    let source = scroll_render_source_json(composition, duration_ms, &viewport, component_js);
+    let track_count = composition
+        .tracks
+        .iter()
+        .filter(|track| track.component == SCROLL_CHAPTER_COMPONENT_ID)
+        .count();
+    write_source(out, &source)?;
+    Ok(EmbeddedRenderSourceReport {
+        schema_version: RENDER_SOURCE_SCHEMA.to_string(),
+        component: SCROLL_CHAPTER_COMPONENT_ID.to_string(),
+        duration_ms,
+        viewport,
+        layer_count: 0,
+        asset_count: composition.assets.len(),
+        generated_assets: 0,
+        track_count,
+        source,
+    })
 }
 
 fn render_source(
@@ -192,6 +230,97 @@ fn render_source_json(
             COMPONENT_ID: POSTER_COMPONENT_JS
         },
         "tracks": tracks_json(poster_value, duration_ms)
+    })
+}
+
+fn scroll_render_source_json(
+    composition: &CompositionDocument,
+    duration_ms: u64,
+    viewport: &EmbeddedRenderViewport,
+    component_js: String,
+) -> Value {
+    json!({
+        "schema_version": RENDER_SOURCE_SCHEMA,
+        "duration_ms": duration_ms,
+        "duration": duration_ms,
+        "meta": {
+            "name": composition.name,
+            "project": "capybara",
+            "composition": composition.id,
+            "render_source_schema": RENDER_SOURCE_SCHEMA,
+            "duration_ms": duration_ms,
+            "source_document_type": "capy-scroll-media"
+        },
+        "viewport": viewport_json(viewport),
+        "theme": {
+            "background": "#111827",
+            "css": ":root { --capy-scroll-background: #111827; } body { background: #111827; }"
+        },
+        "assets": composition.assets,
+        "components": {
+            SCROLL_CHAPTER_COMPONENT_ID: component_js
+        },
+        "tracks": scroll_tracks_json(composition)
+    })
+}
+
+fn scroll_tracks_json(composition: &CompositionDocument) -> Value {
+    Value::Array(
+        composition
+            .tracks
+            .iter()
+            .filter(|track| track.component == SCROLL_CHAPTER_COMPONENT_ID)
+            .map(|track| {
+                let begin_ms = parse_ms(&track.time.start).unwrap_or(0);
+                let end_ms = parse_ms(&track.time.end).unwrap_or(begin_ms + track.duration_ms);
+                json!({
+                    "id": track.id,
+                    "kind": track.kind,
+                    "z": track.z,
+                    "clips": [{
+                        "id": format!("{}.clip", track.id),
+                        "begin": begin_ms,
+                        "begin_ms": begin_ms,
+                        "end": end_ms,
+                        "end_ms": end_ms,
+                        "params": {
+                            "component": SCROLL_CHAPTER_COMPONENT_ID,
+                            "params": track.params,
+                            "style": {},
+                            "track": {
+                                "id": track.id,
+                                "kind": "component",
+                                "source": "capy-scroll-media"
+                            }
+                        }
+                    }]
+                })
+            })
+            .collect(),
+    )
+}
+
+fn parse_ms(value: &str) -> Option<u64> {
+    value
+        .strip_suffix("ms")
+        .unwrap_or(value)
+        .parse::<u64>()
+        .ok()
+}
+
+fn read_scroll_component(out: &Path) -> Result<String, CompileError> {
+    let component_path = out
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("components")
+        .join("html.capy-scroll-chapter.js");
+    fs::read_to_string(&component_path).map_err(|err| {
+        CompileError::new(
+            "COMPILE_FAILED",
+            "$.components.html.capy-scroll-chapter",
+            format!("read scroll chapter component failed: {err}"),
+            "next step · rerun capy media scroll-pack --emit-composition",
+        )
     })
 }
 

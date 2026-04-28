@@ -8,6 +8,7 @@ use serde_json::Value;
 pub const COMPOSITION_SCHEMA: &str = "nextframe.composition.v2";
 pub const CAPY_COMPOSITION_SCHEMA_VERSION: &str = "capy.composition.v1";
 pub const POSTER_COMPONENT_ID: &str = "html.capy-poster";
+pub const SCROLL_CHAPTER_COMPONENT_ID: &str = "html.capy-scroll-chapter";
 pub const POSTER_TRACK_ID: &str = "track-poster";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

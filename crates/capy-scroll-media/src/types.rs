@@ -110,6 +110,21 @@ pub struct StoryPackRequest {
     pub dry_run: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct ScrollCompositionRequest {
+    pub input: PathBuf,
+    pub out_dir: PathBuf,
+    pub name: String,
+    pub overwrite: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoryCompositionRequest {
+    pub manifest: PathBuf,
+    pub out_dir: PathBuf,
+    pub overwrite: bool,
+}
+
 impl StoryPackRequest {
     pub fn presets(&self) -> [ClipPreset; 3] {
         [
@@ -265,6 +280,18 @@ pub struct StoryPackReport {
     pub manifest: Option<StoryPackManifest>,
     pub files: Vec<PackFile>,
     pub verification: Option<VerificationSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompositionEmitReport {
+    pub ok: bool,
+    pub input: String,
+    pub output_dir: String,
+    pub composition_path: String,
+    pub component_paths: Vec<String>,
+    pub tracks: usize,
+    pub duration_ms: u64,
+    pub components: Vec<String>,
 }
 
 impl ScrollPackManifest {

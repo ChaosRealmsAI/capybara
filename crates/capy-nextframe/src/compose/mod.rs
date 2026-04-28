@@ -12,6 +12,7 @@ use serde::Serialize;
 pub use composition::{
     CAPY_COMPOSITION_SCHEMA_VERSION, COMPOSITION_SCHEMA, CompositionAsset, CompositionDocument,
     CompositionTheme, CompositionTime, CompositionTrack, CompositionViewport, POSTER_COMPONENT_ID,
+    SCROLL_CHAPTER_COMPONENT_ID,
 };
 pub use slug::poster_slug;
 

@@ -26,7 +26,16 @@ pub fn snapshot_embedded(
 pub fn render_frame(render_source_path: &Path) -> Result<RgbaImage, SnapshotError> {
     let source = read_source(render_source_path)?;
     let viewport = viewport(&source);
-    let poster = poster_from_source(&source)?;
+    let poster = match poster_from_source(&source) {
+        Ok(poster) => poster,
+        Err(_) if has_scroll_chapter_component(&source) => {
+            let mut image =
+                ImageBuffer::from_pixel(viewport.0, viewport.1, Rgba([17, 24, 39, 255]));
+            render_scroll_placeholder(&mut image);
+            return Ok(image);
+        }
+        Err(err) => return Err(err),
+    };
     let background = poster
         .get("canvas")
         .and_then(|canvas| canvas.get("background"))
@@ -36,6 +45,46 @@ pub fn render_frame(render_source_path: &Path) -> Result<RgbaImage, SnapshotErro
     let mut image = ImageBuffer::from_pixel(viewport.0, viewport.1, background);
     render_layers(&mut image, &poster, render_source_path);
     Ok(image)
+}
+
+fn has_scroll_chapter_component(source: &Value) -> bool {
+    source
+        .get("components")
+        .and_then(|components| components.get("html.capy-scroll-chapter"))
+        .is_some()
+}
+
+fn render_scroll_placeholder(image: &mut RgbaImage) {
+    let width = image.width();
+    let height = image.height();
+    let panel = Rect {
+        x: width / 8,
+        y: height / 3,
+        w: width.saturating_mul(3) / 4,
+        h: height / 3,
+    };
+    fill_rect(image, panel, Rgba([31, 41, 55, 255]));
+    let line_h = (panel.h / 10).max(4);
+    fill_rect(
+        image,
+        Rect {
+            x: panel.x + panel.w / 12,
+            y: panel.y + panel.h / 4,
+            w: panel.w / 3,
+            h: line_h,
+        },
+        Rgba([156, 163, 175, 255]),
+    );
+    fill_rect(
+        image,
+        Rect {
+            x: panel.x + panel.w / 12,
+            y: panel.y + panel.h / 2,
+            w: panel.w.saturating_mul(2) / 3,
+            h: line_h * 2,
+        },
+        Rgba([249, 250, 251, 255]),
+    );
 }
 
 pub fn read_png_metrics(path: &Path) -> Result<SnapshotMetrics, SnapshotError> {

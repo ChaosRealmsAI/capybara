@@ -5,10 +5,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
-use crate::compose::{CAPY_COMPOSITION_SCHEMA_VERSION, CompositionDocument, POSTER_COMPONENT_ID};
+use crate::compose::{
+    CAPY_COMPOSITION_SCHEMA_VERSION, CompositionDocument, POSTER_COMPONENT_ID,
+    SCROLL_CHAPTER_COMPONENT_ID,
+};
 use crate::validate::report::{ValidationError, ValidationReport, ValidationWarning};
 
-const REGISTERED_COMPONENTS: &[&str] = &[POSTER_COMPONENT_ID];
+const REGISTERED_COMPONENTS: &[&str] = &[POSTER_COMPONENT_ID, SCROLL_CHAPTER_COMPONENT_ID];
 
 pub fn validate_structure(path: &Path) -> ValidationReport {
     let mut report = ValidationReport::new(path.to_path_buf(), trace_id());
