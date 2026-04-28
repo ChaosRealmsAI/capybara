@@ -997,6 +997,27 @@ mod web {
         Ok(found)
     }
 
+    /// JS-callable absolute move bridge for AI actions and desktop verification.
+    #[wasm_bindgen]
+    pub fn move_node_by_id(id: u32, x: f64, y: f64) -> Result<bool, JsValue> {
+        let state_arc = shared_state().ok_or_else(|| {
+            JsValue::from_str("move_node_by_id(): no shared state · call start() first")
+        })?;
+        let moved = {
+            let mut state = state_arc
+                .lock()
+                .map_err(|_| JsValue::from_str("move_node_by_id(): state lock poisoned"))?;
+            state.move_shape_by_id(u64::from(id), x, y).is_ok()
+        };
+        if moved {
+            redraw_via_shared();
+            log(&format!(
+                "[capy-canvas-web] move_node_by_id(id={id}, x={x:.1}, y={y:.1}) ok"
+            ));
+        }
+        Ok(moved)
+    }
+
     // ── v0.8 introspection exports ──
     //
     // The desktop shell (capy-shell) routes `capy state --key=canvas.*` to the

@@ -64,6 +64,16 @@ try {
   assert(report.checks.interaction.includesCanvasSelection, "composed prompt must include canvas selection");
   assert(report.checks.interaction.pageErrors.length === 0, "page errors after interaction must be empty");
 
+  report.checks.label_move_sync = capyJson([
+    "devtools",
+    "--eval",
+    "window.capyWorkbench.verifyLabelMoveSync()"
+  ]);
+  assert(report.checks.label_move_sync.movedDistance >= 20, "move probe must move the Storyboard node");
+  assert(report.checks.label_move_sync.duringAligned, "canvas label must track node during move");
+  assert(report.checks.label_move_sync.afterAligned, "canvas label must track node after move");
+  assert(report.checks.label_move_sync.pageErrors.length === 0, "page errors after move must be empty");
+
   report.checks.dom_canvas = capyJson(["screenshot", "--region", "canvas", "--out", domCanvasPath]);
   report.checks.dom_planner = capyJson(["screenshot", "--region", "planner", "--out", domPlannerPath]);
   assert(existsSync(openCapturePath), `missing visible desktop capture: ${openCapturePath}`);

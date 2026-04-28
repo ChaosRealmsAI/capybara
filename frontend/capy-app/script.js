@@ -5,6 +5,7 @@ import initCanvas, {
   current_tool,
   dark_mode,
   list_shapes,
+  move_node_by_id,
   select_node,
   selected_context,
   selected_context_text,
@@ -44,10 +45,16 @@ const bareEl = document.querySelector("#bare");
 const searchEl = document.querySelector("#search");
 const writeCodeEl = document.querySelector("#write-code");
 const runtimeFootEl = document.querySelector("#runtime-foot");
+const canvasEl = document.querySelector("#capy-canvas");
 const canvasStatusEl = document.querySelector("#canvas-status");
 const labelLayerEl = document.querySelector("#node-label-layer");
 const contextTitleEl = document.querySelector("#context-title");
 const contextMetaEl = document.querySelector("#context-meta");
+
+let labelRefreshFrame = 0;
+let liveLabelRefreshFrame = 0;
+let liveLabelRefreshActive = false;
+let canvasLabelSyncInstalled = false;
 
 const pending = new Map();
 const state = {
@@ -82,6 +89,7 @@ window.capy = {
   current_tool,
   dark_mode,
   list_shapes,
+  move_node_by_id,
   select_node,
   selected_context,
   selected_context_text,
@@ -91,8 +99,12 @@ window.capyWorkbench = {
   composePromptWithContext,
   refreshPlannerContext,
   seedDemoCanvas,
+  moveNodeById,
   selectNode,
-  stateSnapshot
+  scheduleCanvasLabelRefresh,
+  startLiveCanvasLabelRefresh,
+  stateSnapshot,
+  verifyLabelMoveSync
 };
 
 topbar?.addEventListener("mousedown", (event) => {
@@ -220,6 +232,7 @@ async function initCanvasWorkbench() {
     startCanvas("capy-canvas");
     state.canvas.ready = true;
     updateCanvasStatus("Canvas ready");
+    installCanvasLabelSync();
     await nextFrame();
     seedDemoCanvas();
     refreshPlannerContext();
@@ -256,6 +269,18 @@ function selectNode(id) {
   return ok;
 }
 
+function moveNodeById(id, x, y) {
+  const numericId = Number(id);
+  const nextX = Number(x);
+  const nextY = Number(y);
+  if (!Number.isFinite(numericId) || !Number.isFinite(nextX) || !Number.isFinite(nextY)) {
+    return false;
+  }
+  const ok = move_node_by_id(numericId, nextX, nextY);
+  refreshPlannerContext();
+  return ok;
+}
+
 function refreshPlannerContext() {
   const snapshot = normalizeValue(ai_snapshot()) || {};
   const context = normalizeValue(selected_context()) || { selected_count: 0, items: [] };
@@ -268,33 +293,198 @@ function refreshPlannerContext() {
   state.canvas.selectedNode = selectedItem;
   state.canvas.currentTool = current_tool();
   state.canvas.darkMode = Boolean(dark_mode());
+  state.canvas.viewport = snapshot.viewport || null;
   state.canvas.snapshotText = ai_snapshot_text();
   state.planner.context = context;
   state.planner.contextText = selected_context_text();
-  renderNodeLabels(nodes, state.selectedId);
+  renderNodeLabels(nodes, state.selectedId, snapshot.viewport || null);
   renderPlannerContext(selectedItem);
   updateCanvasStatus(`${state.canvas.nodeCount} nodes · ${state.canvas.currentTool}`);
   return stateSnapshot();
 }
 
-function renderNodeLabels(nodes, selectedId) {
+function renderNodeLabels(nodes, selectedId, viewport) {
   if (!labelLayerEl) return;
-  labelLayerEl.innerHTML = "";
+  const existing = new Map(
+    Array.from(labelLayerEl.querySelectorAll("[data-node-id]")).map((label) => [
+      label.dataset.nodeId,
+      label
+    ])
+  );
   for (const node of nodes) {
     if (!node || !node.bounds) continue;
-    const label = document.createElement("button");
-    label.type = "button";
+    const nodeId = String(node.id);
+    let label = existing.get(nodeId);
+    if (!label) {
+      label = document.createElement("button");
+      label.type = "button";
+      label.innerHTML = `<strong></strong><span></span>`;
+      labelLayerEl.append(label);
+    }
+    existing.delete(nodeId);
     label.className = `node-label${String(node.id) === String(selectedId) ? " is-selected" : ""}`;
-    label.dataset.nodeId = String(node.id);
-    label.style.left = `${Math.round(node.bounds.x)}px`;
-    label.style.top = `${Math.round(node.bounds.y)}px`;
+    label.dataset.nodeId = nodeId;
+    const box = nodeLabelBox(node, viewport);
+    label.style.left = "0";
+    label.style.top = "0";
+    label.style.transform = `translate3d(${box.x}px, ${box.y}px, 0)`;
     label.style.width = `${Math.max(150, Math.min(210, Math.round(node.bounds.w || 180)))}px`;
-    label.innerHTML = `<strong></strong><span></span>`;
     label.querySelector("strong").textContent = node.title || `Node ${node.id}`;
     label.querySelector("span").textContent = `${contentKindLabel(node.content_kind)} · ${node.next_action || "ready"}`;
-    label.addEventListener("click", () => selectNode(node.id));
-    labelLayerEl.append(label);
+    label.onclick = () => selectNode(node.id);
   }
+  for (const orphan of existing.values()) {
+    orphan.remove();
+  }
+}
+
+function nodeLabelBox(node, viewport) {
+  const zoom = Number(viewport?.zoom) || 1;
+  const offset = viewport?.camera_offset || { x: 0, y: 0 };
+  return {
+    x: Math.round(node.bounds.x * zoom + (Number(offset.x) || 0)),
+    y: Math.round(node.bounds.y * zoom + (Number(offset.y) || 0))
+  };
+}
+
+function installCanvasLabelSync() {
+  if (canvasLabelSyncInstalled || !canvasEl) return;
+  canvasLabelSyncInstalled = true;
+  canvasEl.addEventListener("pointerdown", startLiveCanvasLabelRefresh);
+  canvasEl.addEventListener("pointermove", scheduleCanvasLabelRefresh, { passive: true });
+  canvasEl.addEventListener("wheel", scheduleCanvasLabelRefresh, { passive: true });
+  canvasEl.addEventListener("keyup", scheduleCanvasLabelRefresh);
+  window.addEventListener("pointerup", stopLiveCanvasLabelRefresh);
+  window.addEventListener("pointercancel", stopLiveCanvasLabelRefresh);
+  window.addEventListener("blur", stopLiveCanvasLabelRefresh);
+}
+
+function scheduleCanvasLabelRefresh() {
+  if (labelRefreshFrame) return;
+  labelRefreshFrame = requestAnimationFrame(() => {
+    labelRefreshFrame = 0;
+    refreshPlannerContext();
+  });
+}
+
+function startLiveCanvasLabelRefresh() {
+  liveLabelRefreshActive = true;
+  if (liveLabelRefreshFrame) return;
+  const tick = () => {
+    if (!liveLabelRefreshActive) {
+      liveLabelRefreshFrame = 0;
+      return;
+    }
+    refreshPlannerContext();
+    liveLabelRefreshFrame = requestAnimationFrame(tick);
+  };
+  liveLabelRefreshFrame = requestAnimationFrame(tick);
+}
+
+function stopLiveCanvasLabelRefresh() {
+  liveLabelRefreshActive = false;
+  scheduleCanvasLabelRefresh();
+}
+
+function verifyLabelMoveSync() {
+  return new Promise((resolve) => {
+    const done = (value) => resolve(normalizeValue(value));
+    try {
+      if (!canvasEl || !labelLayerEl) {
+        done({ passed: false, reason: "missing canvas or label layer", pageErrors: window.__capyPageErrors || [] });
+        return;
+      }
+
+      const snapshotTarget = () => {
+        const current = refreshPlannerContext();
+        const nodes = Array.isArray(current?.blocks) ? current.blocks : [];
+        const node = nodes.find((item) => item.title === "Storyboard")
+          || nodes.find((item) => item.content_kind === "video");
+        if (!node?.bounds) return null;
+        selectNode(node.id);
+        const selected = refreshPlannerContext();
+        const selectedNode = selected.blocks.find((item) => String(item.id) === String(node.id)) || node;
+        const label = labelLayerEl.querySelector(`[data-node-id="${selectedNode.id}"]`);
+        if (!label) return null;
+        const viewport = selected.canvas?.viewport || { zoom: 1, camera_offset: { x: 0, y: 0 } };
+        const box = nodeLabelBox(selectedNode, viewport);
+        const layerRect = labelLayerEl.getBoundingClientRect();
+        const rect = label.getBoundingClientRect();
+        return {
+          node: selectedNode,
+          rect: {
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height
+          },
+          expected: {
+            x: layerRect.left + box.x,
+            y: layerRect.top + box.y
+          },
+          layerRect: {
+            left: layerRect.left,
+            top: layerRect.top
+          },
+          viewport
+        };
+      };
+
+      const aligned = (sample) => Boolean(sample
+        && Math.abs(sample.rect.left - sample.expected.x) <= 10
+        && Math.abs(sample.rect.top - sample.expected.y) <= 10);
+
+      const before = snapshotTarget();
+      if (!before) {
+        done({ passed: false, reason: "missing Storyboard node or label", pageErrors: window.__capyPageErrors || [] });
+        return;
+      }
+
+      canvasEl.focus({ preventScroll: true });
+      startLiveCanvasLabelRefresh();
+      const nextX = before.node.bounds.x + 84;
+      const nextY = before.node.bounds.y + 48;
+      const moved = moveNodeById(before.node.id, nextX, nextY);
+      setTimeout(() => {
+        scheduleCanvasLabelRefresh();
+        setTimeout(() => {
+          const during = snapshotTarget();
+          setTimeout(() => {
+            stopLiveCanvasLabelRefresh();
+            const after = snapshotTarget();
+            const dx = (after?.node?.bounds?.x || 0) - (before.node.bounds.x || 0);
+            const dy = (after?.node?.bounds?.y || 0) - (before.node.bounds.y || 0);
+            const movedDistance = Math.hypot(dx, dy);
+            done({
+              passed: Boolean(aligned(during) && aligned(after) && movedDistance >= 20),
+              moved,
+              nodeId: before.node.id,
+              movedDistance: Number(movedDistance.toFixed(2)),
+              duringAligned: aligned(during),
+              afterAligned: aligned(after),
+              before: { x: before.node.bounds.x, y: before.node.bounds.y },
+              during: during ? {
+                x: during.node.bounds.x,
+                y: during.node.bounds.y,
+                labelLeft: during.rect.left,
+                expectedLeft: during.expected.x
+              } : null,
+              after: after ? {
+                x: after.node.bounds.x,
+                y: after.node.bounds.y,
+                labelLeft: after.rect.left,
+                expectedLeft: after.expected.x
+              } : null,
+              pageErrors: window.__capyPageErrors || [],
+              consoleErrors: (window.__capyConsoleEvents || []).filter((event) => event.level === "error")
+            });
+          }, 120);
+        }, 120);
+      }, 80);
+    } catch (error) {
+      done({ passed: false, reason: String(error), pageErrors: window.__capyPageErrors || [] });
+    }
+  });
 }
 
 function renderPlannerContext(item) {
