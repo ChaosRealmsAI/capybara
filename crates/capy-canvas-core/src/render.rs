@@ -161,12 +161,14 @@ pub fn build_scene(state: &AppState) -> Scene {
     }
 
     // UI overlays (screen space)
-    ui::draw_toolbar(&mut scene, state);
-    ui::draw_style_panel(&mut scene, state);
-    ui::draw_minimap(&mut scene, state);
+    // v0.12 · suppress legacy WASM chrome (toolbar / minimap / style_panel / status_bar)
+    // because the HTML shell now provides Arc-glass replacements.
+    // ui::draw_toolbar(&mut scene, state);
+    // ui::draw_style_panel(&mut scene, state);
+    // ui::draw_minimap(&mut scene, state);
     ui::draw_context_menu(&mut scene, state);
     ui::draw_tooltip(&mut scene, state);
-    ui::draw_status_bar(&mut scene, state);
+    // ui::draw_status_bar(&mut scene, state);
     ui::draw_toasts(&mut scene, state);
     ui::draw_help_overlay(&mut scene, state);
 

@@ -14,48 +14,60 @@ import initCanvas, {
   start as startCanvas
 } from "./canvas-pkg/capy_canvas_web.js";
 
-const topbar = document.querySelector(".topbar");
-const listEl = document.querySelector("#conversation-list");
-const messagesEl = document.querySelector("#message-list");
-const titleEl = document.querySelector("#chat-title");
-const subtitleEl = document.querySelector("#chat-subtitle");
-const newChatEl = document.querySelector("#new-chat");
-const stopEl = document.querySelector("#stop-run");
-const formEl = document.querySelector("#composer");
-const promptEl = document.querySelector("#prompt");
-const providerEl = document.querySelector("#provider");
-const cwdEl = document.querySelector("#cwd");
-const modelEl = document.querySelector("#model");
-const effortEl = document.querySelector("#effort");
-const policyEl = document.querySelector("#policy");
-const sandboxEl = document.querySelector("#sandbox");
-const serviceTierEl = document.querySelector("#service-tier");
-const runStatusEl = document.querySelector("#run-status");
-const systemPromptEl = document.querySelector("#system-prompt");
-const appendSystemPromptEl = document.querySelector("#append-system-prompt");
-const developerInstructionsEl = document.querySelector("#developer-instructions");
-const addDirsEl = document.querySelector("#add-dirs");
-const allowedToolsEl = document.querySelector("#allowed-tools");
-const disallowedToolsEl = document.querySelector("#disallowed-tools");
-const mcpConfigEl = document.querySelector("#mcp-config");
-const modelProviderEl = document.querySelector("#model-provider");
-const approvalsReviewerEl = document.querySelector("#approvals-reviewer");
-const reasoningSummaryEl = document.querySelector("#reasoning-summary");
-const outputSchemaEl = document.querySelector("#output-schema");
-const bareEl = document.querySelector("#bare");
-const searchEl = document.querySelector("#search");
-const writeCodeEl = document.querySelector("#write-code");
-const runtimeFootEl = document.querySelector("#runtime-foot");
-const canvasEl = document.querySelector("#capy-canvas");
-const canvasStatusEl = document.querySelector("#canvas-status");
-const labelLayerEl = document.querySelector("#node-label-layer");
-const contextTitleEl = document.querySelector("#context-title");
-const contextMetaEl = document.querySelector("#context-meta");
-const imageToolPromptEl = document.querySelector("#image-tool-prompt");
-const imageToolDryRunEl = document.querySelector("#image-tool-dry-run");
-const imageToolLiveEl = document.querySelector("#image-tool-live");
-const imageToolStatusEl = document.querySelector("#image-tool-status");
-const imageToolMetaEl = document.querySelector("#image-tool-meta");
+/* ─── DOM refs ─── */
+const $ = (sel) => document.querySelector(sel);
+
+const topbar = $(".topbar");
+const cmdkTriggerEl = $("#cmdk-trigger");
+const listEl = $("#conversation-list");
+const messagesEl = $("#message-list");
+const newChatEl = $("#new-chat");
+const stopEl = $("#stop-run");
+const runStatusEl = $("#run-status");
+const formEl = $("#composer");
+const promptEl = $("#prompt");
+const configSummaryEl = $("#config-summary");
+const configDialogEl = $("#config-dialog");
+const configDialogCloseEl = $("#config-dialog-close");
+const configDialogDoneEl = $("#config-dialog-done");
+const providerEl = $("#provider");
+const cwdEl = $("#cwd");
+const modelEl = $("#model");
+const effortEl = $("#effort");
+const policyEl = $("#policy");
+const sandboxEl = $("#sandbox");
+const serviceTierEl = $("#service-tier");
+const systemPromptEl = $("#system-prompt");
+const appendSystemPromptEl = $("#append-system-prompt");
+const developerInstructionsEl = $("#developer-instructions");
+const addDirsEl = $("#add-dirs");
+const allowedToolsEl = $("#allowed-tools");
+const disallowedToolsEl = $("#disallowed-tools");
+const mcpConfigEl = $("#mcp-config");
+const modelProviderEl = $("#model-provider");
+const approvalsReviewerEl = $("#approvals-reviewer");
+const reasoningSummaryEl = $("#reasoning-summary");
+const outputSchemaEl = $("#output-schema");
+const bareEl = $("#bare");
+const searchEl = $("#search");
+const writeCodeEl = $("#write-code");
+const runtimeFootEl = $("#runtime-foot");
+const canvasEl = $("#capy-canvas");
+const canvasStatusEl = $("#canvas-status");
+const labelLayerEl = $("#node-label-layer");
+const contextTitleEl = $("#context-title");
+const contextMetaEl = $("#context-meta");
+const cmdPaletteEl = $("#cmd-palette");
+const cmdSearchEl = $("#cmd-search");
+const cmdCloseEl = $("#cmd-close");
+const cmdListEl = $("#cmd-list");
+const cmdToolEl = $("#canvas-image-tool");
+const cmdToolBackEl = $("#cmd-tool-back");
+const imageToolPromptEl = $("#image-tool-prompt");
+const imageToolDryRunEl = $("#image-tool-dry-run");
+const imageToolLiveEl = $("#image-tool-live");
+const imageToolStatusEl = $("#image-tool-status");
+const imageToolMetaEl = $("#image-tool-meta");
 
 let labelRefreshFrame = 0;
 let liveLabelRefreshFrame = 0;
@@ -71,86 +83,47 @@ const state = {
   dbPath: null,
   selectedId: null,
   blocks: [],
-  canvas: {
-    ready: false,
-    nodeCount: 0,
-    selectedNode: null,
-    currentTool: "select",
-    snapshotText: "",
-    darkMode: false,
-    error: null
-  },
-  planner: {
-    context: null,
-    contextText: "",
-    lastOutboundPrompt: ""
-  },
-  canvasTool: {
-    status: "idle",
-    runId: null,
-    lastResult: null,
-    error: null
-  }
+  canvas: { ready: false, nodeCount: 0, selectedNode: null, currentTool: "select", snapshotText: "", darkMode: false, error: null },
+  planner: { context: null, contextText: "", lastOutboundPrompt: "" },
+  canvasTool: { status: "idle", runId: null, lastResult: null, error: null }
 };
 
 window.CAPYBARA_STATE = state;
 window.capy = {
-  add_image_asset_at,
-  ai_snapshot,
-  ai_snapshot_text,
-  create_content_card,
-  current_tool,
-  dark_mode,
-  list_shapes,
-  move_node_by_id,
-  select_node,
-  selected_context,
-  selected_context_text,
-  shape_count
+  add_image_asset_at, ai_snapshot, ai_snapshot_text, create_content_card,
+  current_tool, dark_mode, list_shapes, move_node_by_id, select_node,
+  selected_context, selected_context_text, shape_count
 };
 window.capyWorkbench = {
-  composePromptWithContext,
-  refreshPlannerContext,
-  seedDemoCanvas,
-  createContentCard,
-  insertImageFromBase64,
-  moveNodeById,
-  selectNode,
-  scheduleCanvasLabelRefresh,
-  startLiveCanvasLabelRefresh,
-  stateSnapshot,
-  startCanvasImageTool,
-  verifyCanvasImageTool,
-  verifyLabelMoveSync
+  composePromptWithContext, refreshPlannerContext, seedDemoCanvas,
+  createContentCard, insertImageFromBase64, moveNodeById, selectNode,
+  scheduleCanvasLabelRefresh, startLiveCanvasLabelRefresh, stateSnapshot,
+  startCanvasImageTool, verifyCanvasImageTool, verifyLabelMoveSync,
+  openCmdPalette, closeCmdPalette
 };
 
+/* ─── window drag (CEF native) ─── */
 topbar?.addEventListener("mousedown", (event) => {
   if (event.button !== 0) return;
   const target = event.target;
-  if (target instanceof HTMLElement && target.closest("button, input, a, select, [role=button]")) {
-    return;
-  }
+  if (target instanceof HTMLElement && target.closest("button, input, a, select, [role=button]")) return;
   if (!window.ipc) return;
   window.ipc.postMessage(event.detail === 2 ? "maximize_toggle" : "drag_window");
 });
 
+/* ─── IPC bridge ─── */
 window.__capyReceive = (response) => {
   const entry = pending.get(response.req_id);
   if (!entry) return;
   pending.delete(response.req_id);
-  if (response.ok) {
-    entry.resolve(response.data);
-  } else {
-    entry.reject(response.error || { error: "request failed" });
-  }
+  if (response.ok) entry.resolve(response.data);
+  else entry.reject(response.error || { error: "request failed" });
 };
 
 window.addEventListener("capy:agent-event", (event) => {
   const detail = event.detail;
   if (!detail || detail.conversation_id !== state.activeId) return;
-  if (detail.status) {
-    setRunStatus(detail.status);
-  }
+  if (detail.status) setRunStatus(detail.status);
   if (detail.kind === "assistant_delta") {
     const current = state.streaming.get(detail.run_id) || "";
     state.streaming.set(detail.run_id, current + (detail.delta || ""));
@@ -169,12 +142,9 @@ window.addEventListener("capy:canvas-tool-event", (event) => {
   });
 });
 
+/* ─── form / button listeners ─── */
 newChatEl?.addEventListener("click", async () => {
-  try {
-    await createConversation();
-  } catch (error) {
-    renderError(error);
-  }
+  try { await createConversation(); } catch (error) { renderError(error); }
 });
 
 stopEl?.addEventListener("click", async () => {
@@ -182,9 +152,7 @@ stopEl?.addEventListener("click", async () => {
   try {
     await rpc("conversation-stop", { id: state.activeId });
     await openConversation(state.activeId);
-  } catch (error) {
-    renderError(error);
-  }
+  } catch (error) { renderError(error); }
 });
 
 formEl?.addEventListener("submit", async (event) => {
@@ -192,19 +160,13 @@ formEl?.addEventListener("submit", async (event) => {
   const prompt = promptEl.value.trim();
   if (!prompt) return;
   try {
-    if (!state.activeId) {
-      await createConversation();
-    }
+    if (!state.activeId) await createConversation();
     if (!state.activeId) return;
     promptEl.value = "";
     await updateConversationConfig();
     const outboundPrompt = composePromptWithContext(prompt);
     state.planner.lastOutboundPrompt = outboundPrompt;
-    state.messages.push({
-      id: `local-${Date.now()}`,
-      role: "user",
-      content: prompt
-    });
+    state.messages.push({ id: `local-${Date.now()}`, role: "user", content: prompt });
     renderMessages();
     setRunStatus("running");
     await rpc("conversation-send", {
@@ -223,10 +185,14 @@ providerEl?.addEventListener("change", () => {
   syncPolicyOptions();
   applyWriteCodeDefaults();
   renderRuntimeFoot();
+  updateConfigSummary();
 });
 
-writeCodeEl?.addEventListener("change", () => {
-  applyWriteCodeDefaults();
+[effortEl, policyEl, sandboxEl, writeCodeEl].forEach((el) => {
+  el?.addEventListener("change", () => {
+    if (el === writeCodeEl) applyWriteCodeDefaults();
+    updateConfigSummary();
+  });
 });
 
 imageToolDryRunEl?.addEventListener("click", () => {
@@ -245,6 +211,125 @@ imageToolLiveEl?.addEventListener("click", () => {
   });
 });
 
+/* ─── view tabs (stub · 切换 active class) ─── */
+document.querySelectorAll(".view-tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".view-tab").forEach((b) => b.classList.toggle("active", b === btn));
+  });
+});
+
+/* ─── config dialog · 弹窗 ─── */
+function openConfigDialog() {
+  if (!configDialogEl) return;
+  configDialogEl.classList.add("is-open");
+  configDialogEl.style.display = "grid";
+}
+async function closeConfigDialog() {
+  if (!configDialogEl) return;
+  configDialogEl.classList.remove("is-open");
+  configDialogEl.style.display = "none";
+  updateConfigSummary();
+  if (state.activeId) {
+    try { await updateConversationConfig(); } catch (e) { renderError(e); }
+  }
+}
+configSummaryEl?.addEventListener("click", openConfigDialog);
+configDialogCloseEl?.addEventListener("click", () => closeConfigDialog());
+configDialogDoneEl?.addEventListener("click", () => closeConfigDialog());
+configDialogEl?.addEventListener("click", (e) => {
+  if (e.target === configDialogEl) closeConfigDialog();
+});
+
+/* ─── cmd-K palette ─── */
+function openCmdPalette() {
+  if (!cmdPaletteEl) return;
+  switchCmdView("list");
+  cmdPaletteEl.classList.add("is-open");
+  cmdPaletteEl.style.display = "grid";
+  setTimeout(() => cmdSearchEl?.focus(), 30);
+}
+function closeCmdPalette() {
+  if (!cmdPaletteEl) return;
+  cmdPaletteEl.classList.remove("is-open");
+  cmdPaletteEl.style.display = "none";
+  if (cmdSearchEl) cmdSearchEl.value = "";
+  switchCmdView("list");
+}
+function switchCmdView(view) {
+  if (!cmdToolEl || !cmdListEl) return;
+  if (view === "tool") {
+    cmdListEl.style.display = "none";
+    cmdToolEl.hidden = false;
+    setTimeout(() => imageToolPromptEl?.focus(), 30);
+  } else {
+    cmdListEl.style.display = "";
+    cmdToolEl.hidden = true;
+  }
+}
+cmdkTriggerEl?.addEventListener("click", openCmdPalette);
+cmdCloseEl?.addEventListener("click", closeCmdPalette);
+cmdToolBackEl?.addEventListener("click", () => switchCmdView("list"));
+cmdPaletteEl?.addEventListener("click", (e) => {
+  if (e.target === cmdPaletteEl) closeCmdPalette();
+});
+cmdPaletteEl?.addEventListener("close", () => switchCmdView("list"));
+
+cmdListEl?.addEventListener("click", (e) => {
+  const row = e.target instanceof HTMLElement ? e.target.closest(".cmd-row") : null;
+  if (!row) return;
+  const cmd = row.dataset.cmd;
+  runCmd(cmd);
+});
+
+cmdSearchEl?.addEventListener("input", () => {
+  const q = cmdSearchEl.value.trim().toLowerCase();
+  cmdListEl?.querySelectorAll(".cmd-row").forEach((row) => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = !q || text.includes(q) ? "" : "none";
+  });
+});
+
+cmdSearchEl?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    const visible = cmdListEl?.querySelector('.cmd-row:not([style*="display: none"])');
+    if (visible) runCmd(visible.dataset.cmd);
+  }
+});
+
+window.addEventListener("keydown", (e) => {
+  const isCmdK = (e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K");
+  if (isCmdK) {
+    e.preventDefault();
+    if (cmdPaletteEl?.classList.contains("is-open")) closeCmdPalette(); else openCmdPalette();
+  }
+  if (e.key === "Escape") {
+    if (cmdPaletteEl?.classList.contains("is-open")) closeCmdPalette();
+    if (configDialogEl?.classList.contains("is-open")) closeConfigDialog();
+  }
+});
+
+function runCmd(cmd) {
+  if (cmd === "open-image-tool") {
+    if (imageToolPromptEl && !imageToolPromptEl.value.trim()) {
+      imageToolPromptEl.value = defaultImagePrompt();
+    }
+    switchCmdView("tool");
+    return;
+  }
+  if (cmd === "dark-mode") {
+    state.canvas.darkMode = !state.canvas.darkMode;
+    document.documentElement.dataset.canvasDark = state.canvas.darkMode ? "true" : "false";
+    closeCmdPalette();
+    return;
+  }
+  if (cmd === "seed-demo") {
+    seedDemoCanvas();
+    closeCmdPalette();
+    return;
+  }
+}
+
+/* ─── boot ─── */
 init();
 
 async function init() {
@@ -253,6 +338,7 @@ async function init() {
   setRunStatus("idle");
   renderCanvasToolStatus();
   renderMessages();
+  updateConfigSummary();
   await initCanvasWorkbench();
   try {
     const data = await rpc("conversation-list", {});
@@ -260,9 +346,7 @@ async function init() {
     state.conversations = data.conversations || [];
     renderConversations();
     renderRuntimeFoot();
-    if (state.conversations[0]) {
-      await openConversation(state.conversations[0].id);
-    }
+    if (state.conversations[0]) await openConversation(state.conversations[0].id);
   } catch (error) {
     renderError(error);
   }
@@ -288,18 +372,14 @@ async function initCanvasWorkbench() {
 }
 
 function seedDemoCanvas() {
-  if (state.blocks.length > 0 || state.canvas.nodeCount > 0) {
-    return state.blocks;
-  }
+  if (state.blocks.length > 0 || state.canvas.nodeCount > 0) return state.blocks;
   create_content_card("brand", "Brand Kit", 110, 105);
   create_content_card("image", "主视觉候选 A", 410, 96);
   create_content_card("web", "Landing Draft", 650, 322);
   create_content_card("video", "Storyboard", 222, 392);
   refreshPlannerContext();
   const preferred = state.blocks.find((node) => node.title === "主视觉候选 A") || state.blocks[0];
-  if (preferred) {
-    selectNode(preferred.id);
-  }
+  if (preferred) selectNode(preferred.id);
   return state.blocks;
 }
 
@@ -315,9 +395,7 @@ function moveNodeById(id, x, y) {
   const numericId = Number(id);
   const nextX = Number(x);
   const nextY = Number(y);
-  if (!Number.isFinite(numericId) || !Number.isFinite(nextX) || !Number.isFinite(nextY)) {
-    return false;
-  }
+  if (!Number.isFinite(numericId) || !Number.isFinite(nextX) || !Number.isFinite(nextY)) return false;
   const ok = move_node_by_id(numericId, nextX, nextY);
   refreshPlannerContext();
   return ok;
@@ -326,17 +404,10 @@ function moveNodeById(id, x, y) {
 function createContentCard(kind, title, x, y) {
   const nextX = Number(x);
   const nextY = Number(y);
-  if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
-    return { ok: false, error: "invalid position" };
-  }
+  if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return { ok: false, error: "invalid position" };
   const idx = create_content_card(kind, title, nextX, nextY);
   refreshPlannerContext();
-  return {
-    ok: true,
-    index: Number(idx),
-    selected_node: state.canvas.selectedNode,
-    snapshot: stateSnapshot()
-  };
+  return { ok: true, index: Number(idx), selected_node: state.canvas.selectedNode, snapshot: stateSnapshot() };
 }
 
 async function insertImageFromBase64(base64, title, x, y, meta = {}) {
@@ -347,9 +418,7 @@ async function insertImageFromBase64(base64, title, x, y, meta = {}) {
     throw new Error("insertImageFromBase64 requires numeric x/y");
   }
   const idx = add_image_asset_at(
-    nextX,
-    nextY,
-    bytes,
+    nextX, nextY, bytes,
     title || "Generated image",
     meta.sourcePath || "",
     meta.provider || "",
@@ -369,22 +438,15 @@ async function insertImageFromBase64(base64, title, x, y, meta = {}) {
 
 async function startCanvasImageTool({ live = false } = {}) {
   const prompt = imageToolPromptEl?.value.trim() || defaultImagePrompt();
-  if (imageToolPromptEl && !imageToolPromptEl.value.trim()) {
-    imageToolPromptEl.value = prompt;
-  }
+  if (imageToolPromptEl && !imageToolPromptEl.value.trim()) imageToolPromptEl.value = prompt;
   const placement = nextImagePlacement();
   state.canvasTool.status = "running";
   state.canvasTool.error = null;
   state.canvasTool.lastResult = null;
   renderCanvasToolStatus();
   const data = await rpc("canvas-generate-image", {
-    prompt,
-    provider: "apimart-gpt-image-2",
-    size: "1:1",
-    resolution: "1k",
-    live,
-    x: placement.x,
-    y: placement.y,
+    prompt, provider: "apimart-gpt-image-2", size: "1:1", resolution: "1k", live,
+    x: placement.x, y: placement.y,
     title: live ? "Live generated image" : "Dry-run generated image",
     name: live ? "desktop-live-image" : "desktop-dry-run-image"
   });
@@ -407,15 +469,8 @@ async function handleCanvasToolEvent(detail) {
     return safeDetail;
   }
   const inserted = await insertImageFromBase64(
-    detail.image_base64,
-    detail.title,
-    detail.x,
-    detail.y,
-    {
-      sourcePath: detail.source_path,
-      provider: detail.provider,
-      promptSummary: detail.prompt_summary
-    }
+    detail.image_base64, detail.title, detail.x, detail.y,
+    { sourcePath: detail.source_path, provider: detail.provider, promptSummary: detail.prompt_summary }
   );
   state.canvasTool.status = "inserted";
   state.canvasTool.error = null;
@@ -473,12 +528,11 @@ function defaultImagePrompt() {
 function base64ToBytes(base64) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
   return bytes;
 }
 
+/* ─── verify hooks ─── */
 function verifyCanvasImageTool() {
   return new Promise((resolve) => {
     const before = refreshPlannerContext();
@@ -516,6 +570,82 @@ function verifyCanvasImageTool() {
   });
 }
 
+function verifyLabelMoveSync() {
+  return new Promise((resolve) => {
+    const done = (value) => resolve(normalizeValue(value));
+    try {
+      if (!canvasEl || !labelLayerEl) {
+        done({ passed: false, reason: "missing canvas or label layer", pageErrors: window.__capyPageErrors || [] });
+        return;
+      }
+      const snapshotTarget = () => {
+        const current = refreshPlannerContext();
+        const nodes = Array.isArray(current?.blocks) ? current.blocks : [];
+        const node = nodes.find((item) => item.title === "Storyboard")
+          || nodes.find((item) => item.content_kind === "video");
+        if (!node?.bounds) return null;
+        selectNode(node.id);
+        const selected = refreshPlannerContext();
+        const selectedNode = selected.blocks.find((item) => String(item.id) === String(node.id)) || node;
+        const label = labelLayerEl.querySelector(`[data-node-id="${selectedNode.id}"]`);
+        if (!label) return null;
+        const viewport = selected.canvas?.viewport || { zoom: 1, camera_offset: { x: 0, y: 0 } };
+        const box = nodeLabelBox(selectedNode, viewport);
+        const layerRect = labelLayerEl.getBoundingClientRect();
+        const rect = label.getBoundingClientRect();
+        return {
+          node: selectedNode,
+          rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+          expected: { x: layerRect.left + box.x, y: layerRect.top + box.y },
+          layerRect: { left: layerRect.left, top: layerRect.top },
+          viewport
+        };
+      };
+      const aligned = (sample) => Boolean(sample
+        && Math.abs(sample.rect.left - sample.expected.x) <= 10
+        && Math.abs(sample.rect.top - sample.expected.y) <= 10);
+      const before = snapshotTarget();
+      if (!before) {
+        done({ passed: false, reason: "missing Storyboard node or label", pageErrors: window.__capyPageErrors || [] });
+        return;
+      }
+      canvasEl.focus({ preventScroll: true });
+      startLiveCanvasLabelRefresh();
+      const nextX = before.node.bounds.x + 84;
+      const nextY = before.node.bounds.y + 48;
+      const moved = moveNodeById(before.node.id, nextX, nextY);
+      setTimeout(() => {
+        scheduleCanvasLabelRefresh();
+        setTimeout(() => {
+          const during = snapshotTarget();
+          setTimeout(() => {
+            stopLiveCanvasLabelRefresh();
+            const after = snapshotTarget();
+            const dx = (after?.node?.bounds?.x || 0) - (before.node.bounds.x || 0);
+            const dy = (after?.node?.bounds?.y || 0) - (before.node.bounds.y || 0);
+            const movedDistance = Math.hypot(dx, dy);
+            done({
+              passed: Boolean(aligned(during) && aligned(after) && movedDistance >= 20),
+              moved, nodeId: before.node.id,
+              movedDistance: Number(movedDistance.toFixed(2)),
+              duringAligned: aligned(during),
+              afterAligned: aligned(after),
+              before: { x: before.node.bounds.x, y: before.node.bounds.y },
+              during: during ? { x: during.node.bounds.x, y: during.node.bounds.y, labelLeft: during.rect.left, expectedLeft: during.expected.x } : null,
+              after: after ? { x: after.node.bounds.x, y: after.node.bounds.y, labelLeft: after.rect.left, expectedLeft: after.expected.x } : null,
+              pageErrors: window.__capyPageErrors || [],
+              consoleErrors: (window.__capyConsoleEvents || []).filter((event) => event.level === "error")
+            });
+          }, 120);
+        }, 120);
+      }, 80);
+    } catch (error) {
+      done({ passed: false, reason: String(error), pageErrors: window.__capyPageErrors || [] });
+    }
+  });
+}
+
+/* ─── canvas state sync ─── */
 function refreshPlannerContext() {
   const snapshot = normalizeValue(ai_snapshot()) || {};
   const context = normalizeValue(selected_context()) || { selected_count: 0, items: [] };
@@ -538,39 +668,72 @@ function refreshPlannerContext() {
   return stateSnapshot();
 }
 
+const TYPE_DOTS = {
+  brand: "#fbbf24", image: "#f9a8d4", video: "#a78bfa", web: "#84cc16",
+  text: "#9ca3af", default: "#a78bfa"
+};
+const TYPE_ICONS = {
+  brand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8.5" stroke-dasharray="2 3"/></svg>',
+  image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l4.5-4 4 3 3.5-2.5 3 2.5"/></svg>',
+  video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor"/></svg>',
+  web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 3 2.6 14 0 17M12 3.5c-2.6 3-2.6 14 0 17"/></svg>',
+  default: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>'
+};
+
+function inferType(node) {
+  const k = String(node?.content_kind || "").toLowerCase();
+  if (k === "brand") return "brand";
+  if (k === "image") return "image";
+  if (k === "video") return "video";
+  if (k === "web") return "web";
+  if (k === "text") return "text";
+  return "default";
+}
+
 function renderNodeLabels(nodes, selectedId, viewport) {
   if (!labelLayerEl) return;
   const existing = new Map(
-    Array.from(labelLayerEl.querySelectorAll("[data-node-id]")).map((label) => [
-      label.dataset.nodeId,
-      label
-    ])
+    Array.from(labelLayerEl.querySelectorAll("[data-node-id]")).map((label) => [label.dataset.nodeId, label])
   );
   for (const node of nodes) {
     if (!node || !node.bounds) continue;
     const nodeId = String(node.id);
-    let label = existing.get(nodeId);
-    if (!label) {
-      label = document.createElement("button");
-      label.type = "button";
-      label.innerHTML = `<strong></strong><span></span>`;
-      labelLayerEl.append(label);
+    let skin = existing.get(nodeId);
+    if (!skin) {
+      skin = document.createElement("div");
+      skin.className = "node-label";
+      skin.setAttribute("aria-hidden", "true");
+      skin.innerHTML = `
+        <div class="node-head">
+          <span class="node-dot"></span>
+          <span class="node-icon"></span>
+          <span class="node-type"></span>
+        </div>
+        <strong class="node-title"></strong>
+        <span class="node-meta"></span>
+      `;
+      labelLayerEl.append(skin);
     }
     existing.delete(nodeId);
-    label.className = `node-label${String(node.id) === String(selectedId) ? " is-selected" : ""}`;
-    label.dataset.nodeId = nodeId;
+    skin.dataset.nodeId = nodeId;
+    const type = inferType(node);
+    skin.classList.toggle("is-selected", String(node.id) === String(selectedId));
+    skin.querySelector(".node-dot").style.background = TYPE_DOTS[type] || TYPE_DOTS.default;
+    skin.querySelector(".node-icon").innerHTML = TYPE_ICONS[type] || TYPE_ICONS.default;
+    skin.querySelector(".node-type").textContent = String(node.content_kind || "node").toLowerCase();
+    skin.querySelector(".node-title").textContent = node.title || `Node ${node.id}`;
+    skin.querySelector(".node-meta").textContent = node.next_action || "ready";
     const box = nodeLabelBox(node, viewport);
-    label.style.left = "0";
-    label.style.top = "0";
-    label.style.transform = `translate3d(${box.x}px, ${box.y}px, 0)`;
-    label.style.width = `${Math.max(150, Math.min(210, Math.round(node.bounds.w || 180)))}px`;
-    label.querySelector("strong").textContent = node.title || `Node ${node.id}`;
-    label.querySelector("span").textContent = `${contentKindLabel(node.content_kind)} · ${node.next_action || "ready"}`;
-    label.onclick = () => selectNode(node.id);
+    const zoom = Number(viewport?.zoom) || 1;
+    const w = Math.max(160, Math.round((node.bounds.w || 200) * zoom));
+    const h = Math.max(86, Math.round((node.bounds.h || 120) * zoom));
+    skin.style.left = "0";
+    skin.style.top = "0";
+    skin.style.transform = `translate3d(${box.x}px, ${box.y}px, 0)`;
+    skin.style.width = `${w}px`;
+    skin.style.height = `${h}px`;
   }
-  for (const orphan of existing.values()) {
-    orphan.remove();
-  }
+  for (const orphan of existing.values()) orphan.remove();
 }
 
 function nodeLabelBox(node, viewport) {
@@ -593,7 +756,6 @@ function installCanvasLabelSync() {
   window.addEventListener("pointercancel", stopLiveCanvasLabelRefresh);
   window.addEventListener("blur", stopLiveCanvasLabelRefresh);
 }
-
 function scheduleCanvasLabelRefresh() {
   if (labelRefreshFrame) return;
   labelRefreshFrame = requestAnimationFrame(() => {
@@ -601,140 +763,30 @@ function scheduleCanvasLabelRefresh() {
     refreshPlannerContext();
   });
 }
-
 function startLiveCanvasLabelRefresh() {
   liveLabelRefreshActive = true;
   if (liveLabelRefreshFrame) return;
   const tick = () => {
-    if (!liveLabelRefreshActive) {
-      liveLabelRefreshFrame = 0;
-      return;
-    }
+    if (!liveLabelRefreshActive) { liveLabelRefreshFrame = 0; return; }
     refreshPlannerContext();
     liveLabelRefreshFrame = requestAnimationFrame(tick);
   };
   liveLabelRefreshFrame = requestAnimationFrame(tick);
 }
-
 function stopLiveCanvasLabelRefresh() {
   liveLabelRefreshActive = false;
   scheduleCanvasLabelRefresh();
-}
-
-function verifyLabelMoveSync() {
-  return new Promise((resolve) => {
-    const done = (value) => resolve(normalizeValue(value));
-    try {
-      if (!canvasEl || !labelLayerEl) {
-        done({ passed: false, reason: "missing canvas or label layer", pageErrors: window.__capyPageErrors || [] });
-        return;
-      }
-
-      const snapshotTarget = () => {
-        const current = refreshPlannerContext();
-        const nodes = Array.isArray(current?.blocks) ? current.blocks : [];
-        const node = nodes.find((item) => item.title === "Storyboard")
-          || nodes.find((item) => item.content_kind === "video");
-        if (!node?.bounds) return null;
-        selectNode(node.id);
-        const selected = refreshPlannerContext();
-        const selectedNode = selected.blocks.find((item) => String(item.id) === String(node.id)) || node;
-        const label = labelLayerEl.querySelector(`[data-node-id="${selectedNode.id}"]`);
-        if (!label) return null;
-        const viewport = selected.canvas?.viewport || { zoom: 1, camera_offset: { x: 0, y: 0 } };
-        const box = nodeLabelBox(selectedNode, viewport);
-        const layerRect = labelLayerEl.getBoundingClientRect();
-        const rect = label.getBoundingClientRect();
-        return {
-          node: selectedNode,
-          rect: {
-            left: rect.left,
-            top: rect.top,
-            width: rect.width,
-            height: rect.height
-          },
-          expected: {
-            x: layerRect.left + box.x,
-            y: layerRect.top + box.y
-          },
-          layerRect: {
-            left: layerRect.left,
-            top: layerRect.top
-          },
-          viewport
-        };
-      };
-
-      const aligned = (sample) => Boolean(sample
-        && Math.abs(sample.rect.left - sample.expected.x) <= 10
-        && Math.abs(sample.rect.top - sample.expected.y) <= 10);
-
-      const before = snapshotTarget();
-      if (!before) {
-        done({ passed: false, reason: "missing Storyboard node or label", pageErrors: window.__capyPageErrors || [] });
-        return;
-      }
-
-      canvasEl.focus({ preventScroll: true });
-      startLiveCanvasLabelRefresh();
-      const nextX = before.node.bounds.x + 84;
-      const nextY = before.node.bounds.y + 48;
-      const moved = moveNodeById(before.node.id, nextX, nextY);
-      setTimeout(() => {
-        scheduleCanvasLabelRefresh();
-        setTimeout(() => {
-          const during = snapshotTarget();
-          setTimeout(() => {
-            stopLiveCanvasLabelRefresh();
-            const after = snapshotTarget();
-            const dx = (after?.node?.bounds?.x || 0) - (before.node.bounds.x || 0);
-            const dy = (after?.node?.bounds?.y || 0) - (before.node.bounds.y || 0);
-            const movedDistance = Math.hypot(dx, dy);
-            done({
-              passed: Boolean(aligned(during) && aligned(after) && movedDistance >= 20),
-              moved,
-              nodeId: before.node.id,
-              movedDistance: Number(movedDistance.toFixed(2)),
-              duringAligned: aligned(during),
-              afterAligned: aligned(after),
-              before: { x: before.node.bounds.x, y: before.node.bounds.y },
-              during: during ? {
-                x: during.node.bounds.x,
-                y: during.node.bounds.y,
-                labelLeft: during.rect.left,
-                expectedLeft: during.expected.x
-              } : null,
-              after: after ? {
-                x: after.node.bounds.x,
-                y: after.node.bounds.y,
-                labelLeft: after.rect.left,
-                expectedLeft: after.expected.x
-              } : null,
-              pageErrors: window.__capyPageErrors || [],
-              consoleErrors: (window.__capyConsoleEvents || []).filter((event) => event.level === "error")
-            });
-          }, 120);
-        }, 120);
-      }, 80);
-    } catch (error) {
-      done({ passed: false, reason: String(error), pageErrors: window.__capyPageErrors || [] });
-    }
-  });
 }
 
 function renderPlannerContext(item) {
   if (!contextTitleEl || !contextMetaEl) return;
   if (!item) {
     contextTitleEl.textContent = "No selection";
-    contextMetaEl.textContent = "选择左侧节点后，Planner 会围绕该对象工作。";
+    contextMetaEl.textContent = "选择左侧节点 · Planner 围绕该对象工作";
     return;
   }
   contextTitleEl.textContent = item.title || `Node ${item.id}`;
-  const detail = [
-    contentKindLabel(item.content_kind),
-    item.next_action,
-    item.editor_route
-  ].filter(Boolean).join(" · ");
+  const detail = [contentKindLabel(item.content_kind), item.next_action, item.editor_route].filter(Boolean).join(" · ");
   contextMetaEl.textContent = detail || "Planner context is ready.";
 }
 
@@ -745,6 +797,7 @@ function composePromptWithContext(prompt) {
   return `${trimmed}\n\n[Canvas selection]\n${context}`;
 }
 
+/* ─── conversations / messages ─── */
 async function createConversation() {
   const data = await rpc("conversation-create", {
     provider: providerEl.value,
@@ -769,8 +822,6 @@ async function openConversation(id) {
   const detail = await rpc("conversation-open", { id });
   state.activeId = detail.conversation.id;
   state.messages = detail.messages || [];
-  titleEl.textContent = detail.conversation.title;
-  subtitleEl.textContent = `${detail.conversation.provider} · ${detail.conversation.cwd}`;
   providerEl.value = detail.conversation.provider;
   cwdEl.value = detail.conversation.cwd;
   modelEl.value = detail.conversation.model || "";
@@ -801,6 +852,7 @@ async function openConversation(id) {
   renderConversations();
   renderMessages();
   renderRuntimeFoot();
+  updateConfigSummary();
 }
 
 async function updateConversationConfig() {
@@ -817,12 +869,10 @@ function renderConversations() {
   listEl.innerHTML = "";
   for (const item of state.conversations) {
     const button = document.createElement("button");
-    button.className = `conversation-item${item.id === state.activeId ? " active" : ""}`;
     button.type = "button";
-    button.innerHTML = `
-      <span class="title"></span>
-      <span class="meta"></span>
-    `;
+    const isRunning = (item.status || "").toLowerCase() === "running";
+    button.className = `conversation-item${item.id === state.activeId ? " active" : ""}${isRunning ? " is-running" : ""}`;
+    button.innerHTML = `<span class="dot"></span><span class="title"></span><span class="meta"></span>`;
     button.querySelector(".title").textContent = item.title;
     button.querySelector(".meta").textContent = `${item.provider} · ${item.status}`;
     button.addEventListener("click", () => openConversation(item.id).catch((error) => renderError(error)));
@@ -835,40 +885,37 @@ function renderMessages() {
   if (state.messages.length === 0 && state.streaming.size === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "Select a canvas node, then ask Planner what to do next.";
+    empty.textContent = "选中画布上的节点 · Planner 会围绕该对象工作。试试 ⌘K 打开生图工具。";
     messagesEl.append(empty);
     return;
   }
-  for (const message of state.messages) {
-    messagesEl.append(messageNode(message.role, message.content));
-  }
-  for (const content of state.streaming.values()) {
-    messagesEl.append(messageNode("assistant", content || "..."));
-  }
+  for (const message of state.messages) messagesEl.append(messageNode(message.role, message.content));
+  for (const content of state.streaming.values()) messagesEl.append(messageNode("assistant", content || "..."));
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
 function messageNode(role, content) {
   const node = document.createElement("article");
   node.className = `message ${role}`;
-  const label = document.createElement("div");
-  label.className = "role";
-  label.textContent = role;
+  if (role !== "user") {
+    const label = document.createElement("div");
+    label.className = "role";
+    label.textContent = role;
+    node.append(label);
+  }
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   bubble.textContent = content;
-  node.append(label, bubble);
+  node.append(bubble);
   return node;
 }
 
 function renderError(error) {
-  state.messages = [{
-    role: "system",
-    content: stringifyError(error)
-  }];
+  state.messages = [{ role: "system", content: stringifyError(error) }];
   renderMessages();
 }
 
+/* ─── config helpers ─── */
 function currentConfig() {
   const config = { capyCanvasTools: true };
   if (effortEl.value) config.effort = effortEl.value;
@@ -919,12 +966,17 @@ function syncPolicyOptions() {
 
 function applyWriteCodeDefaults() {
   if (!writeCodeEl.checked) return;
-  if (providerEl.value === "codex") {
-    policyEl.value = "never";
-  } else {
-    policyEl.value = "bypassPermissions";
-  }
+  if (providerEl.value === "codex") policyEl.value = "never";
+  else policyEl.value = "bypassPermissions";
   sandboxEl.value = "danger-full-access";
+}
+
+function updateConfigSummary() {
+  if (!configSummaryEl) return;
+  const provider = providerEl?.value || "claude";
+  const effort = effortEl?.value || "default";
+  const policy = policyEl?.value || "default";
+  configSummaryEl.textContent = `${provider} · ${effort} · ${policy}`;
 }
 
 function setRunStatus(status) {
@@ -945,15 +997,14 @@ function contentKindLabel(value) {
   return String(value || "shape").replace(/_/g, " ");
 }
 
+/* ─── utils ─── */
 function normalizeValue(value) {
   if (value === null || value === undefined) return value;
   if (typeof value === "bigint") return Number(value);
   if (Array.isArray(value)) return value.map(normalizeValue);
   if (typeof value === "object") {
     const normalized = {};
-    for (const [key, inner] of Object.entries(value)) {
-      normalized[key] = normalizeValue(inner);
-    }
+    for (const [key, inner] of Object.entries(value)) normalized[key] = normalizeValue(inner);
     return normalized;
   }
   return value;
@@ -975,19 +1026,12 @@ function nextFrame() {
 function stringifyError(error) {
   if (typeof error === "string") return error;
   if (error instanceof Error) return error.stack || error.message;
-  try {
-    return JSON.stringify(error, null, 2);
-  } catch (_err) {
-    return String(error);
-  }
+  try { return JSON.stringify(error, null, 2); } catch (_err) { return String(error); }
 }
 
 function rpc(op, params) {
   return new Promise((resolve, reject) => {
-    if (!window.ipc) {
-      reject({ error: "Capybara shell IPC unavailable" });
-      return;
-    }
+    if (!window.ipc) { reject({ error: "Capybara shell IPC unavailable" }); return; }
     const id = `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     pending.set(id, { resolve, reject });
     window.ipc.postMessage(JSON.stringify({ kind: "rpc", id, op, params }));
