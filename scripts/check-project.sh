@@ -13,6 +13,9 @@ cargo run -p capy-cli -- --help >/dev/null
 cargo run -p capy-cli -- agent doctor >/dev/null
 cargo run -p capy-cli -- cutout --help >/dev/null
 cargo run -p capy-cli -- cutout doctor >/dev/null
+cargo run -p capy-cli -- nextframe doctor \
+  --nf tmp/nonexistent-nf \
+  --recorder tmp/nonexistent-nf-recorder >/dev/null
 cargo run -p capy-cli -- image providers >/dev/null
 cargo run -p capy-cli -- image doctor >/dev/null
 cargo run -p capy-cli -- poster validate \
