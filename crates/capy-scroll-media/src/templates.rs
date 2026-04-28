@@ -64,8 +64,25 @@ pub fn runtime_js() -> &'static str {
       root.dispatchEvent(new CustomEvent(name, { detail: state(extra), bubbles: true }));
     }
 
-    function load(src = manifest.default_clip) {
-      const next = resolveUrl(base, src);
+    function clipFor(value) {
+      switch (value) {
+        case "fallback":
+          return manifest.fallback_clip;
+        case "hq":
+          return manifest.hq_clip;
+        case "default":
+        case "":
+        case undefined:
+        case null:
+          return manifest.default_clip;
+        default:
+          return value;
+      }
+    }
+
+    function load(src = root.dataset.clip || "default") {
+      const clip = clipFor(src);
+      const next = resolveUrl(base, clip);
       if (video.dataset.src === next && video.readyState >= HTMLMediaElement.HAVE_METADATA) {
         return Promise.resolve(video);
       }
@@ -80,7 +97,7 @@ pub fn runtime_js() -> &'static str {
         const done = () => {
           cleanup();
           video.pause();
-          dispatch("capy-scroll-video:loaded", { src });
+          dispatch("capy-scroll-video:loaded", { src: clip });
           resolve(video);
         };
         const fail = () => {
@@ -231,6 +248,26 @@ pub fn demo_html() -> &'static str {
 </html>"#
 }
 
+pub fn scroll_hq_html() -> &'static str {
+    r#"<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capy Scroll Media HQ</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="runtime/scroll-video.css" />
+    <style>
+      html,body{margin:0;background:#fff;overscroll-behavior:none}.capy-scroll-story{margin:0;padding:0}
+    </style>
+  </head>
+  <body>
+    <main class="capy-scroll-story"><div data-capy-scroll-video data-manifest="manifest.json" data-clip="hq"></div></main>
+    <script src="runtime/scroll-video.js"></script>
+  </body>
+</html>"#
+}
+
 pub fn raw_quality_html() -> &'static str {
     r#"<!doctype html>
 <html lang="zh-CN">
@@ -254,4 +291,24 @@ pub fn raw_quality_html() -> &'static str {
     </script>
   </body>
 </html>"#
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_supports_hq_clip_selector() {
+        let js = runtime_js();
+        assert!(js.contains("root.dataset.clip"));
+        assert!(js.contains("manifest.hq_clip"));
+    }
+
+    #[test]
+    fn hq_scroll_entry_loads_hq_clip_without_copy() {
+        let html = scroll_hq_html();
+        assert!(html.contains("data-clip=\"hq\""));
+        assert!(html.contains("data-manifest=\"manifest.json\""));
+        assert!(!html.contains("manifest-hq.json"));
+    }
 }

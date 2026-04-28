@@ -14,11 +14,15 @@ cargo run -p capy-cli -- agent doctor >/dev/null
 cargo run -p capy-cli -- image providers >/dev/null
 cargo run -p capy-cli -- image doctor >/dev/null
 cargo run -p capy-cli -- media --help >/dev/null
-cargo run -p capy-cli -- media scroll-pack \
+media_dry_run="$(cargo run -p capy-cli -- media scroll-pack \
   --input tmp/nonexistent-scroll-media-dry-run.mp4 \
   --out target/capy-scroll-media-dry-run \
   --name dry-run \
-  --dry-run >/dev/null
+  --dry-run)"
+if ! grep -q '"scroll-hq.html"' <<<"$media_dry_run"; then
+  echo "project check failed: scroll media dry-run must include scroll-hq.html" >&2
+  exit 1
+fi
 cargo run -p capy-cli -- image generate --dry-run \
   "Scene: Warm studio tabletop. Subject: One ceramic cup centered, 40% frame height. Important details: Product photo, soft key light from upper left, cream and lavender palette. Use case: Hero card, 1:1 crop-safe. Constraints: No text, no watermark, no extra objects." \
   --size 1:1 --resolution 1k >/dev/null

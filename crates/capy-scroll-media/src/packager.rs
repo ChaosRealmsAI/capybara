@@ -316,6 +316,7 @@ fn write_runtime_files(out_dir: &Path) -> Result<()> {
         templates::runtime_css(),
     )?;
     write_text(&out_dir.join("demo.html"), templates::demo_html())?;
+    write_text(&out_dir.join("scroll-hq.html"), templates::scroll_hq_html())?;
     write_text(
         &out_dir.join("raw-quality.html"),
         templates::raw_quality_html(),
@@ -427,6 +428,7 @@ fn collect_files(
         ("runtime-js", "runtime/scroll-video.js"),
         ("runtime-css", "runtime/scroll-video.css"),
         ("demo", "demo.html"),
+        ("scroll-hq", "scroll-hq.html"),
         ("raw-quality", "raw-quality.html"),
     ];
     paths
@@ -462,6 +464,7 @@ fn planned_files(
         ("runtime-js", "runtime/scroll-video.js"),
         ("runtime-css", "runtime/scroll-video.css"),
         ("demo", "demo.html"),
+        ("scroll-hq", "scroll-hq.html"),
         ("raw-quality", "raw-quality.html"),
         ("metrics", "evidence/metrics.json"),
     ]
@@ -522,6 +525,12 @@ mod tests {
         assert!(report.ok);
         assert!(report.dry_run);
         assert!(report.files.iter().any(|file| file.path == "manifest.json"));
+        assert!(
+            report
+                .files
+                .iter()
+                .any(|file| file.path == "scroll-hq.html")
+        );
         Ok(())
     }
 
