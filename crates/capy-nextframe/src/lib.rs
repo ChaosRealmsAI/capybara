@@ -8,6 +8,7 @@ pub mod export;
 pub mod ports;
 pub mod snapshot;
 pub mod validate;
+pub mod verify;
 
 pub use adapter::binary::BinaryAdapter;
 pub use compile::{CompileCompositionRequest, CompileError, CompileReport, compile_composition};
@@ -23,3 +24,4 @@ pub use ports::{
     SnapshotOptions, SnapshotReport, ValidationReport,
 };
 pub use validate::{ValidateCompositionRequest, validate_composition};
+pub use verify::{VerifyError, VerifyExportRequest, VerifyReport, verify_export};

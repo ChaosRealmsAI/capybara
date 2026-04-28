@@ -27,6 +27,8 @@ enum NextFrameCommand {
     Snapshot(NextFrameSnapshotArgs),
     #[command(about = "Export MP4 from a compiled NextFrame composition")]
     Export(NextFrameExportArgs),
+    #[command(about = "Run validate, compile, snapshot, export, and write evidence HTML")]
+    VerifyExport(NextFrameVerifyExportArgs),
     #[command(about = "Attach a NextFrame composition to a live canvas node")]
     Attach(NextFrameAttachArgs),
     #[command(about = "Read live NextFrame attachment state from capy-shell")]
@@ -106,6 +108,14 @@ struct NextFrameExportArgs {
 }
 
 #[derive(Debug, Args)]
+struct NextFrameVerifyExportArgs {
+    #[arg(long)]
+    composition: PathBuf,
+    #[arg(long)]
+    out_html: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
 struct NextFrameAttachArgs {
     #[arg(long)]
     canvas_node: u64,
@@ -149,6 +159,7 @@ pub fn handle(args: NextFrameArgs) -> Result<(), String> {
         NextFrameCommand::Compile(args) => compile(args),
         NextFrameCommand::Snapshot(args) => snapshot(args),
         NextFrameCommand::Export(args) => export(args),
+        NextFrameCommand::VerifyExport(args) => verify_export(args),
         NextFrameCommand::Attach(args) => attach(args),
         NextFrameCommand::State(args) => state(args),
         NextFrameCommand::Status(args) => status(args),
@@ -243,6 +254,19 @@ fn export(args: NextFrameExportArgs) -> Result<(), String> {
         out: args.out,
         fps: args.fps,
         strict_binary: args.strict_binary,
+    });
+    print_json(&report)?;
+    if report.ok {
+        Ok(())
+    } else {
+        std::process::exit(1);
+    }
+}
+
+fn verify_export(args: NextFrameVerifyExportArgs) -> Result<(), String> {
+    let report = capy_nextframe::verify_export(capy_nextframe::VerifyExportRequest {
+        composition_path: args.composition,
+        out_html: args.out_html,
     });
     print_json(&report)?;
     if report.ok {

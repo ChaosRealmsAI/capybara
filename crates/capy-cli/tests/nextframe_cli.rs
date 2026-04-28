@@ -450,6 +450,81 @@ fn nextframe_export_reports_missing_render_source() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+#[test]
+fn nextframe_verify_export_writes_evidence_index() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("verify-export-happy")?;
+    let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
+    let compose = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--out",
+            &dir.display().to_string(),
+            "--duration-ms",
+            "200",
+        ])
+        .output()?;
+    assert!(compose.status.success());
+    let composed: serde_json::Value = serde_json::from_slice(&compose.stdout)?;
+    let composition_path = composed["composition_path"]
+        .as_str()
+        .ok_or("composition_path should be a string")?;
+
+    let output = capy_command()?
+        .env("CAPY_NF_RECORDER", "/definitely/not/nf-recorder")
+        .args([
+            "nextframe",
+            "verify-export",
+            "--composition",
+            composition_path,
+        ])
+        .output()?;
+
+    assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["stage"], "verify-export");
+    assert_eq!(value["verdict"], "passed");
+    assert_eq!(value["stages"]["validate"]["ok"], true);
+    assert_eq!(value["stages"]["compile"]["compile_mode"], "embedded");
+    assert_eq!(value["stages"]["snapshot"]["ok"], true);
+    assert_eq!(value["stages"]["export"]["ok"], true);
+    let index_path = value["evidence_index_html"]
+        .as_str()
+        .ok_or("evidence_index_html should be a string")?;
+    let html = fs::read_to_string(index_path)?;
+    assert_eq!(html.matches(r#"<article class="stage-card">"#).count(), 4);
+    assert!(html.contains("<img"));
+    assert!(html.contains("<video"));
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn nextframe_verify_export_reports_missing_composition() -> Result<(), Box<dyn std::error::Error>> {
+    let output = capy_command()?
+        .args([
+            "nextframe",
+            "verify-export",
+            "--composition",
+            "/definitely/not/composition.json",
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["stage"], "verify-export");
+    assert_eq!(value["verdict"], "failed");
+    assert_eq!(
+        value["stages"]["validate"]["errors"][0]["code"],
+        "COMPOSITION_NOT_FOUND"
+    );
+    Ok(())
+}
+
 fn capy_command() -> Result<Command, Box<dyn std::error::Error>> {
     let path = std::env::var("CARGO_BIN_EXE_capy")?;
     Ok(Command::new(path))
