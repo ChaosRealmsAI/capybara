@@ -171,6 +171,36 @@ impl AppState {
         idx
     }
 
+    pub fn create_poster_document_card(
+        &mut self,
+        title: impl Into<String>,
+        x: f64,
+        y: f64,
+        source_path: impl Into<String>,
+    ) -> usize {
+        let idx = self.create_content_card(CanvasContentKind::Poster, title, x, y);
+        let source_path = source_path.into();
+        let shape = &mut self.shapes[idx];
+        shape.w = 420.0;
+        shape.h = 277.0;
+        shape.text = format!(
+            "{}\n{}",
+            shape.display_title(),
+            content_card_subtitle(CanvasContentKind::Poster)
+        );
+        shape.metadata.status = Some("ready".to_string());
+        if !source_path.trim().is_empty() {
+            shape.metadata.source_path = Some(source_path.trim().to_string());
+        }
+        shape.metadata.refs = vec![
+            "poster-json-source".to_string(),
+            "html-renderer-output".to_string(),
+        ];
+        shape.metadata.next_action =
+            Some(default_content_next_action(CanvasContentKind::Poster).to_string());
+        idx
+    }
+
     pub fn delete_selected(&mut self) {
         if self.selected.is_empty() {
             return;
@@ -719,6 +749,7 @@ fn default_content_title(kind: CanvasContentKind) -> &'static str {
         CanvasContentKind::Project => "Project hub",
         CanvasContentKind::Brand => "Brand system",
         CanvasContentKind::Image => "Image direction",
+        CanvasContentKind::Poster => "Poster document",
         CanvasContentKind::Video => "Storyboard",
         CanvasContentKind::Web => "Web page",
         CanvasContentKind::Text => "Copy block",
@@ -733,6 +764,7 @@ fn content_card_subtitle(kind: CanvasContentKind) -> &'static str {
         CanvasContentKind::Project => "brief · scope · assets",
         CanvasContentKind::Brand => "logo · palette · mascot",
         CanvasContentKind::Image => "prompt · references · variants",
+        CanvasContentKind::Poster => "JSON · layers · HTML preview",
         CanvasContentKind::Video => "shots · motion · export",
         CanvasContentKind::Web => "sections · states · responsive",
         CanvasContentKind::Text => "headline · tone · variants",
@@ -747,6 +779,7 @@ fn default_content_next_action(kind: CanvasContentKind) -> &'static str {
         CanvasContentKind::Project => "open project detail and plan next assets",
         CanvasContentKind::Brand => "generate brand directions and lock tokens",
         CanvasContentKind::Image => "generate image variants from references",
+        CanvasContentKind::Poster => "edit poster JSON and render HTML preview",
         CanvasContentKind::Video => "expand into storyboard shots",
         CanvasContentKind::Web => "open page editor and draft sections",
         CanvasContentKind::Text => "write copy variants in selected tone",
@@ -761,6 +794,7 @@ fn content_card_color(kind: CanvasContentKind) -> u32 {
         CanvasContentKind::Project => 0xfff3bf,
         CanvasContentKind::Brand => 0xffedd5,
         CanvasContentKind::Image => 0xfce7f3,
+        CanvasContentKind::Poster => 0xfef3c7,
         CanvasContentKind::Video => 0xdbeafe,
         CanvasContentKind::Web => 0xd1fae5,
         CanvasContentKind::Text => 0xede9fe,
@@ -775,6 +809,7 @@ fn content_card_stroke_color(kind: CanvasContentKind) -> u32 {
         CanvasContentKind::Project => 0xd97706,
         CanvasContentKind::Brand => 0xf97316,
         CanvasContentKind::Image => 0xdb2777,
+        CanvasContentKind::Poster => 0xa16207,
         CanvasContentKind::Video => 0x2563eb,
         CanvasContentKind::Web => 0x059669,
         CanvasContentKind::Text => 0x7c3aed,

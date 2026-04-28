@@ -28,6 +28,8 @@ for path in \
   scripts/image-provider-apimart.mjs \
   scripts/build-canvas-for-app.sh \
   scripts/verify-agent-canvas-image-placement.mjs \
+  scripts/verify-poster-json-renderer.mjs \
+  fixtures/poster/sample-poster.json \
   crates/capy-shell/Cargo.toml \
   crates/capy-shell/src/browser.rs \
   crates/capy-shell/src/browser/assets.rs \
@@ -47,6 +49,8 @@ for path in \
   spec/versions/v0.6.1-image-generation-tool/status.json \
   spec/versions/v0.8-canvas-image-tool/bdd.json \
   spec/versions/v0.8-canvas-image-tool/status.json \
+  spec/versions/v0.9-poster-json-renderer/bdd.json \
+  spec/versions/v0.9-poster-json-renderer/status.json \
   spec/versions/v0.10-agent-canvas-image-placement/bdd.json \
   spec/versions/v0.10-agent-canvas-image-placement/status.json
 do
@@ -66,6 +70,11 @@ rg -q '^capy-poster\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-
 rg -q '^capy-image-gen\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must use capy-image-gen for desktop canvas tool calls"
 rg -q '^capy-scroll-media\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-scroll-media through the workspace boundary"
 rg -q 'CanvasCommand::GenerateImage' crates/capy-cli/src/canvas.rs || fail "capy canvas generate-image command must exist"
+rg -q 'CanvasCommand::LoadPoster' crates/capy-cli/src/canvas.rs || fail "capy canvas load-poster command must exist"
+rg -q 'CanvasContentKind::Poster' crates/capy-canvas-core/src crates/capy-canvas-web/src || fail "poster content kind must exist in canvas core/web boundary"
+rg -q 'create_poster_document_card' crates/capy-canvas-core/src crates/capy-canvas-web/src frontend/capy-app/script.js || fail "poster document card creation must cross Rust/WASM/frontend boundary"
+rg -q 'poster-overlay-layer' frontend/capy-app/index.html frontend/capy-app/script.js frontend/capy-app/style.css || fail "poster renderer must use current canvas overlay layer"
+rg -q 'verifyPosterRenderer' frontend/capy-app/script.js scripts/verify-poster-json-renderer.mjs || fail "poster renderer visible verification hook must exist"
 rg -q 'canvas-generate-image' crates/capy-shell/src/app.rs || fail "desktop canvas image tool RPC must exist"
 rg -q 'capyCanvasTools' crates/capy-cli/src/main.rs crates/capy-shell/src/agent.rs frontend/capy-app/script.js || fail "agent canvas CLI tool contract must be wired for chat runtimes"
 rg -q 'CAPY_TOOL_CALL_LOG' crates/capy-cli/src/canvas.rs crates/capy-shell/src/agent.rs || fail "agent canvas CLI calls must support JSONL evidence logging"

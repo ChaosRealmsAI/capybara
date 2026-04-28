@@ -1003,6 +1003,31 @@ mod web {
         Ok(idx as u32)
     }
 
+    #[wasm_bindgen]
+    pub fn create_poster_document_card(
+        title: &str,
+        x: f64,
+        y: f64,
+        source_path: &str,
+    ) -> Result<u32, JsValue> {
+        let state_arc = shared_state().ok_or_else(|| {
+            JsValue::from_str("create_poster_document_card(): no shared state · call start() first")
+        })?;
+        let (idx, id) = {
+            let mut state = state_arc.lock().map_err(|_| {
+                JsValue::from_str("create_poster_document_card(): state lock poisoned")
+            })?;
+            let idx = state.create_poster_document_card(title, x, y, source_path);
+            state.tool = Tool::Select;
+            (idx, state.shapes[idx].id)
+        };
+        redraw_via_shared();
+        log(&format!(
+            "[capy-canvas-web] create_poster_document_card(id={id}, idx={idx}) ok"
+        ));
+        Ok(idx as u32)
+    }
+
     /// JS-callable selection bridge for DOM labels and desktop verification.
     #[wasm_bindgen]
     pub fn select_node(id: u32) -> Result<bool, JsValue> {

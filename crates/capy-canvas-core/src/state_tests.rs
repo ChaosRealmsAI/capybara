@@ -282,6 +282,41 @@ fn create_content_card_sets_ai_metadata_and_selection() {
     );
 }
 
+#[test]
+fn create_poster_document_card_sets_source_and_snapshot_metadata() {
+    let mut state = AppState::new();
+    let idx =
+        state.create_poster_document_card("Launch poster", 120.0, 96.0, "/tmp/capy-poster.json");
+    let shape = &state.shapes[idx];
+    assert_eq!(shape.kind, ShapeKind::StickyNote);
+    assert_eq!(shape.content_kind(), CanvasContentKind::Poster);
+    assert_eq!(shape.metadata.status.as_deref(), Some("ready"));
+    assert_eq!(
+        shape.metadata.source_path.as_deref(),
+        Some("/tmp/capy-poster.json")
+    );
+    assert!(
+        shape
+            .metadata
+            .editor_route
+            .as_deref()
+            .unwrap_or_default()
+            .contains("capy://canvas/poster/")
+    );
+
+    let snapshot = state.ai_snapshot();
+    assert_eq!(snapshot.nodes[0].content_kind, CanvasContentKind::Poster);
+    assert_eq!(
+        snapshot.nodes[0].source_path.as_deref(),
+        Some("/tmp/capy-poster.json")
+    );
+    assert!(
+        snapshot.nodes[0]
+            .available_actions
+            .contains(&"open_detail".to_string())
+    );
+}
+
 /// excalidraw zindex: shapes are ordered by creation time.
 #[test]
 fn hit_test_returns_topmost() {
