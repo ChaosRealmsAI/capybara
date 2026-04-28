@@ -8,12 +8,13 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoopWi
 use tao::window::{Window, WindowBuilder};
 use tokio::sync::oneshot;
 
-use crate::agent::{self, AgentRuntimeEvent};
+use crate::agent::AgentRuntimeEvent;
 use crate::capture;
 use crate::ipc::{self, IpcRequest, IpcResponse, error_response, ok_response};
-use crate::store::{CreateConversation, Provider, Store};
+use crate::store::Store;
 
 mod canvas_tool;
+mod conversation;
 mod window;
 
 use window::{WindowManager, WindowStatus};
@@ -205,7 +206,7 @@ pub fn run() {
                     let _send_result = ack.send(response);
                 }
                 ShellEvent::ConversationRequest { request, ack } => {
-                    let response = conversation_response(Arc::clone(&store), &proxy, request);
+                    let response = conversation::response(Arc::clone(&store), &proxy, request);
                     let _send_result = ack.send(response);
                 }
                 ShellEvent::AgentRuntimeEvent { event } => {
@@ -398,107 +399,6 @@ fn capture_window(manager: &mut WindowManager, request: IpcRequest) -> IpcRespon
     response_from_result(request.req_id, result)
 }
 
-fn conversation_response(
-    store: Arc<Store>,
-    proxy: &EventLoopProxy<ShellEvent>,
-    request: IpcRequest,
-) -> IpcResponse {
-    let result = (|| match request.op.as_str() {
-        "conversation-list" => Ok(json!({
-            "conversations": store.list_conversations()?,
-            "db_path": store.db_path().display().to_string()
-        })),
-        "conversation-open" => {
-            let id = required_string(&request.params, "id")?;
-            Ok(serde_json::to_value(store.conversation_detail(&id)?)
-                .map_err(|err| err.to_string())?)
-        }
-        "conversation-events" => {
-            let id = required_string(&request.params, "id")?;
-            let run_id = optional_string(&request.params, "run_id");
-            Ok(json!({
-                "events": store.run_events_for(&id, run_id.as_deref())?
-            }))
-        }
-        "conversation-create" => {
-            let provider = Provider::parse(
-                request
-                    .params
-                    .get("provider")
-                    .and_then(Value::as_str)
-                    .unwrap_or("claude"),
-            )?;
-            let cwd = request
-                .params
-                .get("cwd")
-                .and_then(Value::as_str)
-                .filter(|value| !value.is_empty())
-                .map(ToString::to_string)
-                .unwrap_or_else(default_cwd);
-            let model = optional_string(&request.params, "model");
-            let config = request
-                .params
-                .get("config")
-                .cloned()
-                .unwrap_or_else(|| json!({}));
-            let conversation = store.create_conversation(CreateConversation {
-                provider,
-                cwd,
-                model,
-                config,
-            })?;
-            Ok(json!({ "conversation": conversation, "messages": [] }))
-        }
-        "conversation-send" => {
-            let id = required_string(&request.params, "id")?;
-            let prompt = required_string(&request.params, "prompt")?;
-            let mut conversation = store.get_conversation(&id)?;
-            if request.params.get("model").is_some() || request.params.get("config").is_some() {
-                let model = if request.params.get("model").is_some() {
-                    optional_string(&request.params, "model")
-                } else {
-                    conversation.model.clone()
-                };
-                let incoming_config = request
-                    .params
-                    .get("config")
-                    .cloned()
-                    .unwrap_or_else(|| json!({}));
-                let config = merge_config(conversation.config.clone(), incoming_config);
-                conversation = store.update_config(&id, model, config)?;
-            }
-            let run_id =
-                agent::spawn_turn(Arc::clone(&store), proxy.clone(), conversation, prompt)?;
-            Ok(json!({ "run_id": run_id, "status": "running" }))
-        }
-        "conversation-stop" => {
-            let id = required_string(&request.params, "id")?;
-            agent::stop_running(&store, &id)
-        }
-        "conversation-update-config" => {
-            let id = required_string(&request.params, "id")?;
-            let current = store.get_conversation(&id)?;
-            let model = if request.params.get("model").is_some() {
-                optional_string(&request.params, "model")
-            } else {
-                current.model
-            };
-            let incoming_config = request
-                .params
-                .get("config")
-                .cloned()
-                .unwrap_or_else(|| json!({}));
-            let config = merge_config(current.config, incoming_config);
-            let conversation = store.update_config(&id, model, config)?;
-            Ok(json!({ "conversation": conversation }))
-        }
-        "agent-doctor" => Ok(agent::doctor()),
-        _ => Err(format!("unknown conversation op: {}", request.op)),
-    })();
-
-    response_from_result(request.req_id, result)
-}
-
 fn handle_js_ipc(
     manager: &WindowManager,
     store: Arc<Store>,
@@ -559,7 +459,7 @@ fn handle_js_ipc(
             ),
         )
     } else {
-        conversation_response(store, proxy, request)
+        conversation::response(store, proxy, request)
     };
     send_frontend_rpc(manager, window_id, response);
 }
@@ -600,12 +500,6 @@ fn broadcast_agent_event(manager: &WindowManager, event: &AgentRuntimeEvent) {
     }
 }
 
-fn default_cwd() -> String {
-    std::env::current_dir()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "/".to_string())
-}
-
 fn required_string(params: &Value, key: &str) -> Result<String, String> {
     params
         .get(key)
@@ -621,20 +515,6 @@ fn optional_string(params: &Value, key: &str) -> Option<String> {
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
-}
-
-fn merge_config(mut current: Value, incoming: Value) -> Value {
-    let Some(current_object) = current.as_object_mut() else {
-        return incoming;
-    };
-    if let Some(incoming_object) = incoming.as_object() {
-        for (key, value) in incoming_object {
-            current_object.insert(key.clone(), value.clone());
-        }
-        current
-    } else {
-        incoming
-    }
 }
 
 fn response_from_result(req_id: String, result: Result<Value, String>) -> IpcResponse {
@@ -716,7 +596,9 @@ fn state_script(key: &str) -> String {
   else if (key === "canvas.block-count") value = Array.isArray(state.blocks) ? state.blocks.length : 0;
   else if (key === "canvas.currentTool") value = canvas.currentTool || null;
   else if (key === "canvas.snapshotText") value = canvas.snapshotText || "";
+  else if (key === "canvas.context") value = state.canvasContext || planner.canvasContext || null;
   else if (key === "planner.context") value = planner.context || null;
+  else if (key === "planner.canvasContext") value = planner.canvasContext || null;
   else if (key === "planner.status") value = planner.contextText ? "context-ready" : "idle";
   else return reply({{ ok: false, error: "unknown state key: " + key }});
   return reply({{ ok: true, key, value }});

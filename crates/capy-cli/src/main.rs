@@ -5,7 +5,9 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
 
 mod canvas;
+mod chat_context;
 mod cutout;
+mod desktop_verify;
 mod ipc_client;
 mod media;
 mod poster;
@@ -302,6 +304,12 @@ struct ChatSendArgs {
     id: String,
     #[arg(long)]
     model: Option<String>,
+    #[arg(
+        long,
+        value_name = "context.json",
+        help = "Attach a Canvas Context Packet"
+    )]
+    canvas_context: Option<PathBuf>,
     #[command(flatten)]
     runtime: AgentRuntimeOptions,
     #[arg(required = true)]
@@ -446,7 +454,7 @@ fn run() -> Result<(), String> {
                 "state-query",
                 json!({ "key": "app.ready", "window": args.window, "verify": true }),
             ),
-            VerifyProfile::Desktop => verify_desktop(args),
+            VerifyProfile::Desktop => desktop_verify::verify(args.window, args.capture_out),
         },
         Command::Chat(args) => match args.command {
             ChatCommand::List => send("conversation-list", json!({})),
@@ -461,7 +469,7 @@ fn run() -> Result<(), String> {
                 "conversation-events",
                 json!({ "id": args.id, "run_id": args.run_id }),
             ),
-            ChatCommand::Send(args) => send("conversation-send", chat_send_params(args)),
+            ChatCommand::Send(args) => send("conversation-send", chat_send_params(args)?),
             ChatCommand::Stop(args) => send("conversation-stop", json!({ "id": args.id })),
         },
         Command::Canvas(args) => canvas::handle(args),
@@ -506,18 +514,30 @@ fn chat_configure_params(args: ChatConfigureArgs) -> Value {
     params
 }
 
-fn chat_send_params(args: ChatSendArgs) -> Value {
+fn chat_send_params(args: ChatSendArgs) -> Result<Value, String> {
     let mut config = json!({});
     fill_agent_config(&mut config, args.runtime);
+    let canvas_context = args
+        .canvas_context
+        .map(chat_context::load_canvas_context_packet)
+        .transpose()?;
+    let prompt = if let Some(context) = canvas_context.as_ref() {
+        chat_context::prompt_with_canvas_context(&args.prompt.join(" "), context)
+    } else {
+        args.prompt.join(" ")
+    };
     let mut params = json!({
         "id": args.id,
-        "prompt": args.prompt.join(" "),
+        "prompt": prompt,
         "config": config
     });
     if let Some(model) = args.model {
         params["model"] = json!(model);
     }
-    params
+    if let Some(context) = canvas_context {
+        params["canvas_context"] = context;
+    }
+    Ok(params)
 }
 
 fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) {
@@ -701,140 +721,4 @@ fn request_data(op: &str, params: Value) -> Result<Value, String> {
         .error
         .map(|value| value.to_string())
         .unwrap_or_else(|| "capy IPC request failed".to_string()))
-}
-
-fn verify_desktop(args: VerifyArgs) -> Result<(), String> {
-    let capture_out = args
-        .capture_out
-        .ok_or_else(|| "--profile desktop requires --capture-out=<png>".to_string())?;
-    let capture_out = absolute_path(capture_out)?;
-    let window = args.window;
-    let state = request_data(
-        "state-query",
-        json!({ "key": "app.ready", "window": window.clone(), "verify": true }),
-    )?;
-    ensure(
-        state.get("value").and_then(Value::as_bool) == Some(true),
-        "desktop verify failed: app.ready is not true",
-    )?;
-
-    let browser = request_data(
-        "devtools-eval",
-        json!({
-            "window": window.clone(),
-            "eval": "({browser:document.documentElement.dataset.capyBrowser,native:document.documentElement.dataset.capybaraNative,ready:document.readyState,title:document.title,topbar:!!document.querySelector('.topbar'),ua:navigator.userAgent})"
-        }),
-    )?;
-    ensure(
-        browser.get("browser").and_then(Value::as_str) == Some("cef"),
-        "desktop verify failed: browser identity is not cef",
-    )?;
-    ensure(
-        browser
-            .get("ua")
-            .and_then(Value::as_str)
-            .is_some_and(|ua| ua.contains("Chrome")),
-        "desktop verify failed: user agent does not contain Chrome",
-    )?;
-    ensure(
-        browser.get("topbar").and_then(Value::as_bool) == Some(true),
-        "desktop verify failed: .topbar is missing",
-    )?;
-
-    let bridge = request_data(
-        "devtools-eval",
-        json!({
-            "window": window.clone(),
-            "eval": "({ipc:typeof window.ipc?.postMessage,bridge:!!window.jsBridge,native:document.documentElement.dataset.capybaraNative})"
-        }),
-    )?;
-    ensure(
-        bridge.get("ipc").and_then(Value::as_str) == Some("function")
-            && bridge.get("bridge").and_then(Value::as_bool) == Some(true),
-        "desktop verify failed: JS bridge is not ready",
-    )?;
-
-    let topbar = request_data(
-        "devtools-query",
-        json!({ "query": ".topbar", "get": "bounding-rect", "window": window.clone() }),
-    )?;
-    let rect = topbar.get("value").unwrap_or(&Value::Null);
-    ensure(
-        rect.get("width")
-            .and_then(Value::as_f64)
-            .unwrap_or_default()
-            > 0.0
-            && rect
-                .get("height")
-                .and_then(Value::as_f64)
-                .unwrap_or_default()
-                > 0.0,
-        "desktop verify failed: .topbar has empty bounds",
-    )?;
-
-    let console = request_data(
-        "devtools-eval",
-        json!({
-            "window": window.clone(),
-            "eval": "({consoleEvents:(window.__capyConsoleEvents||[]).slice(-20),pageErrors:window.__capyPageErrors||[]})"
-        }),
-    )?;
-    let page_errors = console
-        .get("pageErrors")
-        .and_then(Value::as_array)
-        .map(Vec::len)
-        .unwrap_or_default();
-    ensure(
-        page_errors == 0,
-        "desktop verify failed: page errors are present",
-    )?;
-
-    let capture = request_data(
-        "capture",
-        json!({ "out": capture_out.display().to_string(), "window": window }),
-    )?;
-    ensure(
-        capture
-            .get("bytes")
-            .and_then(Value::as_u64)
-            .unwrap_or_default()
-            > 100_000,
-        "desktop verify failed: native capture is too small",
-    )?;
-
-    let summary = json!({
-        "ok": true,
-        "profile": "desktop",
-        "socket": ipc_client::socket_path().display().to_string(),
-        "checks": {
-            "app_ready": state,
-            "browser": browser,
-            "bridge": bridge,
-            "topbar": topbar,
-            "console": console,
-            "capture": capture
-        }
-    });
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&summary).map_err(|err| err.to_string())?
-    );
-    Ok(())
-}
-
-fn ensure(condition: bool, message: &str) -> Result<(), String> {
-    if condition {
-        Ok(())
-    } else {
-        Err(message.to_string())
-    }
-}
-
-fn absolute_path(path: PathBuf) -> Result<PathBuf, String> {
-    if path.is_absolute() {
-        return Ok(path);
-    }
-    std::env::current_dir()
-        .map(|cwd| cwd.join(path))
-        .map_err(|err| format!("read cwd failed: {err}"))
 }

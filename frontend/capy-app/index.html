@@ -33,8 +33,7 @@
     </header>
 
     <section class="workbench" data-section="workbench">
-
-      <section class="canvas-panel" data-section="canvas-host" aria-label="Canvas host">
+      <section class="canvas-panel canvas" data-section="canvas-host" aria-label="Canvas host">
         <div class="canvas-grid" aria-hidden="true"></div>
         <canvas id="capy-canvas" data-component="canvas-runtime" tabindex="0"></canvas>
         <div id="poster-overlay-layer" class="poster-overlay-layer" data-component="poster-overlay-layer"></div>
@@ -42,6 +41,7 @@
 
         <div class="canvas-toolbar" data-component="canvas-toolbar">
           <button class="seg active" type="button" data-tool="select">Select</button>
+          <button class="seg region-toggle" id="region-mode" type="button" aria-pressed="false">Region</button>
           <button class="seg" type="button" data-tool="node">Node</button>
           <button class="seg" type="button" data-tool="link">Link</button>
           <span class="seg-info" id="canvas-status">Canvas loading</span>
@@ -66,12 +66,13 @@
           <button class="bt" type="button" data-tool="frame" aria-label="Frame"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M5 2v12M11 2v12M2 5h12M2 11h12"/></svg></button>
         </div>
 
+        <div id="context-region-layer" class="context-region-layer" data-component="context-region-layer"></div>
         <div class="mini-map" data-component="mini-map">
           <span></span><span></span><span></span>
         </div>
       </section>
 
-      <aside class="planner-shell" data-section="planner-chat" aria-label="Planner chat">
+      <aside class="planner planner-shell" data-section="planner-chat" aria-label="Planner chat">
 
         <header class="chat-head">
           <div class="conversation-strip" data-component="conversation-strip">
@@ -88,6 +89,7 @@
           <span class="context-eyebrow" id="context-eyebrow">CONTEXT</span>
           <span class="context-title" id="context-title">No selection</span>
           <span class="context-meta" id="context-meta">选择左侧节点 · Planner 围绕该对象工作</span>
+          <div class="context-attachments" id="context-attachments"></div>
         </section>
 
         <div class="chat-stream" id="message-list" data-section="chat-stream"></div>

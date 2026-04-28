@@ -6,6 +6,7 @@ import initCanvas, {
   create_poster_document_card,
   current_tool,
   dark_mode,
+  focus_node,
   list_shapes,
   move_node_by_id,
   select_node,
@@ -62,11 +63,16 @@ const searchEl = $("#search");
 const writeCodeEl = $("#write-code");
 const runtimeFootEl = $("#runtime-foot");
 const canvasEl = $("#capy-canvas");
+const canvasPanelEl = $('[data-section="canvas-host"]');
 const canvasStatusEl = $("#canvas-status");
 const posterLayerEl = $("#poster-overlay-layer");
 const labelLayerEl = $("#node-label-layer");
+const regionLayerEl = $("#context-region-layer");
+const regionModeEl = $("#region-mode");
+const plannerContextEl = $("#planner-context");
 const contextTitleEl = $("#context-title");
 const contextMetaEl = $("#context-meta");
+const contextAttachmentsEl = $("#context-attachments");
 const cmdPaletteEl = $("#cmd-palette");
 const cmdSearchEl = $("#cmd-search");
 const cmdCloseEl = $("#cmd-close");
@@ -105,7 +111,14 @@ const state = {
   planner: {
     context: null,
     contextText: "",
-    lastOutboundPrompt: ""
+    lastOutboundPrompt: "",
+    canvasContext: null
+  },
+  canvasContext: {
+    regionMode: false,
+    region: null,
+    drag: null,
+    context: null
   },
   canvasTool: {
     status: "idle",
@@ -132,6 +145,7 @@ window.capy = {
   create_poster_document_card,
   current_tool,
   dark_mode,
+  focus_node,
   list_shapes,
   move_node_by_id,
   select_node,
@@ -141,6 +155,9 @@ window.capy = {
 };
 window.capyWorkbench = {
   composePromptWithContext,
+  activeCanvasContext,
+  setCanvasContextRegion,
+  clearCanvasContextRegion,
   refreshPlannerContext,
   seedDemoCanvas,
   createContentCard,
@@ -148,6 +165,7 @@ window.capyWorkbench = {
   loadPosterDocument,
   updatePosterDocument,
   moveNodeById,
+  focusNode,
   selectNode,
   scheduleCanvasLabelRefresh,
   startLiveCanvasLabelRefresh,
@@ -213,6 +231,11 @@ stopEl?.addEventListener("click", async () => {
   } catch (error) { renderError(error); }
 });
 
+regionModeEl?.addEventListener("click", () => {
+  state.canvasContext.regionMode = !state.canvasContext.regionMode;
+  renderRegionMode();
+});
+
 formEl?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const prompt = promptEl.value.trim();
@@ -223,6 +246,7 @@ formEl?.addEventListener("submit", async (event) => {
     promptEl.value = "";
     await updateConversationConfig();
     const outboundPrompt = composePromptWithContext(prompt);
+    const canvasContext = activeCanvasContext();
     state.planner.lastOutboundPrompt = outboundPrompt;
     state.messages.push({ id: `local-${Date.now()}`, role: "user", content: prompt });
     renderMessages();
@@ -231,7 +255,8 @@ formEl?.addEventListener("submit", async (event) => {
       id: state.activeId,
       prompt: outboundPrompt,
       config: currentConfig(),
-      model: modelEl.value.trim() || null
+      model: modelEl.value.trim() || null,
+      canvas_context: canvasContext
     });
   } catch (error) {
     setRunStatus("error");
@@ -417,6 +442,7 @@ async function initCanvasWorkbench() {
     state.canvas.ready = true;
     updateCanvasStatus("Canvas ready");
     installCanvasLabelSync();
+    installCanvasRegionSelection();
     await nextFrame();
     seedDemoCanvas();
     refreshPlannerContext();
@@ -451,6 +477,14 @@ function selectNode(id) {
   const numericId = Number(id);
   if (!Number.isFinite(numericId)) return false;
   const ok = select_node(numericId);
+  refreshPlannerContext();
+  return ok;
+}
+
+function focusNode(id) {
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId)) return false;
+  const ok = focus_node(numericId);
   refreshPlannerContext();
   return ok;
 }
@@ -726,6 +760,264 @@ function verifyCanvasImageTool() {
   });
 }
 
+function installCanvasRegionSelection() {
+  if (!regionLayerEl) return;
+  regionLayerEl.addEventListener("pointerdown", (event) => {
+    if (!state.canvasContext.regionMode || !isRegionCapableSelection()) return;
+    const start = clampPointToSelectedNode(screenPointToWorld(event.clientX, event.clientY));
+    if (!start) return;
+    event.preventDefault();
+    regionLayerEl.setPointerCapture?.(event.pointerId);
+    state.canvasContext.drag = { pointerId: event.pointerId, start };
+    setCanvasContextRegion({ x: start.x, y: start.y, w: 1, h: 1 });
+  });
+  regionLayerEl.addEventListener("pointermove", (event) => {
+    const drag = state.canvasContext.drag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const current = clampPointToSelectedNode(screenPointToWorld(event.clientX, event.clientY));
+    if (!current) return;
+    event.preventDefault();
+    setCanvasContextRegion(normalizeRect(
+      drag.start.x,
+      drag.start.y,
+      current.x - drag.start.x,
+      current.y - drag.start.y
+    ));
+  });
+  regionLayerEl.addEventListener("pointerup", finishRegionDrag);
+  regionLayerEl.addEventListener("pointercancel", finishRegionDrag);
+  renderRegionMode();
+}
+
+function finishRegionDrag(event) {
+  const drag = state.canvasContext.drag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  regionLayerEl?.releasePointerCapture?.(event.pointerId);
+  state.canvasContext.drag = null;
+  const region = state.canvasContext.region;
+  if (!region || region.bounds.w < 4 || region.bounds.h < 4) {
+    clearCanvasContextRegion();
+  }
+}
+
+function renderRegionMode() {
+  if (regionModeEl) {
+    regionModeEl.setAttribute("aria-pressed", state.canvasContext.regionMode ? "true" : "false");
+  }
+  if (regionLayerEl) {
+    regionLayerEl.classList.toggle("is-active", Boolean(state.canvasContext.regionMode && isRegionCapableSelection()));
+  }
+}
+
+function setCanvasContextRegion(bounds, options = {}) {
+  const selected = state.canvas.selectedNode;
+  const selectedBounds = nodeBounds(selected);
+  if (!selectedBounds) return { ok: false, error: "no selected canvas node" };
+  if (selected.content_kind !== "image") {
+    return { ok: false, error: "selected node is not an image" };
+  }
+  const coordinateSpace = options.coordinateSpace || bounds.coordinateSpace || "world";
+  const world = coordinateSpace === "node-relative"
+    ? normalizeRect(
+      selectedBounds.x + Number(bounds.x || 0),
+      selectedBounds.y + Number(bounds.y || 0),
+      Number(bounds.w || bounds.width || 0),
+      Number(bounds.h || bounds.height || 0)
+    )
+    : normalizeRect(
+      Number(bounds.x || 0),
+      Number(bounds.y || 0),
+      Number(bounds.w || bounds.width || 0),
+      Number(bounds.h || bounds.height || 0)
+    );
+  const clamped = clampRectToBounds(world, selectedBounds);
+  if (!clamped || clamped.w <= 0 || clamped.h <= 0) {
+    return { ok: false, error: "region is outside selected image" };
+  }
+  state.canvasContext.region = {
+    node_id: selected.id,
+    bounds: roundGeometry(clamped),
+    coordinate_space: "canvas_world"
+  };
+  syncCanvasContext(selected, state.canvas.viewport);
+  renderRegionOverlay();
+  renderPlannerContext(selected);
+  return { ok: true, context: activeCanvasContext() };
+}
+
+function clearCanvasContextRegion() {
+  state.canvasContext.region = null;
+  syncCanvasContext(state.canvas.selectedNode, state.canvas.viewport);
+  renderRegionOverlay();
+  renderPlannerContext(state.canvas.selectedNode);
+  return { ok: true, context: activeCanvasContext() };
+}
+
+function syncCanvasContext(selectedItem, viewport) {
+  const region = state.canvasContext.region;
+  if (!selectedItem || (region && String(region.node_id) !== String(selectedItem.id))) {
+    state.canvasContext.region = null;
+  }
+  const context = buildCanvasContextPreview(selectedItem, viewport);
+  state.canvasContext.context = context;
+  state.planner.canvasContext = context;
+  renderRegionMode();
+}
+
+function buildCanvasContextPreview(selectedItem, viewport) {
+  if (!selectedItem) return null;
+  const region = state.canvasContext.region;
+  const isRegion = Boolean(region && String(region.node_id) === String(selectedItem.id));
+  const isImage = selectedItem.content_kind === "image";
+  const bounds = selectedItem.bounds || selectedItem.geometry || {};
+  const kind = isRegion ? "image_region" : isImage ? "selected_image" : "selected_node";
+  const contextId = isRegion
+    ? `ctx-live-region-${selectedItem.id}-${compactGeometry(region.bounds)}`
+    : `ctx-live-selected-${selectedItem.id}`;
+  return normalizeValue({
+    schema_version: 1,
+    context_id: contextId,
+    kind,
+    source_node_id: selectedItem.id,
+    source_node_title: selectedItem.title || `Node ${selectedItem.id}`,
+    content_kind: selectedItem.content_kind,
+    source_path: selectedItem.source_path || null,
+    node_bounds_world: bounds,
+    region_bounds_world: isRegion ? region.bounds : null,
+    region_bounds_node_percent: isRegion ? regionPercent(region.bounds, bounds) : null,
+    viewport,
+    attachment_paths: [],
+    expected_attachments: isRegion
+      ? ["viewport.png", "selected-node.png", "region.png", "context.json"]
+      : ["viewport.png", "selected-node.png", "context.json"],
+    summary: contextSummary(selectedItem, isRegion ? region.bounds : null)
+  });
+}
+
+function activeCanvasContext() {
+  refreshPlannerContext();
+  return normalizeValue(state.canvasContext.context);
+}
+
+function renderRegionOverlay() {
+  if (!regionLayerEl) return;
+  regionLayerEl.querySelectorAll(".context-region-box").forEach((node) => node.remove());
+  const region = state.canvasContext.region;
+  const selected = state.canvas.selectedNode;
+  if (!region || !selected || String(region.node_id) !== String(selected.id)) return;
+  const box = worldBoxToScreen(region.bounds, state.canvas.viewport);
+  const node = document.createElement("div");
+  node.className = "context-region-box";
+  node.dataset.label = "Region context";
+  node.style.left = `${box.x}px`;
+  node.style.top = `${box.y}px`;
+  node.style.width = `${Math.max(8, box.w)}px`;
+  node.style.height = `${Math.max(8, box.h)}px`;
+  regionLayerEl.append(node);
+}
+
+function isRegionCapableSelection() {
+  return Boolean(state.canvas.selectedNode?.content_kind === "image" && nodeBounds(state.canvas.selectedNode));
+}
+
+function screenPointToWorld(clientX, clientY) {
+  const rect = (regionLayerEl || canvasPanelEl || canvasEl)?.getBoundingClientRect();
+  const viewport = state.canvas.viewport || { zoom: 1, camera_offset: { x: 0, y: 0 } };
+  const zoom = Number(viewport.zoom) || 1;
+  const offset = viewport.camera_offset || { x: 0, y: 0 };
+  return {
+    x: (clientX - (rect?.left || 0) - (Number(offset.x) || 0)) / zoom,
+    y: (clientY - (rect?.top || 0) - (Number(offset.y) || 0)) / zoom
+  };
+}
+
+function clampPointToSelectedNode(point) {
+  const bounds = nodeBounds(state.canvas.selectedNode);
+  if (!point || !bounds) return null;
+  return {
+    x: Math.min(bounds.x + bounds.w, Math.max(bounds.x, point.x)),
+    y: Math.min(bounds.y + bounds.h, Math.max(bounds.y, point.y))
+  };
+}
+
+function nodeBounds(node) {
+  return node?.bounds || node?.geometry || null;
+}
+
+function worldBoxToScreen(bounds, viewport) {
+  const zoom = Number(viewport?.zoom) || 1;
+  const offset = viewport?.camera_offset || { x: 0, y: 0 };
+  return {
+    x: Math.round(bounds.x * zoom + (Number(offset.x) || 0)),
+    y: Math.round(bounds.y * zoom + (Number(offset.y) || 0)),
+    w: Math.round(bounds.w * zoom),
+    h: Math.round(bounds.h * zoom)
+  };
+}
+
+function clampRectToBounds(rect, bounds) {
+  if (!rect || !bounds) return null;
+  const x1 = Math.max(bounds.x, rect.x);
+  const y1 = Math.max(bounds.y, rect.y);
+  const x2 = Math.min(bounds.x + bounds.w, rect.x + rect.w);
+  const y2 = Math.min(bounds.y + bounds.h, rect.y + rect.h);
+  if (x2 <= x1 || y2 <= y1) return null;
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
+function normalizeRect(x, y, w, h) {
+  const nextX = Number(x) || 0;
+  const nextY = Number(y) || 0;
+  const nextW = Number(w) || 0;
+  const nextH = Number(h) || 0;
+  return {
+    x: nextW < 0 ? nextX + nextW : nextX,
+    y: nextH < 0 ? nextY + nextH : nextY,
+    w: Math.abs(nextW),
+    h: Math.abs(nextH)
+  };
+}
+
+function roundGeometry(geometry) {
+  return {
+    x: round2(geometry.x),
+    y: round2(geometry.y),
+    w: round2(geometry.w),
+    h: round2(geometry.h)
+  };
+}
+
+function regionPercent(region, bounds) {
+  if (!region || !bounds || !bounds.w || !bounds.h) return null;
+  return {
+    x: round4((region.x - bounds.x) / bounds.w),
+    y: round4((region.y - bounds.y) / bounds.h),
+    w: round4(region.w / bounds.w),
+    h: round4(region.h / bounds.h)
+  };
+}
+
+function compactGeometry(geometry) {
+  return [geometry.x, geometry.y, geometry.w, geometry.h].map((value) => Math.round(Number(value) || 0)).join("-");
+}
+
+function contextSummary(node, region) {
+  const title = node?.title || `Node ${node?.id || "unknown"}`;
+  if (!region) {
+    const label = node?.content_kind === "image" ? "selected image" : "selected node";
+    return `${label} ${title} id=${node?.id}`;
+  }
+  return `region on ${title} id=${node?.id} bounds=${compactGeometry(region)}`;
+}
+
+function round2(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function round4(value) {
+  return Math.round((Number(value) || 0) * 10000) / 10000;
+}
+
 function verifyLabelMoveSync() {
   return new Promise((resolve) => {
     const done = (value) => resolve(normalizeValue(value));
@@ -818,8 +1110,10 @@ function refreshPlannerContext() {
   state.canvas.snapshotText = ai_snapshot_text();
   state.planner.context = context;
   state.planner.contextText = selected_context_text();
+  syncCanvasContext(selectedItem, snapshot.viewport || null);
   renderPosterOverlays(nodes, state.selectedId, snapshot.viewport || null);
   renderNodeLabels(nodes, state.selectedId, snapshot.viewport || null);
+  renderRegionOverlay();
   renderPlannerContext(selectedItem);
   updateCanvasStatus(`${state.canvas.nodeCount} nodes · ${state.canvas.currentTool}`);
   return stateSnapshot();
@@ -1138,21 +1432,67 @@ function posterDocumentsState() {
 }
 function renderPlannerContext(item) {
   if (!contextTitleEl || !contextMetaEl) return;
+  if (contextAttachmentsEl) contextAttachmentsEl.innerHTML = "";
+  plannerContextEl?.classList.toggle("is-region", state.canvasContext.context?.kind === "image_region");
   if (!item) {
     contextTitleEl.textContent = "No selection";
     contextMetaEl.textContent = "选择左侧节点 · Planner 围绕该对象工作";
     return;
   }
-  contextTitleEl.textContent = item.title || `Node ${item.id}`;
-  const detail = [contentKindLabel(item.content_kind), item.next_action, item.editor_route].filter(Boolean).join(" · ");
+  const active = state.canvasContext.context;
+  contextTitleEl.textContent = active?.kind === "image_region"
+    ? `Region · ${item.title || `Node ${item.id}`}`
+    : item.title || `Node ${item.id}`;
+  const region = active?.region_bounds_world;
+  const detail = region
+    ? [
+      contentKindLabel(item.content_kind),
+      `id=${item.id}`,
+      `x=${Math.round(region.x)} y=${Math.round(region.y)} w=${Math.round(region.w)} h=${Math.round(region.h)}`
+    ].join(" · ")
+    : [
+      contentKindLabel(item.content_kind),
+      `id=${item.id}`,
+      item.source_path ? "source ready" : null,
+      item.next_action,
+      item.editor_route
+    ].filter(Boolean).join(" · ");
   contextMetaEl.textContent = detail || "Planner context is ready.";
+  renderContextChips(active);
 }
 
 function composePromptWithContext(prompt) {
   const context = state.planner.contextText || selected_context_text();
+  const packet = state.canvasContext.context || activeCanvasContext();
   const trimmed = prompt.trim();
-  if (!context.trim()) return trimmed;
-  return `${trimmed}\n\n[Canvas selection]\n${context}`;
+  if (!packet && !context.trim()) return trimmed;
+  const packetLines = packet ? [
+    `context_id=${packet.context_id}`,
+    `kind=${packet.kind}`,
+    `source_node_id=${packet.source_node_id}`,
+    `source_node_title=${packet.source_node_title}`,
+    `source_path=${packet.source_path || "none"}`,
+    packet.region_bounds_world
+      ? `region_world=${JSON.stringify(packet.region_bounds_world)}`
+      : null,
+    `expected_attachments=${(packet.expected_attachments || []).join(",")}`
+  ].filter(Boolean).join("\n") : "";
+  return `${trimmed}\n\n[Canvas context packet]\n${packetLines}\n\n[Canvas selection]\n${context}`.trim();
+}
+
+function renderContextChips(active) {
+  if (!contextAttachmentsEl || !active) return;
+  const chips = [
+    active.context_id,
+    active.kind === "image_region" ? "region.png" : "selected-node.png",
+    "viewport.png"
+  ];
+  for (const chip of chips.filter(Boolean)) {
+    const node = document.createElement("span");
+    node.className = "context-chip";
+    node.textContent = chip;
+    contextAttachmentsEl.append(node);
+  }
 }
 
 /* ─── conversations / messages ─── */
@@ -1378,7 +1718,8 @@ function stateSnapshot() {
     poster: {
       ...state.poster,
       documents: posterDocumentsState()
-    }
+    },
+    canvasContext: state.canvasContext.context
   });
 }
 

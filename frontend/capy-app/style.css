@@ -219,6 +219,15 @@ body {
   color: var(--c-text-dark);
   box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), inset 0 0 0 0.5px rgba(251, 191, 36, 0.4);
 }
+.seg.region-toggle {
+  color: #365314;
+  background: rgba(132, 204, 22, 0.16);
+}
+.seg.region-toggle[aria-pressed="true"] {
+  color: #fff;
+  background: #65a30d;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.08), inset 0 0 0 0.5px rgba(77, 124, 15, 0.22);
+}
 .seg-info {
   font-size: 11px;
   font-family: var(--f-mono);
@@ -435,6 +444,47 @@ body {
   pointer-events: none;
   transition: box-shadow .18s, border-color .18s;
   overflow: hidden;
+}
+
+.context-region-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+}
+
+.context-region-layer.is-active {
+  cursor: crosshair;
+  pointer-events: auto;
+}
+
+.context-region-box {
+  position: absolute;
+  min-width: 8px;
+  min-height: 8px;
+  border: 2px solid #65a30d;
+  background: rgba(132, 204, 22, 0.16);
+  box-shadow:
+    0 0 0 9999px rgba(28, 25, 23, 0.08),
+    0 14px 30px rgba(54, 83, 20, 0.18);
+  pointer-events: none;
+}
+
+.context-region-box::after {
+  content: attr(data-label);
+  position: absolute;
+  left: -2px;
+  top: -28px;
+  min-height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: white;
+  background: #65a30d;
+  font-size: 11px;
+  font-weight: 820;
+  white-space: nowrap;
 }
 .node-label.is-selected {
   border: 0.5px solid rgba(167, 139, 250, 0.7);
@@ -666,6 +716,27 @@ body {
   color: var(--c-text-mute);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   flex: 1; min-width: 0;
+}
+.context-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.context-chip {
+  min-height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #4d7c0f;
+  background: rgba(132, 204, 22, 0.14);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.planner-context.is-region {
+  background: rgba(236, 252, 203, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(101, 163, 13, 0.26);
 }
 
 /* chat stream */
