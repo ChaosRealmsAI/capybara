@@ -4,6 +4,7 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
 
+mod canvas;
 mod cutout;
 mod ipc_client;
 mod media;
@@ -41,6 +42,8 @@ enum Command {
     Verify(VerifyArgs),
     #[command(about = "Manage persistent Claude/Codex conversations")]
     Chat(Box<ChatArgs>),
+    #[command(about = "Operate the live canvas through AI-safe commands")]
+    Canvas(canvas::CanvasArgs),
     #[command(about = "Run AI-usable creative generation tools")]
     Image(ImageArgs),
     #[command(about = "Package video clips for scroll-driven HTML pages")]
@@ -502,6 +505,7 @@ fn run() -> Result<(), String> {
             ChatCommand::Send(args) => send("conversation-send", chat_send_params(args)),
             ChatCommand::Stop(args) => send("conversation-stop", json!({ "id": args.id })),
         },
+        Command::Canvas(args) => canvas::handle(args),
         Command::Image(args) => handle_image_command(args),
         Command::Media(args) => media::handle(args),
         Command::Agent(args) => match args.command {

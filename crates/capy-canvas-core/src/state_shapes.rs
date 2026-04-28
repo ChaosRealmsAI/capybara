@@ -1,6 +1,21 @@
 //! Shape operations: z-order, copy/paste, groups, alignment, distribute, flip.
 
+use std::sync::Arc;
+
 use crate::state::{AppState, CanvasContentKind, Shape, ShapeKind, Toast};
+
+pub struct ImageAssetImport {
+    pub x: f64,
+    pub y: f64,
+    pub rgba: Arc<Vec<u8>>,
+    pub width: u32,
+    pub height: u32,
+    pub mime: String,
+    pub title: Option<String>,
+    pub source_path: Option<String>,
+    pub generation_provider: Option<String>,
+    pub generation_prompt: Option<String>,
+}
 
 impl AppState {
     pub fn shape_index_by_id(&self, id: u64) -> Option<usize> {
@@ -102,6 +117,15 @@ impl AppState {
                 }
                 if let Some(editor_route) = item.editor_route.as_ref() {
                     lines.push(format!("  editor: {editor_route}"));
+                }
+                if let Some(source_path) = item.source_path.as_ref() {
+                    lines.push(format!("  source: {source_path}"));
+                }
+                if let Some(provider) = item.generation_provider.as_ref() {
+                    lines.push(format!("  generation_provider: {provider}"));
+                }
+                if let Some(prompt) = item.generation_prompt.as_ref() {
+                    lines.push(format!("  generation_prompt: {prompt}"));
                 }
                 lines.join("\n")
             })
@@ -629,36 +653,61 @@ impl AppState {
         &mut self,
         x: f64,
         y: f64,
-        rgba: std::sync::Arc<Vec<u8>>,
+        rgba: Arc<Vec<u8>>,
         width: u32,
         height: u32,
         mime: String,
     ) -> usize {
+        self.import_image_asset_bytes(ImageAssetImport {
+            x,
+            y,
+            rgba,
+            width,
+            height,
+            mime,
+            title: None,
+            source_path: None,
+            generation_provider: None,
+            generation_prompt: None,
+        })
+    }
+
+    pub fn import_image_asset_bytes(&mut self, import: ImageAssetImport) -> usize {
         self.push_undo();
         // Clamp the on-screen size: don't insert a 4000px tall thing if the
         // viewport is 800px. Preserve aspect ratio by scaling down uniformly.
         const MAX_SHAPE_DIM: f64 = 600.0;
-        let nat_w = width as f64;
-        let nat_h = height as f64;
+        let nat_w = import.width as f64;
+        let nat_h = import.height as f64;
         let scale = if nat_w > MAX_SHAPE_DIM || nat_h > MAX_SHAPE_DIM {
             (MAX_SHAPE_DIM / nat_w).min(MAX_SHAPE_DIM / nat_h)
         } else {
             1.0
         };
-        let mime_for_metadata = mime.clone();
-        let mut shape = Shape::new(crate::state::ShapeKind::Image, x, y, 0xdddddd);
+        let mime_for_metadata = import.mime.clone();
+        let mut shape = Shape::new(crate::state::ShapeKind::Image, import.x, import.y, 0xdddddd);
         shape.w = nat_w * scale;
         shape.h = nat_h * scale;
         shape.text = String::new();
         shape.metadata.content_kind = Some(crate::shape::CanvasContentKind::Image);
-        shape.metadata.title = Some("Image".to_string());
+        shape.metadata.title = import
+            .title
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| Some("Image".to_string()));
         shape.metadata.status = Some("ready".to_string());
         shape.metadata.mime = Some(mime_for_metadata);
+        shape.metadata.source_path = import.source_path.filter(|value| !value.trim().is_empty());
+        shape.metadata.generation_provider = import
+            .generation_provider
+            .filter(|value| !value.trim().is_empty());
+        shape.metadata.generation_prompt = import
+            .generation_prompt
+            .filter(|value| !value.trim().is_empty());
         shape.image = Some(crate::shape::RasterImage {
-            mime,
-            width,
-            height,
-            rgba: Some(rgba),
+            mime: import.mime,
+            width: import.width,
+            height: import.height,
+            rgba: Some(import.rgba),
             data_url: None,
         });
         self.add_shape(shape)

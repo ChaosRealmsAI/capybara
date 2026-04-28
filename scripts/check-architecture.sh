@@ -39,7 +39,9 @@ for path in \
   spec/versions/v0.6-canvas-chat-workbench/bdd.json \
   spec/versions/v0.6-canvas-chat-workbench/status.json \
   spec/versions/v0.6.1-image-generation-tool/bdd.json \
-  spec/versions/v0.6.1-image-generation-tool/status.json
+  spec/versions/v0.6.1-image-generation-tool/status.json \
+  spec/versions/v0.8-canvas-image-tool/bdd.json \
+  spec/versions/v0.8-canvas-image-tool/status.json
 do
   require_file "$path"
 done
@@ -52,7 +54,10 @@ rg -q '"crates/capy-canvas-web"' Cargo.toml || fail "canvas web crate must be a 
 rg -q '"crates/capy-image-gen"' Cargo.toml || fail "image generation crate must be a workspace member"
 rg -q '"crates/capy-scroll-media"' Cargo.toml || fail "scroll media crate must be a workspace member"
 rg -q '^capy-image-gen\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-image-gen through the workspace boundary"
+rg -q '^capy-image-gen\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must use capy-image-gen for desktop canvas tool calls"
 rg -q '^capy-scroll-media\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-scroll-media through the workspace boundary"
+rg -q 'CanvasCommand::GenerateImage' crates/capy-cli/src/canvas.rs || fail "capy canvas generate-image command must exist"
+rg -q 'canvas-generate-image' crates/capy-shell/src/app.rs || fail "desktop canvas image tool RPC must exist"
 rg -q 'provider-adapter' crates/capy-image-gen/src/apimart.rs || fail "first image provider must remain an adapter, not the top-level abstraction"
 rg -q 'default_no_spend_gate: true' crates/capy-image-gen/src/apimart.rs || fail "image provider must expose no-spend default gate metadata"
 rg -q 'http_range' crates/capy-scroll-media/src/types.rs || fail "scroll media manifest must record HTTP Range requirement"

@@ -916,8 +916,21 @@ mod web {
     /// `DragEvent`.
     #[wasm_bindgen]
     pub fn add_image_at(x: f64, y: f64, bytes: &[u8]) -> Result<u32, JsValue> {
+        add_image_asset_at(x, y, bytes, "", "", "", "")
+    }
+
+    #[wasm_bindgen]
+    pub fn add_image_asset_at(
+        x: f64,
+        y: f64,
+        bytes: &[u8],
+        title: &str,
+        source_path: &str,
+        generation_provider: &str,
+        generation_prompt: &str,
+    ) -> Result<u32, JsValue> {
         let state_arc = shared_state().ok_or_else(|| {
-            JsValue::from_str("add_image_at(): no shared state · call start() first")
+            JsValue::from_str("add_image_asset_at(): no shared state · call start() first")
         })?;
         let decoded = image::load_from_memory(bytes)
             .map_err(|e| JsValue::from_str(&format!("decode image: {e}")))?
@@ -939,8 +952,20 @@ mod web {
         let idx = {
             let mut state = state_arc
                 .lock()
-                .map_err(|_| JsValue::from_str("add_image_at(): state lock poisoned"))?;
-            let idx = state.import_image_bytes(x, y, rgba, w, h, mime);
+                .map_err(|_| JsValue::from_str("add_image_asset_at(): state lock poisoned"))?;
+            let idx =
+                state.import_image_asset_bytes(capy_canvas_core::state_shapes::ImageAssetImport {
+                    x,
+                    y,
+                    rgba,
+                    width: w,
+                    height: h,
+                    mime,
+                    title: optional_string(title),
+                    source_path: optional_string(source_path),
+                    generation_provider: optional_string(generation_provider),
+                    generation_prompt: optional_string(generation_prompt),
+                });
             state.selected = vec![idx];
             state.tool = Tool::Select;
             idx
@@ -1125,6 +1150,15 @@ mod web {
             Tool::Text => "text",
             Tool::Eraser => "eraser",
             Tool::Lasso => "lasso",
+        }
+    }
+
+    fn optional_string(value: &str) -> Option<String> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
         }
     }
 }
