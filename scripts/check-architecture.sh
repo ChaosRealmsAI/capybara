@@ -26,6 +26,7 @@ for path in \
   crates/capy-scroll-media/Cargo.toml \
   crates/capy-scroll-media/src/lib.rs \
   scripts/image-provider-apimart.mjs \
+  scripts/capy-focus-cutout.py \
   scripts/build-canvas-for-app.sh \
   scripts/verify-agent-canvas-image-placement.mjs \
   scripts/verify-poster-json-renderer.mjs \
@@ -91,6 +92,13 @@ rg -q 'capy.poster-document' crates/capy-poster/src/component.rs crates/capy-pos
 if rg -n '/Users/Zhuanz/workspace/NextFrame|NextFrame/target/debug/nf-recorder' crates fixtures; then
   fail "poster adapter must not hardcode a local NextFrame checkout or recorder path"
 fi
+rg -q 'withoutbg/focus' crates/capy-cli/src/main.rs crates/capy-cli/src/cutout.rs scripts/capy-focus-cutout.py || fail "cutout CLI must use withoutbg/focus"
+rg -q 'CutoutCommand::Run' crates/capy-cli/src/cutout.rs || fail "capy cutout run command must remain wired"
+rg -q 'CutoutCommand::Batch' crates/capy-cli/src/cutout.rs || fail "capy cutout batch command must remain wired"
+if rg -n 'CutoutRequest|cutout::execute|flood|tolerance|feather_radius|hole_min_area|DEFAULT_BACKGROUND|fixed-background' \
+  crates/capy-cli/src/main.rs crates/capy-cli/src/cutout.rs; then
+  fail "cutout CLI must not expose the old fixed-background algorithm"
+fi
 
 active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"
 [[ -n "$active_version" ]] || fail "spec active_version is missing"
@@ -99,8 +107,15 @@ require_file "spec/versions/$active_version/status.json"
 jq -e '.versions[] | select(.id == "v0.4-cef-shell-poc" and .status == "merged-verified")' \
   spec/versions/REGISTRY.json >/dev/null || fail "v0.4 CEF foundation must remain registered as merged-verified"
 jq -e --arg active "$active_version" '
-  .versions[] | select(.id == $active) |
-  (.id == "v0.4-cef-shell-poc" or ((.depends_on // []) | index("v0.4-cef-shell-poc") != null) or ((.depends_on // []) | index("v0.5-desktop-foundation-hardening") != null) or ((.depends_on // []) | index("v0.6-canvas-chat-workbench") != null))
+  . as $registry |
+  def deps($id):
+    ($registry.versions[] | select(.id == $id) | (.depends_on // [])) as $direct
+    | $direct + ([$direct[]? | deps(.)] | add // []);
+  ($active == "v0.4-cef-shell-poc") or
+  ((deps($active) | unique) as $deps |
+    ($deps | index("v0.4-cef-shell-poc") != null) or
+    ($deps | index("v0.5-desktop-foundation-hardening") != null) or
+    ($deps | index("v0.6-canvas-chat-workbench") != null))
 ' spec/versions/REGISTRY.json >/dev/null || fail "active version must be v0.4 CEF foundation or depend on the CEF desktop foundation chain"
 
 if rg -n '\bwry\b|objc2-web-kit|javascriptcore|WKWebView|WebKit' \
