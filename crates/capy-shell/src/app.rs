@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -15,6 +16,7 @@ use crate::store::Store;
 
 mod canvas_tool;
 mod conversation;
+pub mod nextframe;
 mod window;
 
 use window::{WindowManager, WindowStatus};
@@ -48,6 +50,10 @@ pub enum ShellEvent {
         request: IpcRequest,
         ack: oneshot::Sender<IpcResponse>,
     },
+    NextFrameAttach {
+        request: IpcRequest,
+        ack: oneshot::Sender<IpcResponse>,
+    },
     AgentRuntimeEvent {
         event: AgentRuntimeEvent,
     },
@@ -65,15 +71,27 @@ pub enum ShellEvent {
     },
 }
 
-#[derive(Default)]
 pub struct ShellState {
     windows: Mutex<Vec<WindowStatus>>,
+    canvas_nodes: Mutex<BTreeSet<u64>>,
+    nextframe_nodes: Mutex<BTreeMap<u64, nextframe::AttachedCanvasNode>>,
+}
+
+impl Default for ShellState {
+    fn default() -> Self {
+        Self {
+            windows: Mutex::new(Vec::new()),
+            canvas_nodes: Mutex::new(BTreeSet::from([0])),
+            nextframe_nodes: Mutex::new(BTreeMap::new()),
+        }
+    }
 }
 
 impl ShellState {
     pub fn can_answer_directly(&self, request: &IpcRequest) -> bool {
         request.params.get("query").and_then(Value::as_str) == Some("windows")
             || request.params.get("key").and_then(Value::as_str) == Some("app.ready")
+            || request.params.get("key").and_then(Value::as_str) == Some("nextframe.attachments")
     }
 
     pub fn state_query(&self, request: IpcRequest) -> IpcResponse {
@@ -94,9 +112,35 @@ impl ShellState {
             .unwrap_or("app.ready");
         let value = match key {
             "app.ready" => json!(true),
+            "nextframe.attachments" => {
+                let Ok(nodes) = self.nextframe_nodes.lock() else {
+                    return error_response(&request.req_id, "nextframe state lock failed");
+                };
+                json!(nodes.clone())
+            }
             _ => Value::Null,
         };
         ok_response(&request, json!({ "key": key, "value": value }))
+    }
+
+    pub(crate) fn has_canvas_node(&self, id: u64) -> bool {
+        self.canvas_nodes
+            .lock()
+            .map(|nodes| nodes.contains(&id))
+            .unwrap_or(false)
+    }
+
+    pub(crate) fn attach_nextframe_node(
+        &self,
+        id: u64,
+        node: nextframe::AttachedCanvasNode,
+    ) -> Result<(), String> {
+        let mut nodes = self
+            .nextframe_nodes
+            .lock()
+            .map_err(|_| "nextframe state lock failed".to_string())?;
+        nodes.insert(id, node);
+        Ok(())
     }
 
     fn sync_from_manager(&self, manager: &WindowManager) {
@@ -209,6 +253,10 @@ pub fn run() {
                     let response = conversation::response(Arc::clone(&store), &proxy, request);
                     let _send_result = ack.send(response);
                 }
+                ShellEvent::NextFrameAttach { request, ack } => {
+                    let response = nextframe_attach(&manager, &state, request);
+                    let _send_result = ack.send(response);
+                }
                 ShellEvent::AgentRuntimeEvent { event } => {
                     broadcast_agent_event(&manager, &event);
                 }
@@ -216,7 +264,14 @@ pub fn run() {
                     send_canvas_tool_event(&manager, &window_id, event);
                 }
                 ShellEvent::IpcFromJs { window_id, body } => {
-                    handle_js_ipc(&manager, Arc::clone(&store), &proxy, &window_id, &body);
+                    handle_js_ipc(
+                        &manager,
+                        Arc::clone(&state),
+                        Arc::clone(&store),
+                        &proxy,
+                        &window_id,
+                        &body,
+                    );
                 }
                 ShellEvent::Quit { request, ack } => {
                     manager.quit_all();
@@ -399,8 +454,38 @@ fn capture_window(manager: &mut WindowManager, request: IpcRequest) -> IpcRespon
     response_from_result(request.req_id, result)
 }
 
+fn nextframe_attach(
+    manager: &WindowManager,
+    state: &ShellState,
+    request: IpcRequest,
+) -> IpcResponse {
+    let req_id = request.req_id.clone();
+    match nextframe::attach_node(state, request.params) {
+        Ok(data) => {
+            if let Some(event) = data.get("event") {
+                broadcast_canvas_node_attached(manager, event);
+            }
+            IpcResponse {
+                req_id,
+                ok: true,
+                data: data.get("report").cloned().or(Some(data)),
+                error: None,
+            }
+        }
+        Err(error) => IpcResponse {
+            req_id,
+            ok: false,
+            data: None,
+            error: serde_json::from_str(&error)
+                .ok()
+                .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
+        },
+    }
+}
+
 fn handle_js_ipc(
     manager: &WindowManager,
+    state: Arc<ShellState>,
     store: Arc<Store>,
     proxy: &EventLoopProxy<ShellEvent>,
     window_id: &str,
@@ -458,6 +543,8 @@ fn handle_js_ipc(
                 request.params,
             ),
         )
+    } else if op == "nextframe-attach" {
+        nextframe_attach(manager, &state, request)
     } else {
         conversation::response(store, proxy, request)
     };
@@ -486,6 +573,18 @@ fn send_canvas_tool_event(manager: &WindowManager, window_id: &str, event: Value
         "window.dispatchEvent(new CustomEvent('capy:canvas-tool-event', {{ detail: {payload} }}));"
     );
     let _eval_result = webview.evaluate_script(&script);
+}
+
+fn broadcast_canvas_node_attached(manager: &WindowManager, event: &Value) {
+    let Ok(payload) = serde_json::to_string(event) else {
+        return;
+    };
+    let script = format!(
+        "window.dispatchEvent(new CustomEvent('capy:canvas-node-attached', {{ detail: {payload} }}));"
+    );
+    for webview in manager.webviews.values() {
+        let _eval_result = webview.evaluate_script(&script);
+    }
 }
 
 fn broadcast_agent_event(manager: &WindowManager, event: &AgentRuntimeEvent) {

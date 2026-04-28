@@ -42,13 +42,21 @@ pub fn request(op: impl Into<String>, params: Value) -> IpcRequest {
 }
 
 pub fn send(req: IpcRequest) -> Result<IpcResponse, String> {
+    send_with_path(req, socket_path())
+}
+
+pub fn send_to(req: IpcRequest, path: PathBuf) -> Result<IpcResponse, String> {
+    send_with_path(req, path)
+}
+
+fn send_with_path(req: IpcRequest, path: PathBuf) -> Result<IpcResponse, String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|err| format!("socket runtime failed: {err}"))?;
 
     runtime
-        .block_on(async { tokio::time::timeout(ipc_timeout(), send_async(req)).await })
+        .block_on(async { tokio::time::timeout(ipc_timeout(), send_async(req, path)).await })
         .map_err(|_| format!("IPC request timed out after {}s", ipc_timeout().as_secs()))?
 }
 
@@ -61,8 +69,7 @@ fn ipc_timeout() -> Duration {
         .unwrap_or(DEFAULT_IPC_TIMEOUT)
 }
 
-async fn send_async(req: IpcRequest) -> Result<IpcResponse, String> {
-    let path = socket_path();
+async fn send_async(req: IpcRequest, path: PathBuf) -> Result<IpcResponse, String> {
     let name = path
         .to_str()
         .ok_or_else(|| format!("socket path is not UTF-8: {path:?}"))?

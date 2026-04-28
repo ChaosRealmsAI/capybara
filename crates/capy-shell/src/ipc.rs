@@ -207,6 +207,13 @@ async fn dispatch(
             })
             .await
         }
+        "nextframe-attach" => {
+            send_event(req, proxy, |request, ack| ShellEvent::NextFrameAttach {
+                request,
+                ack,
+            })
+            .await
+        }
         "quit" => send_event(req, proxy, |request, ack| ShellEvent::Quit { request, ack }).await,
         _ => error_response(&req.req_id, format!("unknown op: {}", req.op)),
     }

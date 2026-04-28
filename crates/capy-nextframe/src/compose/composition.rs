@@ -1,4 +1,6 @@
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -22,6 +24,14 @@ pub struct CompositionDocument {
     pub tracks: Vec<CompositionTrack>,
     #[serde(default)]
     pub assets: Vec<CompositionAsset>,
+}
+
+impl CompositionDocument {
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let text =
+            fs::read_to_string(path).map_err(|err| format!("read composition failed: {err}"))?;
+        serde_json::from_str(&text).map_err(|err| format!("parse composition failed: {err}"))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

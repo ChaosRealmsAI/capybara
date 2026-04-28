@@ -362,6 +362,39 @@ fn nextframe_compile_strict_binary_requires_nf() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+#[test]
+fn nextframe_attach_reports_shell_unavailable_json() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("attach-no-shell")?;
+    let composition = dir.join("composition.json");
+    fs::write(&composition, valid_composition_text())?;
+    let socket = dir.join("missing.sock");
+
+    let output = capy_command()?
+        .args([
+            "nextframe",
+            "attach",
+            "--canvas-node",
+            "0",
+            "--composition",
+            &composition.display().to_string(),
+            "--socket",
+            &socket.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    assert!(output.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["stage"], "attach");
+    assert_eq!(value["code"], "SHELL_UNAVAILABLE");
+    assert_eq!(value["errors"][0]["code"], "SHELL_UNAVAILABLE");
+    assert_eq!(value["canvas_node_id"], 0);
+    assert_eq!(value["ipc_socket"], socket.display().to_string());
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
 fn capy_command() -> Result<Command, Box<dyn std::error::Error>> {
     let path = std::env::var("CARGO_BIN_EXE_capy")?;
     Ok(Command::new(path))
@@ -410,4 +443,8 @@ fn write_fake_binary(
         fs::set_permissions(&path, permissions)?;
     }
     Ok(path)
+}
+
+fn valid_composition_text() -> &'static str {
+    r#"{"schema":"nextframe.composition.v2","schema_version":"capy.composition.v1","id":"poster-snapshot","title":"Poster Snapshot","name":"Poster Snapshot","duration_ms":1000,"duration":"1000ms","viewport":{"w":1920,"h":1080,"ratio":"16:9"},"theme":"default","tracks":[{"id":"track-poster","kind":"component","component":"html.capy-poster","z":10,"time":{"start":"0ms","end":"1000ms"},"duration_ms":1000,"params":{"poster":{"type":"poster"}}}],"assets":[]}"#
 }

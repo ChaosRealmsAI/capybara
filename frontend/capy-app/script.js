@@ -131,6 +131,9 @@ const state = {
     selectedLayerId: "headline",
     lastNodeId: null,
     lastError: null
+  },
+  nextframe: {
+    attachments: new Map()
   }
 };
 
@@ -170,6 +173,7 @@ window.capyWorkbench = {
   scheduleCanvasLabelRefresh,
   startLiveCanvasLabelRefresh,
   stateSnapshot,
+  attachNextFrameComposition,
   startCanvasImageTool,
   verifyCanvasImageTool,
   verifyLabelMoveSync,
@@ -216,6 +220,10 @@ window.addEventListener("capy:canvas-tool-event", (event) => {
     state.canvasTool.error = stringifyError(error);
     renderCanvasToolStatus();
   });
+});
+
+window.addEventListener("capy:canvas-node-attached", (event) => {
+  handleCanvasNodeAttached(event.detail);
 });
 
 /* ─── form / button listeners ─── */
@@ -1099,6 +1107,7 @@ function refreshPlannerContext() {
   const context = normalizeValue(selected_context()) || { selected_count: 0, items: [] };
   const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
   const selectedItem = Array.isArray(context.items) ? context.items[0] || null : null;
+  applyNextFrameAttachments(nodes);
   state.blocks = nodes;
   state.selectedId = selectedItem?.id || null;
   state.canvas.ready = true;
@@ -1121,17 +1130,21 @@ function refreshPlannerContext() {
 
 const TYPE_DOTS = {
   brand: "#fbbf24", image: "#f9a8d4", video: "#a78bfa", web: "#84cc16",
+  "nextframe-composition": "#34d399",
   text: "#9ca3af", default: "#a78bfa"
 };
 const TYPE_ICONS = {
   brand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8.5" stroke-dasharray="2 3"/></svg>',
   image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l4.5-4 4 3 3.5-2.5 3 2.5"/></svg>',
   video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor"/></svg>',
+  "nextframe-composition": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5M7 17h10"/></svg>',
   web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 3 2.6 14 0 17M12 3.5c-2.6 3-2.6 14 0 17"/></svg>',
   default: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>'
 };
 
 function inferType(node) {
+  const componentKind = String(node?.capyComponentKind || node?.component_kind || "").toLowerCase();
+  if (componentKind === "nextframe-composition") return "nextframe-composition";
   const k = String(node?.content_kind || "").toLowerCase();
   if (k === "brand") return "brand";
   if (k === "image") return "image";
@@ -1233,12 +1246,18 @@ function renderNodeLabels(nodes, selectedId, viewport) {
     existing.delete(nodeId);
     skin.dataset.nodeId = nodeId;
     const type = inferType(node);
+    skin.dataset.capyComponentKind = type === "nextframe-composition" ? type : "";
+    skin.dataset.capyNextframeState = node.nextframe?.state || "";
     skin.classList.toggle("is-selected", String(node.id) === String(selectedId));
     skin.querySelector(".node-dot").style.background = TYPE_DOTS[type] || TYPE_DOTS.default;
     skin.querySelector(".node-icon").innerHTML = TYPE_ICONS[type] || TYPE_ICONS.default;
-    skin.querySelector(".node-type").textContent = String(node.content_kind || "node").toLowerCase();
+    skin.querySelector(".node-type").textContent = type === "nextframe-composition"
+      ? "nextframe"
+      : String(node.content_kind || "node").toLowerCase();
     skin.querySelector(".node-title").textContent = node.title || `Node ${node.id}`;
-    skin.querySelector(".node-meta").textContent = node.next_action || "ready";
+    skin.querySelector(".node-meta").textContent = type === "nextframe-composition"
+      ? (node.nextframe?.state || "preview-ready")
+      : (node.next_action || "ready");
     const box = nodeLabelBox(node, viewport);
     const zoom = Number(viewport?.zoom) || 1;
     const w = Math.max(160, Math.round((node.bounds.w || 200) * zoom));
@@ -1250,6 +1269,52 @@ function renderNodeLabels(nodes, selectedId, viewport) {
     skin.style.height = `${h}px`;
   }
   for (const orphan of existing.values()) orphan.remove();
+}
+
+async function attachNextFrameComposition(canvasNodeId, compositionPath) {
+  return rpc("nextframe-attach", {
+    canvas_node_id: Number(canvasNodeId),
+    composition_path: compositionPath
+  });
+}
+
+function handleCanvasNodeAttached(detail) {
+  if (!detail) return;
+  const nodeId = String(detail.canvas_node_id);
+  state.nextframe.attachments.set(nodeId, {
+    state: detail.state || "preview-ready",
+    composition_ref: detail.composition_ref || null
+  });
+  const node = state.blocks.find((item) => String(item.id) === nodeId);
+  if (node) {
+    applyNextFrameAttachment(node, state.nextframe.attachments.get(nodeId));
+  }
+  const escapedNodeId = window.CSS?.escape ? CSS.escape(nodeId) : nodeId.replace(/"/g, '\\"');
+  const label = labelLayerEl?.querySelector(`[data-node-id="${escapedNodeId}"]`);
+  if (label) {
+    label.dataset.capyComponentKind = "nextframe-composition";
+    label.dataset.capyNextframeState = detail.state || "preview-ready";
+    const type = label.querySelector(".node-type");
+    const meta = label.querySelector(".node-meta");
+    if (type) type.textContent = "nextframe";
+    if (meta) meta.textContent = detail.state || "preview-ready";
+  }
+  scheduleCanvasLabelRefresh();
+}
+
+function applyNextFrameAttachments(nodes) {
+  for (const node of nodes) {
+    const attachment = state.nextframe.attachments.get(String(node?.id));
+    if (attachment) applyNextFrameAttachment(node, attachment);
+  }
+}
+
+function applyNextFrameAttachment(node, attachment) {
+  if (!node || !attachment) return;
+  node.capyComponentKind = "nextframe-composition";
+  node.component_kind = "nextframe-composition";
+  node.nextframe = attachment;
+  if (!node.content_kind || node.content_kind === "video") node.content_kind = "video";
 }
 
 function nodeLabelBox(node, viewport) {

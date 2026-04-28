@@ -494,6 +494,26 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
+.node-label[data-capy-component-kind="nextframe-composition"] {
+  border-color: rgba(52, 211, 153, 0.44);
+  background:
+    linear-gradient(135deg, rgba(236, 253, 245, 0.96), rgba(255, 255, 255, 0.94));
+}
+
+.node-label[data-capy-component-kind="nextframe-composition"]::after {
+  content: "NextFrame";
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: rgba(6, 95, 70, 0.1);
+  color: #065f46;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 780;
+}
+
 .node-head {
   display: flex; align-items: center; gap: 7px;
 }

@@ -1,7 +1,11 @@
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::{Args, Subcommand};
 use serde::Serialize;
+use serde_json::{Value, json};
+
+use crate::ipc_client;
 
 #[derive(Debug, Args)]
 pub struct NextFrameArgs {
@@ -19,6 +23,8 @@ enum NextFrameCommand {
     Validate(NextFrameValidateArgs),
     #[command(about = "Compile a NextFrame composition JSON document")]
     Compile(NextFrameCompileArgs),
+    #[command(about = "Attach a NextFrame composition to a live canvas node")]
+    Attach(NextFrameAttachArgs),
 }
 
 #[derive(Debug, Args)]
@@ -61,12 +67,23 @@ struct NextFrameCompileArgs {
     strict_binary: bool,
 }
 
+#[derive(Debug, Args)]
+struct NextFrameAttachArgs {
+    #[arg(long)]
+    canvas_node: u64,
+    #[arg(long)]
+    composition: PathBuf,
+    #[arg(long)]
+    socket: Option<PathBuf>,
+}
+
 pub fn handle(args: NextFrameArgs) -> Result<(), String> {
     match args.command {
         NextFrameCommand::Doctor(args) => doctor(args),
         NextFrameCommand::ComposePoster(args) => compose_poster(args),
         NextFrameCommand::Validate(args) => validate(args),
         NextFrameCommand::Compile(args) => compile(args),
+        NextFrameCommand::Attach(args) => attach(args),
     }
 }
 
@@ -122,10 +139,111 @@ fn compile(args: NextFrameCompileArgs) -> Result<(), String> {
     }
 }
 
+fn attach(args: NextFrameAttachArgs) -> Result<(), String> {
+    let composition_path = absolute_path(args.composition)?;
+    let socket = args.socket.unwrap_or_else(ipc_client::socket_path);
+    let request = ipc_client::request(
+        "nextframe-attach",
+        json!({
+            "canvas_node_id": args.canvas_node,
+            "composition_path": composition_path.display().to_string()
+        }),
+    );
+    match ipc_client::send_to(request, socket.clone()) {
+        Ok(response) if response.ok => {
+            let mut report = response.data.unwrap_or(Value::Null);
+            report["ipc_socket"] = json!(socket.display().to_string());
+            print_json(&report)
+        }
+        Ok(response) => {
+            let report = attach_failure(
+                args.canvas_node,
+                &composition_path,
+                &socket,
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("code"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("IPC_ERROR"),
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("message"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("capy-shell nextframe attach failed"),
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("hint"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("next step · run capy nextframe attach --help"),
+            );
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+        Err(error) => {
+            let report = attach_failure(
+                args.canvas_node,
+                &composition_path,
+                &socket,
+                "SHELL_UNAVAILABLE",
+                error,
+                "next step · run capy shell",
+            );
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+    }
+}
+
 fn print_json<T: Serialize>(data: &T) -> Result<(), String> {
     println!(
         "{}",
         serde_json::to_string_pretty(data).map_err(|err| err.to_string())?
     );
     Ok(())
+}
+
+fn attach_failure(
+    canvas_node_id: u64,
+    composition_path: &std::path::Path,
+    socket: &std::path::Path,
+    code: &str,
+    message: impl Into<String>,
+    hint: &str,
+) -> Value {
+    let error = json!({
+        "code": code,
+        "message": message.into(),
+        "hint": hint
+    });
+    json!({
+        "ok": false,
+        "trace_id": trace_id(),
+        "stage": "attach",
+        "canvas_node_id": canvas_node_id,
+        "composition_path": composition_path.display().to_string(),
+        "node_state": "error",
+        "ipc_socket": socket.display().to_string(),
+        "code": code,
+        "errors": [error]
+    })
+}
+
+fn absolute_path(path: PathBuf) -> Result<PathBuf, String> {
+    if path.is_absolute() {
+        return Ok(path);
+    }
+    std::env::current_dir()
+        .map(|cwd| cwd.join(path))
+        .map_err(|err| format!("read cwd failed: {err}"))
+}
+
+fn trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("attach-{millis}-{}", std::process::id())
 }
