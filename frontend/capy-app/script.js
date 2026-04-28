@@ -3,6 +3,7 @@ import initCanvas, {
   ai_snapshot,
   ai_snapshot_text,
   create_content_card,
+  create_poster_document_card,
   current_tool,
   dark_mode,
   list_shapes,
@@ -13,6 +14,14 @@ import initCanvas, {
   shape_count,
   start as startCanvas
 } from "./canvas-pkg/capy_canvas_web.js";
+import {
+  buildPosterState,
+  cloneDefaultPosterDocument,
+  cloneDocument,
+  parsePosterDocument,
+  renderPosterStage,
+  validatePosterDocument
+} from "./poster-renderer.js";
 
 const topbar = document.querySelector(".topbar");
 const listEl = document.querySelector("#conversation-list");
@@ -48,6 +57,7 @@ const writeCodeEl = document.querySelector("#write-code");
 const runtimeFootEl = document.querySelector("#runtime-foot");
 const canvasEl = document.querySelector("#capy-canvas");
 const canvasStatusEl = document.querySelector("#canvas-status");
+const posterLayerEl = document.querySelector("#poster-overlay-layer");
 const labelLayerEl = document.querySelector("#node-label-layer");
 const contextTitleEl = document.querySelector("#context-title");
 const contextMetaEl = document.querySelector("#context-meta");
@@ -90,8 +100,16 @@ const state = {
     runId: null,
     lastResult: null,
     error: null
+  },
+  poster: {
+    renderState: "idle",
+    selectedLayerId: "headline",
+    lastNodeId: null,
+    lastError: null
   }
 };
+
+const posterDocuments = new Map();
 
 window.CAPYBARA_STATE = state;
 window.capy = {
@@ -99,6 +117,7 @@ window.capy = {
   ai_snapshot,
   ai_snapshot_text,
   create_content_card,
+  create_poster_document_card,
   current_tool,
   dark_mode,
   list_shapes,
@@ -114,6 +133,8 @@ window.capyWorkbench = {
   seedDemoCanvas,
   createContentCard,
   insertImageFromBase64,
+  loadPosterDocument,
+  updatePosterDocument,
   moveNodeById,
   selectNode,
   scheduleCanvasLabelRefresh,
@@ -121,7 +142,8 @@ window.capyWorkbench = {
   stateSnapshot,
   startCanvasImageTool,
   verifyCanvasImageTool,
-  verifyLabelMoveSync
+  verifyLabelMoveSync,
+  verifyPosterRenderer
 };
 
 topbar?.addEventListener("mousedown", (event) => {
@@ -295,6 +317,12 @@ function seedDemoCanvas() {
   create_content_card("image", "主视觉候选 A", 410, 96);
   create_content_card("web", "Landing Draft", 650, 322);
   create_content_card("video", "Storyboard", 222, 392);
+  loadPosterDocument(cloneDefaultPosterDocument(), {
+    title: "Poster JSON preview",
+    x: 360,
+    y: 118,
+    sourcePath: "fixture://poster/default"
+  });
   refreshPlannerContext();
   const preferred = state.blocks.find((node) => node.title === "主视觉候选 A") || state.blocks[0];
   if (preferred) {
@@ -336,6 +364,98 @@ function createContentCard(kind, title, x, y) {
     index: Number(idx),
     selected_node: state.canvas.selectedNode,
     snapshot: stateSnapshot()
+  };
+}
+
+function loadPosterDocument(rawDocument, options = {}) {
+  const document = parsePosterDocument(rawDocument || cloneDefaultPosterDocument());
+  validatePosterDocument(document);
+  const placement = posterPlacement(options);
+  const title = String(options.title || document.title || "Poster document");
+  const sourcePath = String(options.sourcePath || options.source_path || "");
+  const idx = create_poster_document_card(title, placement.x, placement.y, sourcePath);
+  refreshPlannerContext();
+  const selectedNode = state.canvas.selectedNode;
+  if (!selectedNode?.id) {
+    throw new Error("Poster document node was not selected after creation.");
+  }
+  const nodeId = String(selectedNode.id);
+  posterDocuments.set(nodeId, {
+    document: cloneDocument(document),
+    renderState: "rendered",
+    error: null,
+    selectedLayerId: options.selectedLayerId || "headline",
+    sourcePath
+  });
+  state.poster.renderState = "rendered";
+  state.poster.lastNodeId = Number(selectedNode.id);
+  state.poster.lastError = null;
+  state.poster.selectedLayerId = options.selectedLayerId || "headline";
+  refreshPlannerContext();
+  return {
+    ok: true,
+    kind: "poster-document",
+    index: Number(idx),
+    node_id: Number(selectedNode.id),
+    content_kind: selectedNode.content_kind,
+    document_title: document.title || title,
+    source_path: sourcePath || null,
+    render_state: "rendered",
+    poster_state: posterStateForNode(selectedNode.id),
+    selected_node: state.canvas.selectedNode
+  };
+}
+
+function updatePosterDocument(nodeId, rawDocument) {
+  const key = String(nodeId || state.poster.lastNodeId || "");
+  const entry = posterDocuments.get(key);
+  if (!entry) {
+    throw new Error(`Poster document node ${key || "<missing>"} is not loaded.`);
+  }
+  try {
+    const document = parsePosterDocument(rawDocument);
+    validatePosterDocument(document);
+    entry.document = cloneDocument(document);
+    entry.renderState = "rendered";
+    entry.error = null;
+    state.poster.renderState = "rendered";
+    state.poster.lastError = null;
+  } catch (error) {
+    entry.renderState = "error-preserved";
+    entry.error = error instanceof Error ? error.message : String(error);
+    state.poster.renderState = "error-preserved";
+    state.poster.lastError = entry.error;
+  }
+  state.poster.lastNodeId = Number(key);
+  refreshPlannerContext();
+  return {
+    ok: entry.renderState === "rendered",
+    node_id: Number(key),
+    render_state: entry.renderState,
+    error: entry.error,
+    poster_state: posterStateForNode(key)
+  };
+}
+
+function posterPlacement(options) {
+  const x = Number(options.x);
+  const y = Number(options.y);
+  if (Number.isFinite(x) && Number.isFinite(y)) {
+    return { x, y };
+  }
+  const current = refreshPlannerContext();
+  const selected = current.canvas?.selectedNode;
+  const bounds = selected?.bounds || selected?.geometry || null;
+  if (bounds) {
+    return {
+      x: Number(bounds.x || 0) + Number(bounds.w || 320) + 56,
+      y: Number(bounds.y || 0)
+    };
+  }
+  const viewport = current.canvas?.viewport;
+  return {
+    x: Math.round((viewport?.visible_world?.x || 80) + 640),
+    y: Math.round((viewport?.visible_world?.y || 80) + 100)
   };
 }
 
@@ -532,10 +652,75 @@ function refreshPlannerContext() {
   state.canvas.snapshotText = ai_snapshot_text();
   state.planner.context = context;
   state.planner.contextText = selected_context_text();
+  renderPosterOverlays(nodes, state.selectedId, snapshot.viewport || null);
   renderNodeLabels(nodes, state.selectedId, snapshot.viewport || null);
   renderPlannerContext(selectedItem);
   updateCanvasStatus(`${state.canvas.nodeCount} nodes · ${state.canvas.currentTool}`);
   return stateSnapshot();
+}
+
+function renderPosterOverlays(nodes, selectedId, viewport) {
+  if (!posterLayerEl) return;
+  const existing = new Map(
+    Array.from(posterLayerEl.querySelectorAll("[data-poster-node-id]")).map((node) => [
+      node.dataset.posterNodeId,
+      node
+    ])
+  );
+  for (const node of nodes) {
+    if (!node || node.content_kind !== "poster" || !node.bounds) continue;
+    const nodeId = String(node.id);
+    const entry = posterDocuments.get(nodeId);
+    if (!entry) continue;
+    let preview = existing.get(nodeId);
+    if (!preview) {
+      preview = document.createElement("div");
+      preview.className = "poster-preview";
+      preview.tabIndex = 0;
+      preview.setAttribute("role", "button");
+      preview.innerHTML = `
+        <div class="poster-preview-head">
+          <strong></strong>
+          <span></span>
+        </div>
+        <div class="poster-preview-frame"></div>
+        <div class="poster-preview-error"></div>
+      `;
+      posterLayerEl.append(preview);
+      preview.addEventListener("click", () => selectNode(node.id));
+      preview.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectNode(node.id);
+        }
+      });
+    }
+    existing.delete(nodeId);
+    const box = nodeOverlayBox(node, viewport);
+    preview.dataset.posterNodeId = nodeId;
+    preview.dataset.renderState = entry.renderState;
+    preview.className = `poster-preview${String(node.id) === String(selectedId) ? " is-selected" : ""}`;
+    preview.style.left = "0";
+    preview.style.top = "0";
+    preview.style.transform = `translate3d(${box.x}px, ${box.y}px, 0)`;
+    preview.style.width = `${box.w}px`;
+    preview.style.height = `${box.h}px`;
+    preview.querySelector("strong").textContent = node.title || "Poster document";
+    preview.querySelector("span").textContent = entry.renderState === "error-preserved"
+      ? "error preserved"
+      : "JSON -> HTML";
+    const frame = preview.querySelector(".poster-preview-frame");
+    const scale = box.w / Number(entry.document.canvas.width || 1920);
+    frame.replaceChildren(renderPosterStage(entry.document, {
+      scale,
+      selectedLayerId: entry.selectedLayerId || state.poster.selectedLayerId
+    }));
+    const errorNode = preview.querySelector(".poster-preview-error");
+    errorNode.textContent = entry.error || "";
+  }
+  for (const orphan of existing.values()) {
+    orphan.remove();
+  }
 }
 
 function renderNodeLabels(nodes, selectedId, viewport) {
@@ -548,6 +733,7 @@ function renderNodeLabels(nodes, selectedId, viewport) {
   );
   for (const node of nodes) {
     if (!node || !node.bounds) continue;
+    if (node.content_kind === "poster") continue;
     const nodeId = String(node.id);
     let label = existing.get(nodeId);
     if (!label) {
@@ -579,6 +765,16 @@ function nodeLabelBox(node, viewport) {
   return {
     x: Math.round(node.bounds.x * zoom + (Number(offset.x) || 0)),
     y: Math.round(node.bounds.y * zoom + (Number(offset.y) || 0))
+  };
+}
+
+function nodeOverlayBox(node, viewport) {
+  const base = nodeLabelBox(node, viewport);
+  const zoom = Number(viewport?.zoom) || 1;
+  return {
+    ...base,
+    w: Math.max(220, Math.round(Number(node.bounds.w || 360) * zoom)),
+    h: Math.max(124, Math.round(Number(node.bounds.h || 202.5) * zoom))
   };
 }
 
@@ -720,6 +916,133 @@ function verifyLabelMoveSync() {
       done({ passed: false, reason: String(error), pageErrors: window.__capyPageErrors || [] });
     }
   });
+}
+
+function verifyPosterRenderer() {
+  return new Promise((resolve) => {
+    const done = (value) => resolve(normalizeValue(value));
+    try {
+      let current = refreshPlannerContext();
+      let posterNode = current.blocks.find((node) => node.content_kind === "poster");
+      if (!posterNode) {
+        loadPosterDocument(cloneDefaultPosterDocument(), {
+          title: "Verification poster",
+          x: 360,
+          y: 118,
+          sourcePath: "fixture://poster/verification"
+        });
+        current = refreshPlannerContext();
+        posterNode = current.blocks.find((node) => node.content_kind === "poster");
+      }
+      if (!posterNode) {
+        done({ passed: false, reason: "poster node not found" });
+        return;
+      }
+
+      selectNode(posterNode.id);
+      const initial = posterOverlaySample(posterNode.id);
+      const entry = posterDocuments.get(String(posterNode.id));
+      const edited = cloneDocument(entry.document);
+      const headline = edited.layers.find((layer) => layer.id === "headline");
+      if (headline) {
+        headline.text = "LOCAL\nPOSTER";
+        headline.x = 132;
+      }
+      const editResult = updatePosterDocument(posterNode.id, edited);
+      const afterEdit = posterOverlaySample(posterNode.id);
+      const invalidResult = updatePosterDocument(posterNode.id, "{ invalid poster json");
+      const afterInvalid = posterOverlaySample(posterNode.id);
+
+      const beforeMoveNode = refreshPlannerContext().blocks.find((node) => String(node.id) === String(posterNode.id));
+      const beforeMove = posterOverlaySample(posterNode.id);
+      moveNodeById(posterNode.id, beforeMoveNode.bounds.x + 72, beforeMoveNode.bounds.y + 44);
+      setTimeout(() => {
+        const afterMove = posterOverlaySample(posterNode.id);
+        const movedDistance = Math.hypot(
+          (afterMove?.node?.bounds?.x || 0) - (beforeMove?.node?.bounds?.x || 0),
+          (afterMove?.node?.bounds?.y || 0) - (beforeMove?.node?.bounds?.y || 0)
+        );
+        const pageErrors = window.__capyPageErrors || [];
+        const consoleErrors = (window.__capyConsoleEvents || []).filter((event) => event.level === "error");
+        done({
+          passed: Boolean(
+            initial?.layerCount >= 3
+            && afterEdit?.headline === "LOCAL\nPOSTER"
+            && invalidResult.render_state === "error-preserved"
+            && afterInvalid?.headline === "LOCAL\nPOSTER"
+            && movedDistance > 20
+            && afterMove?.aligned
+            && pageErrors.length === 0
+            && consoleErrors.length === 0
+          ),
+          node_id: Number(posterNode.id),
+          initial,
+          editResult,
+          afterEdit,
+          invalidResult,
+          afterInvalid,
+          beforeMove,
+          afterMove,
+          movedDistance: Number(movedDistance.toFixed(2)),
+          pageErrors,
+          consoleErrors,
+          poster_state: posterStateForNode(posterNode.id)
+        });
+      }, 120);
+    } catch (error) {
+      done({
+        passed: false,
+        reason: stringifyError(error),
+        pageErrors: window.__capyPageErrors || [],
+        consoleErrors: (window.__capyConsoleEvents || []).filter((event) => event.level === "error")
+      });
+    }
+  });
+}
+
+function posterOverlaySample(nodeId) {
+  const current = refreshPlannerContext();
+  const node = current.blocks.find((item) => String(item.id) === String(nodeId));
+  const overlay = posterLayerEl?.querySelector(`[data-poster-node-id="${nodeId}"]`);
+  const stage = overlay?.querySelector(".poster-stage");
+  const headline = stage?.querySelector('[data-layer-id="headline"]');
+  if (!node || !overlay || !stage) return null;
+  const viewport = current.canvas?.viewport || { zoom: 1, camera_offset: { x: 0, y: 0 } };
+  const box = nodeOverlayBox(node, viewport);
+  const layerRect = posterLayerEl.getBoundingClientRect();
+  const rect = overlay.getBoundingClientRect();
+  return {
+    node,
+    renderState: overlay.dataset.renderState,
+    headline: headline?.textContent || null,
+    layerCount: stage.querySelectorAll("[data-layer-id]").length,
+    rect: {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height
+    },
+    expected: {
+      left: layerRect.left + box.x,
+      top: layerRect.top + box.y
+    },
+    aligned: Math.abs(rect.left - (layerRect.left + box.x)) <= 10
+      && Math.abs(rect.top - (layerRect.top + box.y)) <= 10
+  };
+}
+
+function posterStateForNode(nodeId) {
+  const entry = posterDocuments.get(String(nodeId));
+  if (!entry) return null;
+  return {
+    node_id: Number(nodeId),
+    source_path: entry.sourcePath || null,
+    ...buildPosterState(entry.document, entry.renderState, entry.error)
+  };
+}
+
+function posterDocumentsState() {
+  return Array.from(posterDocuments.keys()).map((nodeId) => posterStateForNode(nodeId));
 }
 
 function renderPlannerContext(item) {
@@ -942,6 +1265,7 @@ function updateCanvasStatus(text) {
 }
 
 function contentKindLabel(value) {
+  if (value === "poster") return "poster";
   return String(value || "shape").replace(/_/g, " ");
 }
 
@@ -964,7 +1288,11 @@ function stateSnapshot() {
     canvas: state.canvas,
     selectedId: state.selectedId,
     blocks: state.blocks,
-    planner: state.planner
+    planner: state.planner,
+    poster: {
+      ...state.poster,
+      documents: posterDocumentsState()
+    }
   });
 }
 

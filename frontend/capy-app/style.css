@@ -237,6 +237,137 @@ button {
   pointer-events: none;
 }
 
+.poster-overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.poster-preview {
+  position: absolute;
+  display: grid;
+  grid-template-rows: 28px minmax(0, 1fr);
+  gap: 6px;
+  padding: 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(161, 98, 7, 0.34);
+  background: rgba(255, 250, 240, 0.74);
+  box-shadow:
+    0 24px 56px rgba(81, 51, 32, 0.18),
+    inset 0 1px rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+  pointer-events: auto;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.poster-preview.is-selected {
+  border-color: rgba(251, 191, 36, 0.96);
+  box-shadow:
+    0 24px 62px rgba(81, 51, 32, 0.22),
+    0 0 0 3px rgba(251, 191, 36, 0.24);
+}
+
+.poster-preview-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #3f2d18;
+  user-select: none;
+}
+
+.poster-preview-head strong,
+.poster-preview-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poster-preview-head strong {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 860;
+}
+
+.poster-preview-head span {
+  flex: 0 0 auto;
+  color: #7c2d12;
+  font-family: "SF Mono", "JetBrains Mono", monospace;
+  font-size: 10px;
+}
+
+.poster-preview-frame {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  align-self: start;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(28, 25, 23, 0.1);
+}
+
+.poster-preview-error {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  display: none;
+  min-height: 22px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: #7f1d1d;
+  background: rgba(254, 226, 226, 0.92);
+  font-size: 11px;
+  font-weight: 720;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.poster-preview[data-render-state="error-preserved"] .poster-preview-error {
+  display: block;
+}
+
+.poster-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--poster-bg, #f6f1e8);
+}
+
+.poster-layer {
+  position: absolute;
+  transform-origin: center;
+}
+
+.poster-layer[data-kind="text"] {
+  white-space: pre-line;
+  line-height: 0.96;
+  letter-spacing: 0;
+}
+
+.poster-layer[data-kind="image"] img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.poster-layer[data-kind="shape"] {
+  border: 1px solid rgba(28, 25, 23, 0.08);
+}
+
+.poster-layer.is-selected {
+  outline: 2px solid rgba(167, 139, 250, 0.78);
+  outline-offset: 3px;
+}
+
 .node-label {
   position: absolute;
   display: grid;

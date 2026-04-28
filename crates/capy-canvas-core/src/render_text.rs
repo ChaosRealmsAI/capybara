@@ -159,6 +159,25 @@ fn draw_content_kind_icon(
             mountain.line_to((cx + 10.0, cy - 1.0));
             scene.stroke(&Stroke::new(1.5), camera_tf, color, None, &mountain);
         }
+        CanvasContentKind::Poster => {
+            let frame =
+                RoundedRect::from_rect(Rect::new(cx - 12.0, cy - 8.0, cx + 12.0, cy + 8.0), 3.0);
+            scene.stroke(&Stroke::new(1.5), camera_tf, color, None, &frame);
+            scene.stroke(
+                &Stroke::new(1.1),
+                camera_tf,
+                color,
+                None,
+                &Line::new((cx - 9.0, cy - 2.0), (cx + 9.0, cy - 2.0)),
+            );
+            scene.stroke(
+                &Stroke::new(1.1),
+                camera_tf,
+                color,
+                None,
+                &Line::new((cx - 9.0, cy + 3.0), (cx + 3.0, cy + 3.0)),
+            );
+        }
         CanvasContentKind::Video => {
             let frame =
                 RoundedRect::from_rect(Rect::new(cx - 12.0, cy - 9.0, cx + 12.0, cy + 9.0), 4.0);
