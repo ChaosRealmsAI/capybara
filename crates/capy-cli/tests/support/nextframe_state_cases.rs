@@ -108,50 +108,45 @@ fn short_socket_path(label: &str) -> Result<PathBuf, Box<dyn std::error::Error>>
 fn fake_state_shell(
     socket: &Path,
     response_data: Value,
-) -> Result<std::thread::JoinHandle<()>, Box<dyn std::error::Error>> {
+) -> Result<
+    std::thread::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>,
+    Box<dyn std::error::Error>,
+> {
     let socket = socket.to_path_buf();
     let (ready_tx, ready_rx) = mpsc::channel();
-    let handle = std::thread::spawn(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("test socket runtime should build");
-        runtime.block_on(async move {
-            let name = socket
-                .to_str()
-                .expect("test socket path should be UTF-8")
-                .to_fs_name::<GenericFilePath>()
-                .expect("test socket name should be valid");
-            let listener = ListenerOptions::new()
-                .name(name)
-                .create_tokio()
-                .expect("test socket listener should bind");
-            ready_tx.send(()).expect("test should wait for readiness");
-            let conn = listener.accept().await.expect("test socket should accept");
-            let (read_half, mut write_half) = conn.split();
-            let mut reader = BufReader::new(read_half);
-            let mut line = String::new();
-            reader
-                .read_line(&mut line)
-                .await
-                .expect("test socket should read request");
-            let request: Value =
-                serde_json::from_str(line.trim_end()).expect("request should be JSON");
-            assert_eq!(request["op"], "nextframe-state");
-            let response = json!({
-                "req_id": request["req_id"],
-                "ok": true,
-                "data": response_data
-            });
-            let mut payload = serde_json::to_string(&response).expect("response should serialize");
-            payload.push('\n');
-            write_half
-                .write_all(payload.as_bytes())
-                .await
-                .expect("test socket should write response");
-            write_half.flush().await.expect("test socket should flush");
-        });
-    });
+    let handle = std::thread::spawn(
+        move || -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            runtime.block_on(async move {
+                let name = socket
+                    .to_str()
+                    .ok_or("test socket path should be UTF-8")?
+                    .to_fs_name::<GenericFilePath>()?;
+                let listener = ListenerOptions::new().name(name).create_tokio()?;
+                ready_tx.send(())?;
+                let conn = listener.accept().await?;
+                let (read_half, mut write_half) = conn.split();
+                let mut reader = BufReader::new(read_half);
+                let mut line = String::new();
+                reader.read_line(&mut line).await?;
+                let request: Value = serde_json::from_str(line.trim_end())?;
+                assert_eq!(request["op"], "nextframe-state");
+                let response = json!({
+                    "req_id": request["req_id"],
+                    "ok": true,
+                    "data": response_data
+                });
+                let mut payload = serde_json::to_string(&response)?;
+                payload.push('\n');
+                write_half.write_all(payload.as_bytes()).await?;
+                write_half.flush().await?;
+                Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+            })?;
+            Ok(())
+        },
+    );
     ready_rx.recv()?;
     Ok(handle)
 }

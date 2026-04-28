@@ -8,6 +8,8 @@ The open-source core is a thin Rust desktop shell with a CLI-first control surfa
 
 `v0.4` is the desktop foundation: bundled CEF/Chromium + tao is merged on `main`. `v0.2` remains only as the legacy wry/tao baseline and rollback reference.
 
+**v0.13** · NextFrame fusion complete. Capybara is now a creative AI workstation built on a single timeline/composition engine. Poster JSON, scroll media, brand tokens all flow through `capy nextframe compose-poster` into the NextFrame pipeline.
+
 - `capy` CLI for AI-friendly operation.
 - `capy-image-gen` provider-neutral image generation tool module.
 - `capy-scroll-media` video-to-scroll-HTML packager with small committed examples.

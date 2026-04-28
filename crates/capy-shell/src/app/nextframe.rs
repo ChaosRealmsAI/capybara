@@ -614,7 +614,7 @@ fn export_cancel_trace_id() -> String {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use serde_json::{Value, json};
 
@@ -656,14 +656,15 @@ mod tests {
         let dir = unique_dir("open-not-ready")?;
         let path = write_composition(&dir, json!({"tracks": []}))?;
         let state = ShellState::default();
-        let _error = super::attach_node(
+        let attach_result = super::attach_node(
             &state,
             json!({"canvas_node_id": 0, "composition_path": path}),
-        )
-        .expect_err("invalid composition should create error-state attachment");
+        );
+        assert!(attach_result.is_err());
 
         let error = open_node(&state, json!({"canvas_node_id": 0}))
-            .expect_err("error-state attachment is not preview-ready");
+            .err()
+            .ok_or("error-state attachment should not be preview-ready")?;
         let value: Value = serde_json::from_str(&error)?;
 
         assert_eq!(value["code"], "NOT_PREVIEW_READY");
@@ -681,7 +682,8 @@ mod tests {
         let state = ShellState::default();
 
         let error = open_node(&state, json!({"canvas_node_id": 99}))
-            .expect_err("unknown canvas node should fail");
+            .err()
+            .ok_or("unknown canvas node should fail")?;
         let value: Value = serde_json::from_str(&error)?;
 
         assert_eq!(value["code"], "CANVAS_NODE_NOT_FOUND");
@@ -719,10 +721,7 @@ mod tests {
         Ok(())
     }
 
-    fn write_composition(
-        dir: &PathBuf,
-        value: Value,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    fn write_composition(dir: &Path, value: Value) -> Result<PathBuf, Box<dyn std::error::Error>> {
         fs::create_dir_all(dir.join("components"))?;
         let path = dir.join("composition.json");
         fs::write(&path, serde_json::to_string_pretty(&value)?)?;

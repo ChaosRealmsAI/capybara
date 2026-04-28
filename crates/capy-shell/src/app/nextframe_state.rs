@@ -196,13 +196,15 @@ mod tests {
     }
 
     #[test]
-    fn transition_rejects_compile_before_validate() {
+    fn transition_rejects_compile_before_validate() -> Result<(), Box<dyn std::error::Error>> {
         let error = NextFrameNodeState::Draft
             .transition(NextFrameNodeAction::CompileOk)
-            .expect_err("draft cannot compile directly");
+            .err()
+            .ok_or("draft cannot compile directly")?;
 
         assert_eq!(error.from, "draft");
         assert_eq!(error.action, "compile-ok");
+        Ok(())
     }
 
     #[test]

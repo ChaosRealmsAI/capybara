@@ -254,7 +254,7 @@ impl StateDetailRequest {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use serde_json::{Value, json};
 
@@ -307,10 +307,7 @@ mod tests {
         Ok(())
     }
 
-    fn write_composition(
-        dir: &PathBuf,
-        value: Value,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    fn write_composition(dir: &Path, value: Value) -> Result<PathBuf, Box<dyn std::error::Error>> {
         fs::create_dir_all(dir.join("components"))?;
         let path = dir.join("composition.json");
         fs::write(&path, serde_json::to_string_pretty(&value)?)?;
