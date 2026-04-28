@@ -11,12 +11,12 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoopWi
 use tao::platform::macos::WindowExtMacOS;
 use tao::window::{UserAttentionType, Window, WindowBuilder, WindowId};
 use tokio::sync::oneshot;
-use wry::WebView;
 
 use crate::agent::{self, AgentRuntimeEvent};
 use crate::capture;
 use crate::ipc::{self, IpcRequest, IpcResponse, error_response, ok_response};
 use crate::store::{CreateConversation, Provider, Store};
+use crate::webview::ShellBrowser;
 
 pub enum ShellEvent {
     OpenWindow {
@@ -28,6 +28,10 @@ pub enum ShellEvent {
         ack: oneshot::Sender<IpcResponse>,
     },
     DevtoolsQuery {
+        request: IpcRequest,
+        ack: oneshot::Sender<IpcResponse>,
+    },
+    DevtoolsEval {
         request: IpcRequest,
         ack: oneshot::Sender<IpcResponse>,
     },
@@ -110,6 +114,21 @@ impl ShellState {
 }
 
 pub fn run() {
+    match crate::webview::maybe_run_cef_subprocess() {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(err) => {
+            eprintln!("capy-shell CEF subprocess failed: {err}");
+            std::process::exit(1);
+        }
+    }
+    let mut cef_runtime = Some(match crate::webview::init_cef_runtime() {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            eprintln!("capy-shell CEF init failed: {err}");
+            std::process::exit(1);
+        }
+    });
     let mut builder = EventLoopBuilder::<ShellEvent>::with_user_event();
     let event_loop = builder.build();
     let proxy = event_loop.create_proxy();
@@ -148,6 +167,7 @@ pub fn run() {
             Event::LoopDestroyed => {
                 manager.quit_all();
                 let _cleanup_result = std::fs::remove_file(ipc::socket_path());
+                drop(cef_runtime.take());
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
@@ -168,6 +188,9 @@ pub fn run() {
                 }
                 ShellEvent::DevtoolsQuery { request, ack } => {
                     devtools_query(&manager, request, ack);
+                }
+                ShellEvent::DevtoolsEval { request, ack } => {
+                    devtools_eval(&manager, request, ack);
                 }
                 ShellEvent::Screenshot { request, ack } => {
                     screenshot(&manager, request, ack);
@@ -192,6 +215,7 @@ pub fn run() {
                     let _cleanup_result = std::fs::remove_file(ipc::socket_path());
                     let response = ok_response(&request, json!({ "quit": true }));
                     let _send_result = ack.send(response);
+                    drop(cef_runtime.take());
                     *control_flow = ControlFlow::Exit;
                 }
             },
@@ -248,6 +272,27 @@ fn devtools_query(manager: &WindowManager, request: IpcRequest, ack: oneshot::Se
                 send_shared_response(&callback_ack, js_callback_response(&callback_req_id, &raw));
             })
             .map_err(|err| format!("devtools evaluate failed: {err}"))
+    })();
+
+    if let Err(error) = result {
+        send_shared_response(&shared_ack, error_response(&req_id, error));
+    }
+}
+
+fn devtools_eval(manager: &WindowManager, request: IpcRequest, ack: oneshot::Sender<IpcResponse>) {
+    let req_id = request.req_id.clone();
+    let shared_ack = shared_ack(ack);
+    let result = (|| {
+        let script = required_string(&request.params, "eval")?;
+        let window = optional_string(&request.params, "window");
+        let (_, webview) = manager.webview_for_target(window.as_deref())?;
+        let callback_ack = Arc::clone(&shared_ack);
+        let callback_req_id = req_id.clone();
+        webview
+            .evaluate_script_with_callback(&script, move |raw| {
+                send_shared_response(&callback_ack, js_callback_response(&callback_req_id, &raw));
+            })
+            .map_err(|err| format!("devtools eval failed: {err}"))
     })();
 
     if let Err(error) = result {
@@ -445,6 +490,10 @@ fn handle_js_ipc(
     let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
         return;
     };
+    if value.get("type").and_then(Value::as_str) == Some("console") {
+        eprintln!("CAPYCONSOLE {trimmed}");
+        return;
+    }
     if value.get("kind").and_then(Value::as_str) != Some("rpc") {
         return;
     }
@@ -769,7 +818,7 @@ fn json_string(value: &str) -> String {
 
 struct WindowManager {
     windows: HashMap<String, Window>,
-    webviews: HashMap<String, WebView>,
+    webviews: HashMap<String, ShellBrowser>,
     id_by_wid: HashMap<WindowId, String>,
     metadata: HashMap<String, WindowMeta>,
     window_numbers: HashMap<String, u32>,
@@ -864,7 +913,10 @@ impl WindowManager {
         statuses
     }
 
-    fn webview_for_target(&self, window_id: Option<&str>) -> Result<(String, &WebView), String> {
+    fn webview_for_target(
+        &self,
+        window_id: Option<&str>,
+    ) -> Result<(String, &ShellBrowser), String> {
         let target_id = self
             .find_target(window_id)
             .ok_or_else(|| "no open Capybara window".to_string())?;
@@ -881,7 +933,7 @@ impl WindowManager {
             .ok_or_else(|| format!("no such window: {window_id}"))
     }
 
-    fn webview_by_id(&self, window_id: &str) -> Result<&WebView, String> {
+    fn webview_by_id(&self, window_id: &str) -> Result<&ShellBrowser, String> {
         self.webviews
             .get(window_id)
             .ok_or_else(|| format!("webview missing for {window_id}"))
@@ -910,6 +962,9 @@ impl WindowManager {
         activate_current_app();
         window.set_visible(true);
         window.set_focus();
+        if let Some(webview) = self.webviews.get(window_id) {
+            webview.set_focus(true);
+        }
         window.request_user_attention(Some(UserAttentionType::Informational));
         self.focused_window_id = Some(window_id.to_string());
         Ok(())

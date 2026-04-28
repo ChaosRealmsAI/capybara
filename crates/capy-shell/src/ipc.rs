@@ -15,6 +15,7 @@ use tokio::sync::oneshot;
 use crate::app::{ShellEvent, ShellState};
 
 const EVENT_ACK_TIMEOUT: Duration = Duration::from_secs(10);
+const SOCKET_ENV: &str = "CAPYBARA_SOCKET";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpcRequest {
@@ -35,6 +36,9 @@ pub struct IpcResponse {
 }
 
 pub fn socket_path() -> PathBuf {
+    if let Some(path) = std::env::var_os(SOCKET_ENV).filter(|value| !value.is_empty()) {
+        return PathBuf::from(path);
+    }
     let uid = get_uid();
     PathBuf::from(format!("/tmp/capybara-{uid}.sock"))
 }
@@ -161,6 +165,13 @@ async fn dispatch(
         }
         "devtools-query" => {
             send_event(req, proxy, |request, ack| ShellEvent::DevtoolsQuery {
+                request,
+                ack,
+            })
+            .await
+        }
+        "devtools-eval" => {
+            send_event(req, proxy, |request, ack| ShellEvent::DevtoolsEval {
                 request,
                 ack,
             })

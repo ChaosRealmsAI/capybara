@@ -9,6 +9,7 @@ use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 const IPC_TIMEOUT: Duration = Duration::from_secs(10);
+const SOCKET_ENV: &str = "CAPYBARA_SOCKET";
 static REQ_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,6 +92,9 @@ async fn send_async(req: IpcRequest) -> Result<IpcResponse, String> {
 }
 
 pub fn socket_path() -> PathBuf {
+    if let Some(path) = std::env::var_os(SOCKET_ENV).filter(|value| !value.is_empty()) {
+        return PathBuf::from(path);
+    }
     let uid = get_uid();
     PathBuf::from(format!("/tmp/capybara-{uid}.sock"))
 }
