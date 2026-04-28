@@ -53,7 +53,12 @@ pub struct CompositionAsset {
     pub id: String,
     #[serde(rename = "type")]
     pub asset_type: String,
+    #[serde(default)]
     pub src: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mask: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -104,6 +109,8 @@ mod tests {
                 id: "hero".to_string(),
                 asset_type: "image".to_string(),
                 src: "assets/hero.png".to_string(),
+                source_path: None,
+                source_kind: None,
                 mask: None,
                 provenance: None,
             }],

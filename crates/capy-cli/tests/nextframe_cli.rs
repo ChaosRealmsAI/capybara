@@ -121,6 +121,119 @@ fn nextframe_compose_poster_reports_invalid_json() -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+#[test]
+fn nextframe_validate_accepts_composed_composition() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("validate-happy")?;
+    let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
+    let compose = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--out",
+            &dir.display().to_string(),
+        ])
+        .output()?;
+    assert!(compose.status.success());
+    let composed: serde_json::Value = serde_json::from_slice(&compose.stdout)?;
+    let composition_path = composed["composition_path"]
+        .as_str()
+        .ok_or("composition_path should be a string")?;
+
+    let output = capy_command()?
+        .args(["nextframe", "validate", "--composition", composition_path])
+        .output()?;
+
+    assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["track_count"], 1);
+    assert_eq!(value["components"][0], "html.capy-poster");
+    assert!(
+        value["errors"]
+            .as_array()
+            .ok_or("errors should be array")?
+            .is_empty()
+    );
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn nextframe_validate_reports_empty_tracks() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("validate-empty")?;
+    let composition = dir.join("composition.json");
+    fs::write(
+        &composition,
+        r#"{"schema":"nextframe.composition.v2","schema_version":"capy.composition.v1","id":"broken","title":"broken","name":"broken","duration_ms":1000,"duration":"1000ms","viewport":{"w":1920,"h":1080,"ratio":"16:9"},"theme":"default","tracks":[],"assets":[]}"#,
+    )?;
+
+    let output = capy_command()?
+        .args([
+            "nextframe",
+            "validate",
+            "--composition",
+            &composition.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["errors"][0]["code"], "EMPTY_TRACKS");
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn nextframe_validate_reports_missing_composition() -> Result<(), Box<dyn std::error::Error>> {
+    let output = capy_command()?
+        .args([
+            "nextframe",
+            "validate",
+            "--composition",
+            "/definitely/not/composition.json",
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["errors"][0]["code"], "COMPOSITION_NOT_FOUND");
+    Ok(())
+}
+
+#[test]
+fn nextframe_validate_strict_binary_requires_nf() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("validate-strict")?;
+    let composition = dir.join("composition.json");
+    fs::write(
+        &composition,
+        r#"{"schema":"nextframe.composition.v2","schema_version":"capy.composition.v1","id":"poster-snapshot","title":"Poster Snapshot","name":"Poster Snapshot","duration_ms":1000,"duration":"1000ms","viewport":{"w":1920,"h":1080,"ratio":"16:9"},"theme":"default","tracks":[{"id":"track-poster","kind":"component","component":"html.capy-poster","z":10,"time":{"start":"0ms","end":"1000ms"},"duration_ms":1000,"params":{"poster":{"type":"poster"}}}],"assets":[]}"#,
+    )?;
+
+    let output = capy_command()?
+        .env("PATH", "/definitely/not/on/path")
+        .env_remove("CAPY_NF")
+        .env_remove("CAPY_NF_RECORDER")
+        .args([
+            "nextframe",
+            "validate",
+            "--composition",
+            &composition.display().to_string(),
+            "--strict-binary",
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["errors"][0]["code"], "NEXTFRAME_NOT_FOUND");
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
 fn capy_command() -> Result<Command, Box<dyn std::error::Error>> {
     let path = std::env::var("CARGO_BIN_EXE_capy")?;
     Ok(Command::new(path))

@@ -4,6 +4,7 @@ pub mod config;
 pub mod doctor;
 pub mod error;
 pub mod ports;
+pub mod validate;
 
 pub use adapter::binary::BinaryAdapter;
 pub use compose::{
@@ -16,3 +17,4 @@ pub use ports::{
     CompileReport, CompositionArtifact, ExportOptions, ExportReport, NextFrameProjectPort,
     NextFrameRecorderPort, SnapshotOptions, SnapshotReport, ValidationReport,
 };
+pub use validate::{ValidateCompositionRequest, validate_composition};

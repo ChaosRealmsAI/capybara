@@ -15,6 +15,8 @@ enum NextFrameCommand {
     Doctor(NextFrameDoctorArgs),
     #[command(about = "Compose Poster JSON into a NextFrame composition project")]
     ComposePoster(NextFrameComposePosterArgs),
+    #[command(about = "Validate a NextFrame composition JSON document")]
+    Validate(NextFrameValidateArgs),
 }
 
 #[derive(Debug, Args)]
@@ -41,10 +43,19 @@ struct NextFrameComposePosterArgs {
     duration_ms: u64,
 }
 
+#[derive(Debug, Args)]
+struct NextFrameValidateArgs {
+    #[arg(long)]
+    composition: PathBuf,
+    #[arg(long)]
+    strict_binary: bool,
+}
+
 pub fn handle(args: NextFrameArgs) -> Result<(), String> {
     match args.command {
         NextFrameCommand::Doctor(args) => doctor(args),
         NextFrameCommand::ComposePoster(args) => compose_poster(args),
+        NextFrameCommand::Validate(args) => validate(args),
     }
 }
 
@@ -71,6 +82,19 @@ fn compose_poster(args: NextFrameComposePosterArgs) -> Result<(), String> {
             print_json(&capy_nextframe::compose::failure(err))?;
             std::process::exit(1);
         }
+    }
+}
+
+fn validate(args: NextFrameValidateArgs) -> Result<(), String> {
+    let report = capy_nextframe::validate_composition(capy_nextframe::ValidateCompositionRequest {
+        composition_path: args.composition,
+        strict_binary: args.strict_binary,
+    });
+    print_json(&report)?;
+    if report.ok {
+        Ok(())
+    } else {
+        std::process::exit(1);
     }
 }
 
