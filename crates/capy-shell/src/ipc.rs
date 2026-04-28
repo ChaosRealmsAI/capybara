@@ -183,6 +183,7 @@ async fn dispatch(
         "conversation-list"
         | "conversation-create"
         | "conversation-open"
+        | "conversation-events"
         | "conversation-send"
         | "conversation-stop"
         | "conversation-update-config"

@@ -70,6 +70,32 @@ pub struct RunRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunEvent {
+    pub id: String,
+    pub conversation_id: String,
+    pub run_id: String,
+    pub kind: String,
+    pub delta: Option<String>,
+    pub content: Option<String>,
+    pub status: Option<String>,
+    pub error: Option<String>,
+    pub event_json: Value,
+    pub created_at: i64,
+}
+
+#[derive(Debug)]
+pub struct CreateRunEvent<'a> {
+    pub conversation_id: &'a str,
+    pub run_id: &'a str,
+    pub kind: &'a str,
+    pub delta: Option<&'a str>,
+    pub content: Option<&'a str>,
+    pub status: Option<&'a str>,
+    pub error: Option<&'a str>,
+    pub event_json: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationDetail {
     pub conversation: Conversation,
     pub messages: Vec<Message>,
@@ -153,10 +179,28 @@ impl Store {
                 error TEXT,
                 FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS run_events (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                delta TEXT,
+                content TEXT,
+                status TEXT,
+                error TEXT,
+                event_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+                FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
+            );
             CREATE INDEX IF NOT EXISTS idx_conversations_updated
                 ON conversations(archived, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_messages_conversation
                 ON messages(conversation_id, created_at ASC);
+            CREATE INDEX IF NOT EXISTS idx_run_events_conversation
+                ON run_events(conversation_id, created_at ASC);
+            CREATE INDEX IF NOT EXISTS idx_run_events_run
+                ON run_events(run_id, created_at ASC);
             "#,
         )
         .map_err(|err| format!("migrate database failed: {err}"))
@@ -340,6 +384,79 @@ impl Store {
         Ok(())
     }
 
+    pub fn add_run_event(&self, input: CreateRunEvent<'_>) -> Result<RunEvent, String> {
+        let id = new_id("evt");
+        let now = now_ms();
+        let event = serde_json::to_string(&input.event_json).map_err(|err| err.to_string())?;
+        let conn = self.lock()?;
+        conn.execute(
+            r#"
+            INSERT INTO run_events
+                (id, conversation_id, run_id, kind, delta, content, status, error, event_json, created_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "#,
+            params![
+                id,
+                input.conversation_id,
+                input.run_id,
+                input.kind,
+                input.delta,
+                input.content,
+                input.status,
+                input.error,
+                event,
+                now
+            ],
+        )
+        .map_err(|err| format!("insert run event failed: {err}"))?;
+        Ok(RunEvent {
+            id,
+            conversation_id: input.conversation_id.to_string(),
+            run_id: input.run_id.to_string(),
+            kind: input.kind.to_string(),
+            delta: input.delta.map(ToString::to_string),
+            content: input.content.map(ToString::to_string),
+            status: input.status.map(ToString::to_string),
+            error: input.error.map(ToString::to_string),
+            event_json: input.event_json,
+            created_at: now,
+        })
+    }
+
+    pub fn run_events_for(
+        &self,
+        conversation_id: &str,
+        run_id: Option<&str>,
+    ) -> Result<Vec<RunEvent>, String> {
+        let conn = self.lock()?;
+        let (sql, params): (&str, Vec<&str>) = if let Some(run_id) = run_id {
+            (
+                r#"
+                SELECT id, conversation_id, run_id, kind, delta, content, status, error, event_json, created_at
+                FROM run_events
+                WHERE conversation_id = ?1 AND run_id = ?2
+                ORDER BY created_at ASC
+                "#,
+                vec![conversation_id, run_id],
+            )
+        } else {
+            (
+                r#"
+                SELECT id, conversation_id, run_id, kind, delta, content, status, error, event_json, created_at
+                FROM run_events
+                WHERE conversation_id = ?1
+                ORDER BY created_at ASC
+                "#,
+                vec![conversation_id],
+            )
+        };
+        let mut stmt = conn.prepare(sql).map_err(|err| err.to_string())?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params), row_to_run_event)
+            .map_err(|err| err.to_string())?;
+        collect_rows(rows)
+    }
+
     pub fn running_run_for_conversation(
         &self,
         conversation_id: &str,
@@ -478,6 +595,22 @@ fn row_to_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<RunRecord> {
     })
 }
 
+fn row_to_run_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<RunEvent> {
+    let event_json: String = row.get(8)?;
+    Ok(RunEvent {
+        id: row.get(0)?,
+        conversation_id: row.get(1)?,
+        run_id: row.get(2)?,
+        kind: row.get(3)?,
+        delta: row.get(4)?,
+        content: row.get(5)?,
+        status: row.get(6)?,
+        error: row.get(7)?,
+        event_json: serde_json::from_str(&event_json).unwrap_or_else(|_| json!({})),
+        created_at: row.get(9)?,
+    })
+}
+
 fn collect_rows<T>(
     rows: rusqlite::MappedRows<'_, impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>>,
 ) -> Result<Vec<T>, String> {
@@ -530,7 +663,7 @@ fn title_from_prompt(prompt: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{CreateConversation, Provider, Store};
+    use super::{CreateConversation, CreateRunEvent, Provider, Store};
     use serde_json::json;
 
     #[test]
@@ -546,10 +679,35 @@ mod tests {
             model: Some("sonnet".to_string()),
             config: json!({ "effort": "medium" }),
         })?;
+        let run = store.create_run(&conversation.id)?;
         store.add_message(&conversation.id, "user", "hello", json!({}))?;
+        store.add_run_event(CreateRunEvent {
+            conversation_id: &conversation.id,
+            run_id: &run.id,
+            kind: "assistant_delta",
+            delta: Some("he"),
+            content: None,
+            status: None,
+            error: None,
+            event_json: json!({ "kind": "assistant_delta" }),
+        })?;
+        store.add_run_event(CreateRunEvent {
+            conversation_id: &conversation.id,
+            run_id: &run.id,
+            kind: "assistant_done",
+            delta: None,
+            content: Some("hello"),
+            status: Some("completed"),
+            error: None,
+            event_json: json!({ "kind": "assistant_done" }),
+        })?;
         let detail = store.conversation_detail(&conversation.id)?;
         assert_eq!(detail.conversation.provider, Provider::Claude);
         assert_eq!(detail.messages.len(), 1);
+        let events = store.run_events_for(&conversation.id, Some(&run.id))?;
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].delta.as_deref(), Some("he"));
+        assert_eq!(events[1].content.as_deref(), Some("hello"));
         let _remove_result = std::fs::remove_file(path);
         Ok(())
     }

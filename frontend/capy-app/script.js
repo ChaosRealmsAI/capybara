@@ -16,13 +16,32 @@ const cwdEl = document.querySelector("#cwd");
 const modelEl = document.querySelector("#model");
 const effortEl = document.querySelector("#effort");
 const policyEl = document.querySelector("#policy");
+const sandboxEl = document.querySelector("#sandbox");
+const serviceTierEl = document.querySelector("#service-tier");
+const runStatusEl = document.querySelector("#run-status");
+const systemPromptEl = document.querySelector("#system-prompt");
+const appendSystemPromptEl = document.querySelector("#append-system-prompt");
+const developerInstructionsEl = document.querySelector("#developer-instructions");
+const addDirsEl = document.querySelector("#add-dirs");
+const allowedToolsEl = document.querySelector("#allowed-tools");
+const disallowedToolsEl = document.querySelector("#disallowed-tools");
+const mcpConfigEl = document.querySelector("#mcp-config");
+const modelProviderEl = document.querySelector("#model-provider");
+const approvalsReviewerEl = document.querySelector("#approvals-reviewer");
+const reasoningSummaryEl = document.querySelector("#reasoning-summary");
+const outputSchemaEl = document.querySelector("#output-schema");
+const bareEl = document.querySelector("#bare");
+const searchEl = document.querySelector("#search");
+const writeCodeEl = document.querySelector("#write-code");
+const runtimeFootEl = document.querySelector("#runtime-foot");
 
 const pending = new Map();
 const state = {
   conversations: [],
   activeId: null,
   messages: [],
-  streaming: new Map()
+  streaming: new Map(),
+  dbPath: null
 };
 
 topbar?.addEventListener("mousedown", (event) => {
@@ -49,6 +68,9 @@ window.__capyReceive = (response) => {
 window.addEventListener("capy:agent-event", (event) => {
   const detail = event.detail;
   if (!detail || detail.conversation_id !== state.activeId) return;
+  if (detail.status) {
+    setRunStatus(detail.status);
+  }
   if (detail.kind === "assistant_delta") {
     const current = state.streaming.get(detail.run_id) || "";
     state.streaming.set(detail.run_id, current + (detail.delta || ""));
@@ -66,6 +88,7 @@ newChatEl?.addEventListener("click", async () => {
 stopEl?.addEventListener("click", async () => {
   if (!state.activeId) return;
   await rpc("conversation-stop", { id: state.activeId });
+  await openConversation(state.activeId);
 });
 
 formEl?.addEventListener("submit", async (event) => {
@@ -77,17 +100,24 @@ formEl?.addEventListener("submit", async (event) => {
   }
   if (!state.activeId) return;
   promptEl.value = "";
+  await updateConversationConfig();
   state.messages.push({
     id: `local-${Date.now()}`,
     role: "user",
     content: prompt
   });
   renderMessages();
-  await rpc("conversation-send", { id: state.activeId, prompt });
+  setRunStatus("running");
+  await rpc("conversation-send", { id: state.activeId, prompt, config: currentConfig(), model: modelEl.value.trim() || null });
 });
 
 providerEl?.addEventListener("change", () => {
   syncPolicyOptions();
+  applyWriteCodeDefaults();
+});
+
+writeCodeEl?.addEventListener("change", () => {
+  applyWriteCodeDefaults();
 });
 
 init();
@@ -97,8 +127,10 @@ async function init() {
   syncPolicyOptions();
   try {
     const data = await rpc("conversation-list", {});
+    state.dbPath = data.db_path || null;
     state.conversations = data.conversations || [];
     renderConversations();
+    renderRuntimeFoot();
     if (state.conversations[0]) {
       await openConversation(state.conversations[0].id);
     } else {
@@ -122,8 +154,10 @@ async function createConversation() {
 
 async function refreshList() {
   const data = await rpc("conversation-list", {});
+  state.dbPath = data.db_path || state.dbPath;
   state.conversations = data.conversations || [];
   renderConversations();
+  renderRuntimeFoot();
 }
 
 async function openConversation(id) {
@@ -140,9 +174,38 @@ async function openConversation(id) {
     ? detail.conversation.config?.permissionMode
     : detail.conversation.config?.approvalPolicy;
   policyEl.value = policy || "";
+  sandboxEl.value = detail.conversation.config?.sandbox || "";
+  serviceTierEl.value = detail.conversation.config?.serviceTier || "";
+  systemPromptEl.value = detail.conversation.config?.systemPrompt || "";
+  appendSystemPromptEl.value = detail.conversation.config?.appendSystemPrompt || "";
+  developerInstructionsEl.value = detail.conversation.config?.developerInstructions || "";
+  addDirsEl.value = (detail.conversation.config?.addDirs || []).join(", ");
+  allowedToolsEl.value = detail.conversation.config?.allowedTools || "";
+  disallowedToolsEl.value = detail.conversation.config?.disallowedTools || "";
+  mcpConfigEl.value = detail.conversation.config?.mcpConfig || "";
+  modelProviderEl.value = detail.conversation.config?.modelProvider || "";
+  approvalsReviewerEl.value = detail.conversation.config?.approvalsReviewer || "";
+  reasoningSummaryEl.value = detail.conversation.config?.reasoningSummary || "";
+  outputSchemaEl.value = detail.conversation.config?.outputSchema || "";
+  bareEl.checked = Boolean(detail.conversation.config?.bare);
+  searchEl.checked = Boolean(detail.conversation.config?.search);
+  writeCodeEl.checked = Boolean(detail.conversation.config?.writeCode);
+  setRunStatus(detail.conversation.status || "idle");
   syncPolicyOptions();
+  applyWriteCodeDefaults();
   renderConversations();
   renderMessages();
+  renderRuntimeFoot();
+}
+
+async function updateConversationConfig() {
+  if (!state.activeId) return;
+  await rpc("conversation-update-config", {
+    id: state.activeId,
+    model: modelEl.value.trim() || null,
+    config: currentConfig()
+  });
+  await refreshList();
 }
 
 function renderConversations() {
@@ -206,6 +269,30 @@ function currentConfig() {
   if (effortEl.value) config.effort = effortEl.value;
   if (providerEl.value === "claude" && policyEl.value) config.permissionMode = policyEl.value;
   if (providerEl.value === "codex" && policyEl.value) config.approvalPolicy = policyEl.value;
+  if (sandboxEl.value) config.sandbox = sandboxEl.value;
+  if (serviceTierEl.value.trim()) config.serviceTier = serviceTierEl.value.trim();
+  if (systemPromptEl.value.trim()) config.systemPrompt = systemPromptEl.value.trim();
+  if (appendSystemPromptEl.value.trim()) config.appendSystemPrompt = appendSystemPromptEl.value.trim();
+  if (developerInstructionsEl.value.trim()) config.developerInstructions = developerInstructionsEl.value.trim();
+  const addDirs = addDirsEl.value.split(",").map((value) => value.trim()).filter(Boolean);
+  if (addDirs.length) config.addDirs = addDirs;
+  if (allowedToolsEl.value.trim()) config.allowedTools = allowedToolsEl.value.trim();
+  if (disallowedToolsEl.value.trim()) config.disallowedTools = disallowedToolsEl.value.trim();
+  if (mcpConfigEl.value.trim()) config.mcpConfig = mcpConfigEl.value.trim();
+  if (modelProviderEl.value.trim()) config.modelProvider = modelProviderEl.value.trim();
+  if (approvalsReviewerEl.value) config.approvalsReviewer = approvalsReviewerEl.value;
+  if (reasoningSummaryEl.value) config.reasoningSummary = reasoningSummaryEl.value;
+  if (outputSchemaEl.value.trim()) config.outputSchema = outputSchemaEl.value.trim();
+  if (bareEl.checked) config.bare = true;
+  if (searchEl.checked) config.search = true;
+  if (writeCodeEl.checked) {
+    config.writeCode = true;
+    if (providerEl.value === "codex" && !config.approvalPolicy) config.approvalPolicy = "never";
+    if (providerEl.value === "claude" && !config.permissionMode) config.permissionMode = "bypassPermissions";
+    if (!config.sandbox) config.sandbox = "danger-full-access";
+    config.allowDangerouslySkipPermissions = true;
+    config.dangerouslySkipPermissions = true;
+  }
   return config;
 }
 
@@ -223,6 +310,26 @@ function syncPolicyOptions() {
     policyEl.append(option);
   }
   policyEl.value = options.some(([value]) => value === current) ? current : "";
+}
+
+function applyWriteCodeDefaults() {
+  if (!writeCodeEl.checked) return;
+  if (providerEl.value === "codex") {
+    policyEl.value = "never";
+  } else {
+    policyEl.value = "bypassPermissions";
+  }
+  sandboxEl.value = "danger-full-access";
+}
+
+function setRunStatus(status) {
+  runStatusEl.textContent = status || "idle";
+  runStatusEl.dataset.status = status || "idle";
+}
+
+function renderRuntimeFoot() {
+  const provider = providerEl.value === "claude" ? "Claude Code" : "Codex CLI";
+  runtimeFootEl.textContent = `${provider} · ${state.dbPath || "SQLite store pending"}`;
 }
 
 function rpc(op, params) {

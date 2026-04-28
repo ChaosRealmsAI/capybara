@@ -109,6 +109,8 @@ enum ChatCommand {
     Configure(ChatConfigureArgs),
     #[command(about = "Open one conversation with messages")]
     Open(ChatOpenArgs),
+    #[command(about = "List persisted streaming/runtime events")]
+    Events(ChatEventsArgs),
     #[command(about = "Send a prompt to a conversation")]
     Send(ChatSendArgs),
     #[command(about = "Stop the running turn in one conversation")]
@@ -140,30 +142,101 @@ struct ChatNewArgs {
     cwd: Option<PathBuf>,
     #[arg(long)]
     model: Option<String>,
-    #[arg(long)]
+    #[command(flatten)]
+    runtime: AgentRuntimeOptions,
+}
+
+#[derive(Debug, Args, Default, Clone)]
+struct AgentRuntimeOptions {
+    #[arg(
+        long,
+        help = "Coding preset: allow provider to edit files in cwd explicitly"
+    )]
+    write_code: bool,
+    #[arg(long, help = "Reasoning effort, e.g. low, medium, high, xhigh")]
     effort: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Claude permission mode, e.g. default, plan, acceptEdits")]
     permission_mode: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Codex approval policy, e.g. on-request, never")]
     approval_policy: Option<String>,
-    #[arg(long)]
+    #[arg(
+        long,
+        help = "Codex sandbox mode: read-only, workspace-write, danger-full-access"
+    )]
     sandbox: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Codex service tier override")]
     service_tier: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Extra filesystem root for the provider runtime")]
     add_dir: Vec<String>,
-    #[arg(long)]
+    #[arg(long, help = "Claude allowed tools list")]
     allowed_tools: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Claude disallowed tools list")]
     disallowed_tools: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "MCP config path or JSON")]
     mcp_config: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Claude full system prompt override")]
+    system_prompt: Option<String>,
+    #[arg(long, help = "Prompt appended to the provider's default system prompt")]
     append_system_prompt: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Claude maximum run budget in USD")]
     max_budget_usd: Option<String>,
-    #[arg(long)]
+    #[arg(long, help = "Run Claude in bare/minimal mode")]
     bare: bool,
+    #[arg(long, help = "Claude fallback model for overloaded print runs")]
+    fallback_model: Option<String>,
+    #[arg(long, help = "Claude JSON schema string for structured output")]
+    json_schema: Option<String>,
+    #[arg(long, help = "Claude settings file path or JSON")]
+    settings: Option<String>,
+    #[arg(long, help = "Claude debug log file path")]
+    debug_file: Option<String>,
+    #[arg(long, help = "Claude agent name override")]
+    agent: Option<String>,
+    #[arg(long, help = "Claude custom agents JSON")]
+    agents: Option<String>,
+    #[arg(long, help = "Claude tools list override")]
+    tools: Option<String>,
+    #[arg(long, help = "Claude beta header")]
+    beta: Vec<String>,
+    #[arg(long, help = "Claude plugin directory")]
+    plugin_dir: Vec<String>,
+    #[arg(long, help = "Use only MCP servers from --mcp-config")]
+    strict_mcp_config: bool,
+    #[arg(long, help = "Include Claude hook events in stream-json output")]
+    include_hook_events: bool,
+    #[arg(
+        long,
+        help = "Disable Claude session persistence for this conversation"
+    )]
+    no_session_persistence: bool,
+    #[arg(long, help = "Allow Claude permission bypass as an explicit option")]
+    allow_dangerously_skip_permissions: bool,
+    #[arg(long, help = "Explicitly bypass Claude permission checks")]
+    dangerously_skip_permissions: bool,
+    #[arg(long, help = "Codex model provider override")]
+    model_provider: Option<String>,
+    #[arg(long, help = "Codex approval reviewer, e.g. user or auto_review")]
+    approvals_reviewer: Option<String>,
+    #[arg(long, help = "Codex base instructions override")]
+    base_instructions: Option<String>,
+    #[arg(long, help = "Codex developer instructions override")]
+    developer_instructions: Option<String>,
+    #[arg(long, help = "Codex reasoning summary: auto, concise, detailed, none")]
+    reasoning_summary: Option<String>,
+    #[arg(long, help = "Codex output schema JSON or file path")]
+    output_schema: Option<String>,
+    #[arg(long, help = "Codex personality, e.g. pragmatic, friendly, none")]
+    personality: Option<String>,
+    #[arg(long, help = "Codex app-server config override key=value")]
+    codex_config: Vec<String>,
+    #[arg(long, help = "Codex feature flag to enable")]
+    codex_enable: Vec<String>,
+    #[arg(long, help = "Codex feature flag to disable")]
+    codex_disable: Vec<String>,
+    #[arg(long, help = "Enable Codex web search through config")]
+    search: bool,
+    #[arg(long, help = "Start Codex thread as ephemeral")]
+    ephemeral: bool,
 }
 
 #[derive(Debug, Args)]
@@ -172,30 +245,8 @@ struct ChatConfigureArgs {
     id: String,
     #[arg(long)]
     model: Option<String>,
-    #[arg(long)]
-    effort: Option<String>,
-    #[arg(long)]
-    permission_mode: Option<String>,
-    #[arg(long)]
-    approval_policy: Option<String>,
-    #[arg(long)]
-    sandbox: Option<String>,
-    #[arg(long)]
-    service_tier: Option<String>,
-    #[arg(long)]
-    add_dir: Vec<String>,
-    #[arg(long)]
-    allowed_tools: Option<String>,
-    #[arg(long)]
-    disallowed_tools: Option<String>,
-    #[arg(long)]
-    mcp_config: Option<String>,
-    #[arg(long)]
-    append_system_prompt: Option<String>,
-    #[arg(long)]
-    max_budget_usd: Option<String>,
-    #[arg(long)]
-    bare: bool,
+    #[command(flatten)]
+    runtime: AgentRuntimeOptions,
 }
 
 #[derive(Debug, Args)]
@@ -205,9 +256,21 @@ struct ChatOpenArgs {
 }
 
 #[derive(Debug, Args)]
+struct ChatEventsArgs {
+    #[arg(long)]
+    id: String,
+    #[arg(long)]
+    run_id: Option<String>,
+}
+
+#[derive(Debug, Args)]
 struct ChatSendArgs {
     #[arg(long)]
     id: String,
+    #[arg(long)]
+    model: Option<String>,
+    #[command(flatten)]
+    runtime: AgentRuntimeOptions,
     #[arg(required = true)]
     prompt: Vec<String>,
 }
@@ -279,10 +342,11 @@ fn run() -> Result<(), String> {
             ChatCommand::Open(args) | ChatCommand::Export(args) => {
                 send("conversation-open", json!({ "id": args.id }))
             }
-            ChatCommand::Send(args) => send(
-                "conversation-send",
-                json!({ "id": args.id, "prompt": args.prompt.join(" ") }),
+            ChatCommand::Events(args) => send(
+                "conversation-events",
+                json!({ "id": args.id, "run_id": args.run_id }),
             ),
+            ChatCommand::Send(args) => send("conversation-send", chat_send_params(args)),
             ChatCommand::Stop(args) => send("conversation-stop", json!({ "id": args.id })),
         },
         Command::Agent(args) => match args.command {
@@ -301,23 +365,7 @@ fn chat_new_params(args: ChatNewArgs) -> Result<Value, String> {
         None => std::env::current_dir().map_err(|err| format!("read cwd failed: {err}"))?,
     };
     let mut config = json!({});
-    fill_agent_config(
-        &mut config,
-        AgentConfigArgs {
-            effort: args.effort,
-            permission_mode: args.permission_mode,
-            approval_policy: args.approval_policy,
-            sandbox: args.sandbox,
-            service_tier: args.service_tier,
-            add_dir: args.add_dir,
-            allowed_tools: args.allowed_tools,
-            disallowed_tools: args.disallowed_tools,
-            mcp_config: args.mcp_config,
-            append_system_prompt: args.append_system_prompt,
-            max_budget_usd: args.max_budget_usd,
-            bare: args.bare,
-        },
-    );
+    fill_agent_config(&mut config, args.runtime);
     Ok(json!({
         "provider": args.provider.as_str(),
         "cwd": cwd.display().to_string(),
@@ -328,23 +376,7 @@ fn chat_new_params(args: ChatNewArgs) -> Result<Value, String> {
 
 fn chat_configure_params(args: ChatConfigureArgs) -> Value {
     let mut config = json!({});
-    fill_agent_config(
-        &mut config,
-        AgentConfigArgs {
-            effort: args.effort,
-            permission_mode: args.permission_mode,
-            approval_policy: args.approval_policy,
-            sandbox: args.sandbox,
-            service_tier: args.service_tier,
-            add_dir: args.add_dir,
-            allowed_tools: args.allowed_tools,
-            disallowed_tools: args.disallowed_tools,
-            mcp_config: args.mcp_config,
-            append_system_prompt: args.append_system_prompt,
-            max_budget_usd: args.max_budget_usd,
-            bare: args.bare,
-        },
-    );
+    fill_agent_config(&mut config, args.runtime);
     let mut params = json!({
         "id": args.id,
         "config": config
@@ -355,22 +387,21 @@ fn chat_configure_params(args: ChatConfigureArgs) -> Value {
     params
 }
 
-struct AgentConfigArgs {
-    effort: Option<String>,
-    permission_mode: Option<String>,
-    approval_policy: Option<String>,
-    sandbox: Option<String>,
-    service_tier: Option<String>,
-    add_dir: Vec<String>,
-    allowed_tools: Option<String>,
-    disallowed_tools: Option<String>,
-    mcp_config: Option<String>,
-    append_system_prompt: Option<String>,
-    max_budget_usd: Option<String>,
-    bare: bool,
+fn chat_send_params(args: ChatSendArgs) -> Value {
+    let mut config = json!({});
+    fill_agent_config(&mut config, args.runtime);
+    let mut params = json!({
+        "id": args.id,
+        "prompt": args.prompt.join(" "),
+        "config": config
+    });
+    if let Some(model) = args.model {
+        params["model"] = json!(model);
+    }
+    params
 }
 
-fn fill_agent_config(config: &mut Value, args: AgentConfigArgs) {
+fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) {
     set_opt(config, "effort", args.effort);
     set_opt(config, "permissionMode", args.permission_mode);
     set_opt(config, "approvalPolicy", args.approval_policy);
@@ -379,18 +410,87 @@ fn fill_agent_config(config: &mut Value, args: AgentConfigArgs) {
     set_opt(config, "allowedTools", args.allowed_tools);
     set_opt(config, "disallowedTools", args.disallowed_tools);
     set_opt(config, "mcpConfig", args.mcp_config);
+    set_opt(config, "systemPrompt", args.system_prompt);
     set_opt(config, "appendSystemPrompt", args.append_system_prompt);
     set_opt(config, "maxBudgetUsd", args.max_budget_usd);
+    set_opt(config, "fallbackModel", args.fallback_model);
+    set_opt(config, "jsonSchema", args.json_schema);
+    set_opt(config, "settings", args.settings);
+    set_opt(config, "debugFile", args.debug_file);
+    set_opt(config, "agent", args.agent);
+    set_opt(config, "agents", args.agents);
+    set_opt(config, "tools", args.tools);
+    set_opt(config, "modelProvider", args.model_provider);
+    set_opt(config, "approvalsReviewer", args.approvals_reviewer);
+    set_opt(config, "baseInstructions", args.base_instructions);
+    set_opt(config, "developerInstructions", args.developer_instructions);
+    set_opt(config, "reasoningSummary", args.reasoning_summary);
+    set_opt(config, "outputSchema", args.output_schema);
+    set_opt(config, "personality", args.personality);
     if !args.add_dir.is_empty() {
         config["addDirs"] = json!(args.add_dir);
     }
+    if !args.beta.is_empty() {
+        config["betas"] = json!(args.beta);
+    }
+    if !args.plugin_dir.is_empty() {
+        config["pluginDirs"] = json!(args.plugin_dir);
+    }
+    if !args.codex_config.is_empty() {
+        config["codexConfig"] = json!(args.codex_config);
+    }
+    if !args.codex_enable.is_empty() {
+        config["codexEnable"] = json!(args.codex_enable);
+    }
+    if !args.codex_disable.is_empty() {
+        config["codexDisable"] = json!(args.codex_disable);
+    }
     if args.bare {
         config["bare"] = json!(true);
+    }
+    if args.strict_mcp_config {
+        config["strictMcpConfig"] = json!(true);
+    }
+    if args.include_hook_events {
+        config["includeHookEvents"] = json!(true);
+    }
+    if args.no_session_persistence {
+        config["noSessionPersistence"] = json!(true);
+    }
+    if args.allow_dangerously_skip_permissions {
+        config["allowDangerouslySkipPermissions"] = json!(true);
+    }
+    if args.dangerously_skip_permissions {
+        config["dangerouslySkipPermissions"] = json!(true);
+    }
+    if args.search {
+        config["search"] = json!(true);
+    }
+    if args.ephemeral {
+        config["ephemeral"] = json!(true);
+    }
+    if args.write_code {
+        config["writeCode"] = json!(true);
+        set_default(config, "approvalPolicy", "never");
+        set_default(config, "sandbox", "danger-full-access");
+        set_default(config, "permissionMode", "bypassPermissions");
+        if config.get("allowDangerouslySkipPermissions").is_none() {
+            config["allowDangerouslySkipPermissions"] = json!(true);
+        }
+        if config.get("dangerouslySkipPermissions").is_none() {
+            config["dangerouslySkipPermissions"] = json!(true);
+        }
     }
 }
 
 fn set_opt(config: &mut Value, key: &str, value: Option<String>) {
     if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+        config[key] = json!(value);
+    }
+}
+
+fn set_default(config: &mut Value, key: &str, value: &str) {
+    if config.get(key).is_none() {
         config[key] = json!(value);
     }
 }

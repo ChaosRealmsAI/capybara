@@ -25,7 +25,10 @@
             <div class="chat-title" id="chat-title">Capybara Agent</div>
             <div class="chat-subtitle" id="chat-subtitle">Claude Code / Codex CLI</div>
           </div>
-          <button class="stop-run" id="stop-run" type="button">Stop</button>
+          <div class="run-controls">
+            <span class="run-status" id="run-status">idle</span>
+            <button class="stop-run" id="stop-run" type="button">Stop</button>
+          </div>
         </div>
         <div class="message-list" id="message-list"></div>
         <form class="composer" id="composer">
@@ -40,6 +43,7 @@
               <input id="model" aria-label="Model" placeholder="model">
               <select id="effort" aria-label="Effort">
                 <option value="">effort</option>
+                <option value="minimal">minimal</option>
                 <option value="low">low</option>
                 <option value="medium">medium</option>
                 <option value="high">high</option>
@@ -53,9 +57,88 @@
                 <option value="on-request">on request</option>
                 <option value="never">never</option>
               </select>
+              <select id="sandbox" aria-label="Sandbox">
+                <option value="">sandbox</option>
+                <option value="read-only">read only</option>
+                <option value="workspace-write">workspace write</option>
+                <option value="danger-full-access">danger full access</option>
+              </select>
+              <label class="write-code-inline">
+                <input id="write-code" type="checkbox">
+                <span>Write code</span>
+              </label>
+              <input id="service-tier" aria-label="Service tier" placeholder="service tier">
             </div>
             <button class="send" type="submit">Send</button>
           </div>
+          <details class="advanced-config">
+            <summary>Runtime options</summary>
+            <div class="advanced-grid">
+              <label>
+                System
+                <textarea id="system-prompt" rows="2" placeholder="Claude system prompt override"></textarea>
+              </label>
+              <label>
+                Append system
+                <textarea id="append-system-prompt" rows="2" placeholder="Append instructions"></textarea>
+              </label>
+              <label>
+                Developer
+                <textarea id="developer-instructions" rows="2" placeholder="Codex developer instructions"></textarea>
+              </label>
+              <label>
+                Add dirs
+                <input id="add-dirs" placeholder="/path/a, /path/b">
+              </label>
+              <label>
+                Allowed tools
+                <input id="allowed-tools" placeholder="Bash(git *) Read">
+              </label>
+              <label>
+                Disallowed tools
+                <input id="disallowed-tools" placeholder="Write">
+              </label>
+              <label>
+                MCP config
+                <input id="mcp-config" placeholder="/path/mcp.json">
+              </label>
+              <label>
+                Codex provider
+                <input id="model-provider" placeholder="openai">
+              </label>
+              <label>
+                Approval reviewer
+                <select id="approvals-reviewer" aria-label="Approval reviewer">
+                  <option value="">reviewer</option>
+                  <option value="user">user</option>
+                  <option value="auto_review">auto review</option>
+                </select>
+              </label>
+              <label>
+                Reasoning summary
+                <select id="reasoning-summary" aria-label="Reasoning summary">
+                  <option value="">summary</option>
+                  <option value="auto">auto</option>
+                  <option value="concise">concise</option>
+                  <option value="detailed">detailed</option>
+                  <option value="none">none</option>
+                </select>
+              </label>
+              <label>
+                Output schema
+                <input id="output-schema" placeholder='{"type":"object"}'>
+              </label>
+              <label class="toggle">
+                <input id="bare" type="checkbox">
+                <span>Claude bare mode</span>
+              </label>
+              <label class="toggle">
+                <input id="search" type="checkbox">
+                <span>Codex web search</span>
+              </label>
+            </div>
+          </details>
+          <div class="runtime-foot" id="runtime-foot">SQLite store: waiting for shell</div>
         </form>
       </section>
     </section>

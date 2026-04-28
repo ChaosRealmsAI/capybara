@@ -360,6 +360,13 @@ fn conversation_response(
             Ok(serde_json::to_value(store.conversation_detail(&id)?)
                 .map_err(|err| err.to_string())?)
         }
+        "conversation-events" => {
+            let id = required_string(&request.params, "id")?;
+            let run_id = optional_string(&request.params, "run_id");
+            Ok(json!({
+                "events": store.run_events_for(&id, run_id.as_deref())?
+            }))
+        }
         "conversation-create" => {
             let provider = Provider::parse(
                 request
@@ -392,7 +399,21 @@ fn conversation_response(
         "conversation-send" => {
             let id = required_string(&request.params, "id")?;
             let prompt = required_string(&request.params, "prompt")?;
-            let conversation = store.get_conversation(&id)?;
+            let mut conversation = store.get_conversation(&id)?;
+            if request.params.get("model").is_some() || request.params.get("config").is_some() {
+                let model = if request.params.get("model").is_some() {
+                    optional_string(&request.params, "model")
+                } else {
+                    conversation.model.clone()
+                };
+                let incoming_config = request
+                    .params
+                    .get("config")
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                let config = merge_config(conversation.config.clone(), incoming_config);
+                conversation = store.update_config(&id, model, config)?;
+            }
             let run_id =
                 agent::spawn_turn(Arc::clone(&store), proxy.clone(), conversation, prompt)?;
             Ok(json!({ "run_id": run_id, "status": "running" }))

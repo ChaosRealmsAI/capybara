@@ -170,6 +170,36 @@ button {
   font-size: 12px;
 }
 
+.run-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.run-status {
+  min-width: 76px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: #5d5349;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(44, 37, 29, 0.1);
+  font-size: 12px;
+}
+
+.run-status[data-status="running"] {
+  color: #6d3d00;
+  background: rgba(251, 191, 36, 0.28);
+}
+
+.run-status[data-status="failed"],
+.run-status[data-status="error"] {
+  color: #8a2f22;
+  background: rgba(255, 236, 226, 0.9);
+}
+
 .stop-run {
   width: 68px;
 }
@@ -261,12 +291,12 @@ button {
 .runtime-config {
   min-width: 0;
   display: grid;
-  grid-template-columns: 96px minmax(180px, 1fr) 120px 92px 120px;
+  grid-template-columns: 96px minmax(160px, 1fr) 120px 92px 120px 140px 108px 110px;
   gap: 8px;
 }
 
-.runtime-config input,
-.runtime-config select {
+.runtime-config > input,
+.runtime-config > select {
   min-width: 0;
   height: 32px;
   padding: 0 9px;
@@ -276,9 +306,99 @@ button {
   box-shadow: inset 0 0 0 1px rgba(44, 37, 29, 0.1);
 }
 
+.write-code-inline {
+  min-width: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: #1f5f67;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(44, 37, 29, 0.1);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.write-code-inline input {
+  width: 14px;
+  height: 14px;
+}
+
 .send {
   width: 78px;
   color: #fff;
   background: #25636d;
   box-shadow: none;
+}
+
+.advanced-config {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: inset 0 0 0 1px rgba(44, 37, 29, 0.08);
+}
+
+.advanced-config summary {
+  padding: 9px 11px;
+  color: #5f554c;
+  font-size: 12px;
+  user-select: none;
+}
+
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.advanced-grid label {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  color: #756b61;
+  font-size: 11px;
+}
+
+.advanced-grid label.toggle {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  align-content: center;
+  padding: 18px 9px 0;
+}
+
+.advanced-grid input,
+.advanced-grid select,
+.advanced-grid textarea {
+  min-width: 0;
+  padding: 8px 9px;
+  border-radius: 8px;
+  color: #342e28;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(44, 37, 29, 0.1);
+}
+
+.advanced-grid textarea {
+  resize: vertical;
+}
+
+.runtime-foot {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #81776b;
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .agent-stage {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .runtime-config,
+  .advanced-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
