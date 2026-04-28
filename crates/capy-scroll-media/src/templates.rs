@@ -1,5 +1,5 @@
 pub fn runtime_css() -> &'static str {
-    r#"*{box-sizing:border-box}.capy-scroll-stage{position:sticky;top:0;width:100%;height:100vh;overflow:hidden;background:#fff}.capy-scroll-stage video{display:block;width:100%;height:100%;object-fit:contain;background:#fff}.capy-scroll-story{min-height:520vh}.capy-scroll-story[data-capy-fill="cover"] video{object-fit:cover}"#
+    r#"*{box-sizing:border-box}[data-capy-scroll-video]{display:block;min-height:520vh}.capy-scroll-stage{position:sticky;top:0;width:100%;height:100vh;overflow:hidden;background:#fff}.capy-scroll-stage video{display:block;width:100%;height:100%;object-fit:contain;background:#fff}.capy-scroll-story[data-capy-fill="cover"] video{object-fit:cover}"#
 }
 
 pub fn runtime_js() -> &'static str {
