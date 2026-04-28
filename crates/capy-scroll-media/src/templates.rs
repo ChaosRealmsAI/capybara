@@ -211,7 +211,6 @@ pub fn demo_html() -> &'static str {
       .hero,.outro{min-height:80vh;display:grid;align-items:center;width:min(1080px,calc(100% - 40px));margin:0 auto}
       h1{font-size:clamp(42px,7vw,88px);line-height:1;margin:0}
       p{font-size:20px;line-height:1.6;color:#52525b;max-width:680px}
-      [data-capy-scroll-video]{min-height:100vh}
     </style>
   </head>
   <body>
