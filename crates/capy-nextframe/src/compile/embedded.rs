@@ -186,7 +186,7 @@ fn render_source_json(
         "duration": duration_ms,
         "meta": meta_json(composition, poster, duration_ms),
         "viewport": viewport_json(viewport),
-        "theme": theme_json(poster),
+        "theme": theme_json(composition, poster),
         "assets": asset_manifest(poster),
         "components": {
             COMPONENT_ID: POSTER_COMPONENT_JS
@@ -219,11 +219,17 @@ fn viewport_json(viewport: &EmbeddedRenderViewport) -> Value {
     })
 }
 
-fn theme_json(poster: &PosterDocument) -> Value {
-    json!({
+fn theme_json(composition: &CompositionDocument, poster: &PosterDocument) -> Value {
+    let mut theme = json!({
         "background": poster.canvas.background,
         "css": poster_theme_css(&poster.canvas.background)
-    })
+    });
+    if let Some(brand) = &composition.theme {
+        theme["tokens_ref"] = json!(brand.tokens_ref);
+        theme["source_path"] = json!(brand.source_path);
+        theme["hash"] = json!(brand.hash);
+    }
+    theme
 }
 
 fn tracks_json(poster_value: Value, duration_ms: u64) -> Value {

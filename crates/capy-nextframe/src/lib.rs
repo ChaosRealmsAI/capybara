@@ -1,4 +1,5 @@
 pub mod adapter;
+pub mod brand;
 pub mod compile;
 pub mod compose;
 pub mod config;
@@ -11,6 +12,7 @@ pub mod validate;
 pub mod verify;
 
 pub use adapter::binary::BinaryAdapter;
+pub use brand::{RebuildReport, RebuildRequest, rebuild};
 pub use compile::{CompileCompositionRequest, CompileError, CompileReport, compile_composition};
 pub use compose::{
     ComposePosterFailure, ComposePosterRequest, ComposePosterResult, compose_poster,

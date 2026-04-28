@@ -101,6 +101,45 @@ fn nextframe_compose_poster_writes_composition_json() -> Result<(), Box<dyn std:
 }
 
 #[test]
+fn nextframe_compose_poster_writes_brand_tokens() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("compose-brand")?;
+    let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
+    let tokens = dir.join("source-tokens.css");
+    fs::write(&tokens, ":root { --c-brand-1: #f9a8d4; --r-card: 20px; }\n")?;
+
+    let output = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--brand-tokens",
+            &tokens.display().to_string(),
+            "--out",
+            &dir.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], true);
+    let theme_hash = value["theme_hash"]
+        .as_str()
+        .ok_or("theme_hash should be a string")?;
+    assert!(theme_hash.starts_with("brand-token-"));
+    let composition_path = value["composition_path"]
+        .as_str()
+        .ok_or("composition_path should be a string")?;
+    let composition: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(composition_path)?)?;
+    assert_eq!(composition["theme"]["tokens_ref"], "tokens/tokens.json");
+    assert!(dir.join("tokens/tokens.css").is_file());
+    assert!(dir.join("tokens/tokens.json").is_file());
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
 fn nextframe_compose_poster_reports_invalid_json() -> Result<(), Box<dyn std::error::Error>> {
     let dir = unique_dir("compose-invalid")?;
     let input = dir.join("invalid.json");
@@ -275,6 +314,63 @@ fn nextframe_compile_writes_render_source_embedded() -> Result<(), Box<dyn std::
         .as_str()
         .ok_or("render_source_path should be a string")?;
     assert!(Path::new(render_source_path).is_file());
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn nextframe_rebuild_skips_then_recompiles_after_token_change()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("rebuild-brand")?;
+    let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
+    let tokens = dir.join("source-tokens.css");
+    fs::write(&tokens, ":root { --c-brand-1: #f9a8d4; }\n")?;
+    let compose = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--brand-tokens",
+            &tokens.display().to_string(),
+            "--out",
+            &dir.display().to_string(),
+        ])
+        .output()?;
+    assert!(compose.status.success());
+    let composed: serde_json::Value = serde_json::from_slice(&compose.stdout)?;
+    let composition_path = composed["composition_path"]
+        .as_str()
+        .ok_or("composition_path should be a string")?;
+
+    let noop = capy_command()?
+        .env("PATH", "/definitely/not/on/path")
+        .env_remove("CAPY_NF")
+        .args(["nextframe", "rebuild", "--composition", composition_path])
+        .output()?;
+
+    assert!(noop.status.success());
+    let noop_value: serde_json::Value = serde_json::from_slice(&noop.stdout)?;
+    assert_eq!(noop_value["ok"], true);
+    assert_eq!(noop_value["skipped"], true);
+    assert_eq!(noop_value["theme_hash"], noop_value["previous_theme_hash"]);
+
+    fs::write(&tokens, ":root { --c-brand-1: #84cc16; }\n")?;
+    let rebuild = capy_command()?
+        .env("PATH", "/definitely/not/on/path")
+        .env_remove("CAPY_NF")
+        .args(["nextframe", "rebuild", "--composition", composition_path])
+        .output()?;
+
+    assert!(rebuild.status.success());
+    let rebuild_value: serde_json::Value = serde_json::from_slice(&rebuild.stdout)?;
+    assert_eq!(rebuild_value["ok"], true);
+    assert!(rebuild_value.get("skipped").is_none());
+    assert_ne!(
+        rebuild_value["theme_hash"],
+        rebuild_value["previous_theme_hash"]
+    );
+    assert!(dir.join("render_source.json").is_file());
     fs::remove_dir_all(dir)?;
     Ok(())
 }

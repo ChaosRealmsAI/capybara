@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 pub const COMPOSITION_SCHEMA: &str = "nextframe.composition.v2";
@@ -20,7 +20,12 @@ pub struct CompositionDocument {
     pub duration_ms: u64,
     pub duration: String,
     pub viewport: CompositionViewport,
-    pub theme: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_theme"
+    )]
+    pub theme: Option<CompositionTheme>,
     pub tracks: Vec<CompositionTrack>,
     #[serde(default)]
     pub assets: Vec<CompositionAsset>,
@@ -35,10 +40,30 @@ impl CompositionDocument {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompositionTheme {
+    pub tokens_ref: String,
+    pub source_path: String,
+    pub hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompositionViewport {
     pub w: u32,
     pub h: u32,
     pub ratio: String,
+}
+
+fn deserialize_theme<'de, D>(deserializer: D) -> Result<Option<CompositionTheme>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    match value {
+        None | Some(Value::Null) | Some(Value::String(_)) => Ok(None),
+        Some(value) => serde_json::from_value(value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -78,8 +103,8 @@ pub struct CompositionAsset {
 #[cfg(test)]
 mod tests {
     use super::{
-        CAPY_COMPOSITION_SCHEMA_VERSION, COMPOSITION_SCHEMA, CompositionDocument, CompositionTrack,
-        CompositionViewport, POSTER_COMPONENT_ID,
+        CAPY_COMPOSITION_SCHEMA_VERSION, COMPOSITION_SCHEMA, CompositionDocument, CompositionTheme,
+        CompositionTrack, CompositionViewport, POSTER_COMPONENT_ID,
     };
     use crate::compose::composition::{CompositionAsset, CompositionTime};
     use serde_json::json;
@@ -102,7 +127,11 @@ mod tests {
                 h: 1080,
                 ratio: "16:9".to_string(),
             },
-            theme: "default".to_string(),
+            theme: Some(CompositionTheme {
+                tokens_ref: "tokens/tokens.json".to_string(),
+                source_path: "/tmp/tokens.css".to_string(),
+                hash: "brand-token-fnv1a64-0000000000000000".to_string(),
+            }),
             tracks: vec![CompositionTrack {
                 id: "track-poster".to_string(),
                 kind: "component".to_string(),
@@ -132,6 +161,34 @@ mod tests {
         assert_eq!(decoded, document);
         assert_eq!(decoded.schema, COMPOSITION_SCHEMA);
         assert_eq!(decoded.schema_version, CAPY_COMPOSITION_SCHEMA_VERSION);
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_string_theme_decodes_as_no_brand() -> Result<(), serde_json::Error> {
+        let decoded: CompositionDocument = serde_json::from_value(json!({
+            "schema": COMPOSITION_SCHEMA,
+            "schema_version": CAPY_COMPOSITION_SCHEMA_VERSION,
+            "id": "poster-snapshot",
+            "title": "Poster Snapshot",
+            "name": "Poster Snapshot",
+            "duration_ms": 1000,
+            "duration": "1000ms",
+            "viewport": {"w": 1920, "h": 1080, "ratio": "16:9"},
+            "theme": "default",
+            "tracks": [{
+                "id": "track-poster",
+                "kind": "component",
+                "component": POSTER_COMPONENT_ID,
+                "z": 10,
+                "time": {"start": "0ms", "end": "1000ms"},
+                "duration_ms": 1000,
+                "params": {"poster": {"type": "poster"}}
+            }],
+            "assets": []
+        }))?;
+
+        assert!(decoded.theme.is_none());
         Ok(())
     }
 }

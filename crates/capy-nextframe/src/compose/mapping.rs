@@ -31,7 +31,7 @@ pub fn poster_to_composition(
             h: poster.document.canvas.height,
             ratio: ratio(poster),
         },
-        theme: "default".to_string(),
+        theme: None,
         tracks: vec![CompositionTrack {
             id: POSTER_TRACK_ID.to_string(),
             kind: "component".to_string(),

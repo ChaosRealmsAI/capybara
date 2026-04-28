@@ -11,7 +11,7 @@ use serde::Serialize;
 
 pub use composition::{
     CAPY_COMPOSITION_SCHEMA_VERSION, COMPOSITION_SCHEMA, CompositionAsset, CompositionDocument,
-    CompositionTime, CompositionTrack, CompositionViewport, POSTER_COMPONENT_ID,
+    CompositionTheme, CompositionTime, CompositionTrack, CompositionViewport, POSTER_COMPONENT_ID,
 };
 pub use slug::poster_slug;
 
@@ -129,6 +129,7 @@ function value(raw, fallback) {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComposePosterRequest {
     pub poster_path: PathBuf,
+    pub brand_tokens_path: Option<PathBuf>,
     pub project_slug: Option<String>,
     pub composition_id: Option<String>,
     pub output_dir: Option<PathBuf>,
@@ -155,6 +156,8 @@ pub struct ComposePosterResult {
     pub layers: usize,
     pub assets: usize,
     pub duration_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_hash: Option<String>,
     #[serde(skip_serializing)]
     pub artifact: CompositionArtifactReport,
 }
@@ -187,8 +190,11 @@ pub fn compose_poster(req: ComposePosterRequest) -> Result<ComposePosterResult, 
     } else {
         req.duration_ms
     };
-    let composition = poster_to_composition(&poster, composition_id.clone(), duration_ms);
     let project_root = prepare_project_root(output_dir)?;
+    let mut composition = poster_to_composition(&poster, composition_id.clone(), duration_ms);
+    if let Some(path) = req.brand_tokens_path {
+        composition.theme = Some(crate::brand::copy_tokens(&path, &project_root)?);
+    }
     let component_path = write_component(&project_root)?;
     let composition_path = project_root.join("composition.json");
     write_json(&composition_path, &composition)?;
@@ -210,6 +216,7 @@ pub fn compose_poster(req: ComposePosterRequest) -> Result<ComposePosterResult, 
         layers: poster.document.layers.len(),
         assets: poster.document.assets.len(),
         duration_ms,
+        theme_hash: composition.theme.as_ref().map(|theme| theme.hash.clone()),
         artifact: CompositionArtifactReport {
             project_slug: artifact.project_slug,
             composition_id: artifact.composition_id,

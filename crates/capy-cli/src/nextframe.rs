@@ -23,6 +23,8 @@ enum NextFrameCommand {
     Validate(NextFrameValidateArgs),
     #[command(about = "Compile a NextFrame composition JSON document")]
     Compile(NextFrameCompileArgs),
+    #[command(about = "Rebuild a branded NextFrame composition when tokens changed")]
+    Rebuild(NextFrameRebuildArgs),
     #[command(about = "Render a single PNG snapshot from a compiled NextFrame composition")]
     Snapshot(NextFrameSnapshotArgs),
     #[command(about = "Export MP4 from a compiled NextFrame composition")]
@@ -56,6 +58,8 @@ struct NextFrameComposePosterArgs {
     #[arg(long)]
     input: PathBuf,
     #[arg(long)]
+    brand_tokens: Option<PathBuf>,
+    #[arg(long)]
     out: Option<PathBuf>,
     #[arg(long)]
     project: Option<String>,
@@ -75,6 +79,14 @@ struct NextFrameValidateArgs {
 
 #[derive(Debug, Args)]
 struct NextFrameCompileArgs {
+    #[arg(long)]
+    composition: PathBuf,
+    #[arg(long)]
+    strict_binary: bool,
+}
+
+#[derive(Debug, Args)]
+struct NextFrameRebuildArgs {
     #[arg(long)]
     composition: PathBuf,
     #[arg(long)]
@@ -157,6 +169,7 @@ pub fn handle(args: NextFrameArgs) -> Result<(), String> {
         NextFrameCommand::ComposePoster(args) => compose_poster(args),
         NextFrameCommand::Validate(args) => validate(args),
         NextFrameCommand::Compile(args) => compile(args),
+        NextFrameCommand::Rebuild(args) => rebuild(args),
         NextFrameCommand::Snapshot(args) => snapshot(args),
         NextFrameCommand::Export(args) => export(args),
         NextFrameCommand::VerifyExport(args) => verify_export(args),
@@ -180,6 +193,7 @@ fn doctor(args: NextFrameDoctorArgs) -> Result<(), String> {
 fn compose_poster(args: NextFrameComposePosterArgs) -> Result<(), String> {
     let request = capy_nextframe::ComposePosterRequest {
         poster_path: args.input,
+        brand_tokens_path: args.brand_tokens,
         project_slug: args.project,
         composition_id: args.composition,
         output_dir: args.out,
@@ -191,6 +205,19 @@ fn compose_poster(args: NextFrameComposePosterArgs) -> Result<(), String> {
             print_json(&capy_nextframe::compose::failure(err))?;
             std::process::exit(1);
         }
+    }
+}
+
+fn rebuild(args: NextFrameRebuildArgs) -> Result<(), String> {
+    let report = capy_nextframe::rebuild(capy_nextframe::RebuildRequest {
+        composition_path: args.composition,
+        strict_binary: args.strict_binary,
+    });
+    print_json(&report)?;
+    if report.ok {
+        Ok(())
+    } else {
+        std::process::exit(1);
     }
 }
 

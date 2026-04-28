@@ -152,6 +152,7 @@ fn compile_to_file(args: PosterCompileArgs) -> Result<capy_nextframe::CompileRep
         .unwrap_or_else(|| PathBuf::from("."));
     let compose = capy_nextframe::compose_poster(capy_nextframe::ComposePosterRequest {
         poster_path: args.input,
+        brand_tokens_path: None,
         project_slug: None,
         composition_id: None,
         output_dir: Some(composition_dir),
