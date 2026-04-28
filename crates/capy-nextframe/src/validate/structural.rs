@@ -141,6 +141,14 @@ fn validate_assets(raw: &Value, composition_dir: Option<&Path>, report: &mut Val
 
     for (index, asset) in assets.iter().enumerate() {
         if asset
+            .get("kind")
+            .and_then(Value::as_str)
+            .map(|kind| kind == "copied")
+            .unwrap_or(false)
+        {
+            validate_materialized_asset(asset, index, composition_dir, report);
+        }
+        if asset
             .get("source_kind")
             .and_then(Value::as_str)
             .map(|kind| kind == "external")
@@ -167,6 +175,33 @@ fn validate_assets(raw: &Value, composition_dir: Option<&Path>, report: &mut Val
                 "next step · check asset source_path",
             ));
         }
+    }
+}
+
+fn validate_materialized_asset(
+    asset: &Value,
+    index: usize,
+    composition_dir: Option<&Path>,
+    report: &mut ValidationReport,
+) {
+    let source = asset.get("materialized_path").and_then(Value::as_str);
+    let Some(source) = source.filter(|value| !value.trim().is_empty()) else {
+        report.push_error(ValidationError::new(
+            "ASSET_MATERIALIZATION_MISSING",
+            format!("$.assets[{index}].materialized_path"),
+            "copied asset is missing materialized_path",
+            "next step · rerun compose-poster to materialize assets",
+        ));
+        return;
+    };
+    let resolved = resolve_asset_path(source, composition_dir);
+    if !resolved.is_file() {
+        report.push_error(ValidationError::new(
+            "ASSET_MATERIALIZATION_MISSING",
+            format!("$.assets[{index}].materialized_path"),
+            format!("materialized asset does not exist: {}", resolved.display()),
+            "next step · rerun compose-poster to materialize assets",
+        ));
     }
 }
 
@@ -294,6 +329,27 @@ mod tests {
         let report = validate_structure(&path);
 
         assert!(report.ok);
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn reports_missing_materialized_asset() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_dir("materialized-missing")?;
+        let path = write_composition(
+            &dir,
+            json!({"assets": [{
+                "id": "hero",
+                "type": "image",
+                "kind": "copied",
+                "src": "assets/hero.png",
+                "materialized_path": "assets/hero.png",
+                "source_path": "data:image/svg+xml,%3Csvg/%3E"
+            }]}),
+        )?;
+        let report = validate_structure(&path);
+
+        assert_error(&report, "ASSET_MATERIALIZATION_MISSING");
         fs::remove_dir_all(dir)?;
         Ok(())
     }

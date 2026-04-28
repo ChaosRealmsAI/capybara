@@ -91,9 +91,19 @@ pub struct CompositionAsset {
     #[serde(default)]
     pub src: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub materialized_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub byte_size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mask: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -148,8 +158,16 @@ mod tests {
                 id: "hero".to_string(),
                 asset_type: "image".to_string(),
                 src: "assets/hero.png".to_string(),
+                kind: Some("copied".to_string()),
                 source_path: None,
                 source_kind: None,
+                original_path: Some("/tmp/hero.png".to_string()),
+                materialized_path: Some("assets/hero.png".to_string()),
+                byte_size: Some(3),
+                sha256: Some(
+                    "sha256-2d4566582844690f8634a8b2534ea5221560038c6c0650c99140759bad603ae2"
+                        .to_string(),
+                ),
                 mask: None,
                 provenance: None,
             }],

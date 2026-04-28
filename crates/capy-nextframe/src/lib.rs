@@ -1,4 +1,5 @@
 pub mod adapter;
+pub mod asset;
 pub mod brand;
 pub mod compile;
 pub mod compose;

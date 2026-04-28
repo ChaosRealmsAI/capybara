@@ -52,8 +52,13 @@ pub fn poster_to_composition(
                 id: id.clone(),
                 asset_type: asset.asset_type.clone(),
                 src: asset.src.clone(),
+                kind: None,
                 source_path: None,
                 source_kind: None,
+                original_path: None,
+                materialized_path: None,
+                byte_size: None,
+                sha256: None,
                 mask: asset.mask.clone(),
                 provenance: asset.provenance.clone(),
             })

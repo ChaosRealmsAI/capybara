@@ -96,6 +96,26 @@ fn nextframe_compose_poster_writes_composition_json() -> Result<(), Box<dyn std:
     assert!(composition_text.contains("\"html.capy-poster\""));
     let composition: serde_json::Value = serde_json::from_str(&composition_text)?;
     assert_eq!(composition["tracks"].as_array().map(Vec::len), Some(1));
+    assert!(dir.join("assets").is_dir());
+    let assets = composition["assets"]
+        .as_array()
+        .ok_or("composition assets should be an array")?;
+    assert_eq!(
+        assets.first().and_then(|asset| asset["kind"].as_str()),
+        Some("copied")
+    );
+    let materialized_exists = assets
+        .first()
+        .and_then(|asset| asset["materialized_path"].as_str())
+        .map(|path| dir.join(path).is_file())
+        == Some(true);
+    assert!(materialized_exists);
+    let has_sha = assets
+        .first()
+        .and_then(|asset| asset["sha256"].as_str())
+        .map(|sha| sha.starts_with("sha256-"))
+        == Some(true);
+    assert!(has_sha);
     fs::remove_dir_all(dir)?;
     Ok(())
 }

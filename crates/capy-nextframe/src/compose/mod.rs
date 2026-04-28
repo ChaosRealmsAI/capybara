@@ -15,6 +15,10 @@ pub use composition::{
 };
 pub use slug::poster_slug;
 
+use crate::asset::{
+    AssetMaterializationError, AssetMaterializationWarning, MaterializeAssetsRequest,
+    materialize_assets,
+};
 use crate::compose::mapping::poster_to_composition;
 use crate::compose::poster::read_poster;
 use crate::error::{ErrorBody, NextFrameError, NextFrameErrorCode};
@@ -158,6 +162,10 @@ pub struct ComposePosterResult {
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub theme_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<AssetMaterializationError>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<AssetMaterializationWarning>,
     #[serde(skip_serializing)]
     pub artifact: CompositionArtifactReport,
 }
@@ -192,6 +200,18 @@ pub fn compose_poster(req: ComposePosterRequest) -> Result<ComposePosterResult, 
     };
     let project_root = prepare_project_root(output_dir)?;
     let mut composition = poster_to_composition(&poster, composition_id.clone(), duration_ms);
+    let materialized = materialize_assets(MaterializeAssetsRequest {
+        poster: &poster.document,
+        poster_raw: &poster.raw,
+        poster_path: &req.poster_path,
+        project_root: &project_root,
+    });
+    composition.assets = materialized.assets.clone();
+    if let Some(track) = composition.tracks.get_mut(0) {
+        track
+            .params
+            .insert("poster".to_string(), materialized.rewritten_poster.clone());
+    }
     if let Some(path) = req.brand_tokens_path {
         composition.theme = Some(crate::brand::copy_tokens(&path, &project_root)?);
     }
@@ -206,17 +226,21 @@ pub fn compose_poster(req: ComposePosterRequest) -> Result<ComposePosterResult, 
         component_paths: vec![component_path.clone()],
     };
 
+    let ok = materialized.errors.is_empty();
+
     Ok(ComposePosterResult {
-        ok: true,
+        ok,
         trace_id: trace_id("compose"),
         stage: "compose-poster",
         project_root,
         composition_path,
         components: vec![POSTER_COMPONENT_ID.to_string()],
         layers: poster.document.layers.len(),
-        assets: poster.document.assets.len(),
+        assets: composition.assets.len(),
         duration_ms,
         theme_hash: composition.theme.as_ref().map(|theme| theme.hash.clone()),
+        errors: materialized.errors,
+        warnings: materialized.warnings,
         artifact: CompositionArtifactReport {
             project_slug: artifact.project_slug,
             composition_id: artifact.composition_id,
