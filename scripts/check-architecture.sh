@@ -23,6 +23,7 @@ for path in \
   crates/capy-scroll-media/src/lib.rs \
   scripts/image-provider-apimart.mjs \
   scripts/build-canvas-for-app.sh \
+  scripts/verify-agent-canvas-image-placement.mjs \
   crates/capy-shell/Cargo.toml \
   crates/capy-shell/src/browser.rs \
   crates/capy-shell/src/browser/assets.rs \
@@ -41,7 +42,9 @@ for path in \
   spec/versions/v0.6.1-image-generation-tool/bdd.json \
   spec/versions/v0.6.1-image-generation-tool/status.json \
   spec/versions/v0.8-canvas-image-tool/bdd.json \
-  spec/versions/v0.8-canvas-image-tool/status.json
+  spec/versions/v0.8-canvas-image-tool/status.json \
+  spec/versions/v0.10-agent-canvas-image-placement/bdd.json \
+  spec/versions/v0.10-agent-canvas-image-placement/status.json
 do
   require_file "$path"
 done
@@ -58,6 +61,9 @@ rg -q '^capy-image-gen\.workspace = true' crates/capy-shell/Cargo.toml || fail "
 rg -q '^capy-scroll-media\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-scroll-media through the workspace boundary"
 rg -q 'CanvasCommand::GenerateImage' crates/capy-cli/src/canvas.rs || fail "capy canvas generate-image command must exist"
 rg -q 'canvas-generate-image' crates/capy-shell/src/app.rs || fail "desktop canvas image tool RPC must exist"
+rg -q 'capyCanvasTools' crates/capy-cli/src/main.rs crates/capy-shell/src/agent.rs frontend/capy-app/script.js || fail "agent canvas CLI tool contract must be wired for chat runtimes"
+rg -q 'CAPY_TOOL_CALL_LOG' crates/capy-cli/src/canvas.rs crates/capy-shell/src/agent.rs || fail "agent canvas CLI calls must support JSONL evidence logging"
+rg -q 'v0.10-agent-canvas-image-placement' scripts/verify-agent-canvas-image-placement.mjs || fail "agent canvas placement verifier must target v0.10 evidence"
 rg -q 'provider-adapter' crates/capy-image-gen/src/apimart.rs || fail "first image provider must remain an adapter, not the top-level abstraction"
 rg -q 'default_no_spend_gate: true' crates/capy-image-gen/src/apimart.rs || fail "image provider must expose no-spend default gate metadata"
 rg -q 'http_range' crates/capy-scroll-media/src/types.rs || fail "scroll media manifest must record HTTP Range requirement"

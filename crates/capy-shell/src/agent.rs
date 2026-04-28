@@ -8,6 +8,9 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use tao::event_loop::EventLoopProxy;
 
+use crate::agent_tools::{
+    agent_tool_env, claude_append_system_prompt, codex_developer_instructions,
+};
 use crate::app::ShellEvent;
 use crate::store::{Conversation, CreateRunEvent, Provider, Store};
 
@@ -173,6 +176,7 @@ fn run_claude(
     command.args(claude_args(conversation, prompt, use_resume));
     command.current_dir(&conversation.cwd);
     command.env("PATH", &launch.path_env);
+    apply_agent_tool_env(&mut command, &conversation.config);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let mut child = command
@@ -249,6 +253,7 @@ fn run_codex(
     command.arg("--listen").arg("stdio://");
     command
         .env("PATH", &launch.path_env)
+        .envs(agent_tool_env(&conversation.config))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
@@ -390,7 +395,12 @@ fn apply_codex_thread_overrides(params: &mut Value, conversation: &Conversation)
     }
     set_config_str_param(params, &conversation.config, "approvalsReviewer");
     set_config_str_param(params, &conversation.config, "baseInstructions");
-    set_config_str_param(params, &conversation.config, "developerInstructions");
+    if let Some(instructions) = codex_developer_instructions(
+        config_str(&conversation.config, "developerInstructions"),
+        &conversation.config,
+    ) {
+        params["developerInstructions"] = json!(instructions);
+    }
     set_config_str_param(params, &conversation.config, "modelProvider");
     set_config_str_param(params, &conversation.config, "personality");
     set_config_str_param(params, &conversation.config, "serviceTier");
@@ -639,7 +649,10 @@ fn claude_args(conversation: &Conversation, prompt: &str, use_resume: bool) -> V
         args.push("--system-prompt".to_string());
         args.push(system);
     }
-    if let Some(system) = config_str(&conversation.config, "appendSystemPrompt") {
+    if let Some(system) = claude_append_system_prompt(
+        config_str(&conversation.config, "appendSystemPrompt"),
+        &conversation.config,
+    ) {
         args.push("--append-system-prompt".to_string());
         args.push(system);
     }
@@ -704,6 +717,12 @@ fn claude_args(conversation: &Conversation, prompt: &str, use_resume: bool) -> V
     args.push("--".to_string());
     args.push(prompt.to_string());
     args
+}
+
+fn apply_agent_tool_env(command: &mut Command, config: &Value) {
+    for (key, value) in agent_tool_env(config) {
+        command.env(key, value);
+    }
 }
 
 fn codex_sandbox_mode(value: &str) -> &str {

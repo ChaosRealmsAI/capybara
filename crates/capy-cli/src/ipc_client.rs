@@ -1,3 +1,4 @@
+use std::env;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -8,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-const IPC_TIMEOUT: Duration = Duration::from_secs(10);
+const DEFAULT_IPC_TIMEOUT: Duration = Duration::from_secs(60);
+const IPC_TIMEOUT_ENV: &str = "CAPY_IPC_TIMEOUT_SECS";
 const SOCKET_ENV: &str = "CAPYBARA_SOCKET";
 static REQ_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -46,8 +48,17 @@ pub fn send(req: IpcRequest) -> Result<IpcResponse, String> {
         .map_err(|err| format!("socket runtime failed: {err}"))?;
 
     runtime
-        .block_on(async { tokio::time::timeout(IPC_TIMEOUT, send_async(req)).await })
-        .map_err(|_| "IPC request timed out after 10s".to_string())?
+        .block_on(async { tokio::time::timeout(ipc_timeout(), send_async(req)).await })
+        .map_err(|_| format!("IPC request timed out after {}s", ipc_timeout().as_secs()))?
+}
+
+fn ipc_timeout() -> Duration {
+    env::var(IPC_TIMEOUT_ENV)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_IPC_TIMEOUT)
 }
 
 async fn send_async(req: IpcRequest) -> Result<IpcResponse, String> {

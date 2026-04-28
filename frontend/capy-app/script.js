@@ -870,7 +870,7 @@ function renderError(error) {
 }
 
 function currentConfig() {
-  const config = {};
+  const config = { capyCanvasTools: true };
   if (effortEl.value) config.effort = effortEl.value;
   if (providerEl.value === "claude" && policyEl.value) config.permissionMode = policyEl.value;
   if (providerEl.value === "codex" && policyEl.value) config.approvalPolicy = policyEl.value;
@@ -934,7 +934,7 @@ function setRunStatus(status) {
 
 function renderRuntimeFoot() {
   const provider = providerEl.value === "claude" ? "Claude Code" : "Codex CLI";
-  runtimeFootEl.textContent = `${provider} · ${state.dbPath || "SQLite store pending"}`;
+  runtimeFootEl.textContent = `${provider} · Canvas CLI tools active · ${state.dbPath || "SQLite store pending"}`;
 }
 
 function updateCanvasStatus(text) {

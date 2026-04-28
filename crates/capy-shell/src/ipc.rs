@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -14,7 +15,8 @@ use tokio::sync::oneshot;
 
 use crate::app::{ShellEvent, ShellState};
 
-const EVENT_ACK_TIMEOUT: Duration = Duration::from_secs(10);
+const DEFAULT_EVENT_ACK_TIMEOUT: Duration = Duration::from_secs(60);
+const EVENT_ACK_TIMEOUT_ENV: &str = "CAPY_EVENT_ACK_TIMEOUT_SECS";
 const SOCKET_ENV: &str = "CAPYBARA_SOCKET";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -231,7 +233,8 @@ async fn send_event(
         };
     }
 
-    match tokio::time::timeout(EVENT_ACK_TIMEOUT, rx).await {
+    let timeout = event_ack_timeout();
+    match tokio::time::timeout(timeout, rx).await {
         Ok(Ok(resp)) => resp,
         Ok(Err(err)) => IpcResponse {
             req_id,
@@ -250,12 +253,21 @@ async fn send_event(
             data: None,
             error: Some(json!({
                 "error": "socket failed",
-                "detail": "event ack timed out after 10s",
+                "detail": format!("event ack timed out after {}s", timeout.as_secs()),
                 "hint": "restart capy shell",
                 "exit_code": 1
             })),
         },
     }
+}
+
+fn event_ack_timeout() -> Duration {
+    env::var(EVENT_ACK_TIMEOUT_ENV)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_EVENT_ACK_TIMEOUT)
 }
 
 pub fn ok_response(req: &IpcRequest, data: Value) -> IpcResponse {
