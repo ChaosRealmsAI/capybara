@@ -8,6 +8,7 @@ mod canvas;
 mod cutout;
 mod ipc_client;
 mod media;
+mod poster;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -48,6 +49,8 @@ enum Command {
     Image(ImageArgs),
     #[command(about = "Package video clips for scroll-driven HTML pages")]
     Media(media::MediaArgs),
+    #[command(about = "Validate, compile, and snapshot poster JSON documents")]
+    Poster(poster::PosterArgs),
     #[command(about = "Inspect local agent runtimes")]
     Agent(AgentArgs),
     #[command(about = "Quit the Capybara shell")]
@@ -515,6 +518,7 @@ fn run() -> Result<(), String> {
         Command::Canvas(args) => canvas::handle(args),
         Command::Image(args) => handle_image_command(args),
         Command::Media(args) => media::handle(args),
+        Command::Poster(args) => poster::handle(args),
         Command::Agent(args) => match args.command {
             AgentCommand::Doctor => {
                 println!("{}", capy_shell::agent::doctor());

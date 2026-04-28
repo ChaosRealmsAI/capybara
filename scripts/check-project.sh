@@ -13,6 +13,16 @@ cargo run -p capy-cli -- --help >/dev/null
 cargo run -p capy-cli -- agent doctor >/dev/null
 cargo run -p capy-cli -- image providers >/dev/null
 cargo run -p capy-cli -- image doctor >/dev/null
+cargo run -p capy-cli -- poster validate \
+  --input fixtures/poster/v0.1/sample-poster.json >/dev/null
+cargo run -p capy-cli -- poster compile \
+  --input fixtures/poster/v0.1/sample-poster.json \
+  --out target/capy-poster/sample-poster.render_source.json >/dev/null
+if ! jq -e '.schema_version == "nf.render_source.v1" and (.tracks | length) == 1' \
+  target/capy-poster/sample-poster.render_source.json >/dev/null; then
+  echo "project check failed: poster compile must emit render_source.v1 with one component track" >&2
+  exit 1
+fi
 cargo run -p capy-cli -- media --help >/dev/null
 media_dry_run="$(cargo run -p capy-cli -- media scroll-pack \
   --input tmp/nonexistent-scroll-media-dry-run.mp4 \

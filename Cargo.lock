@@ -375,6 +375,7 @@ version = "0.2.0"
 dependencies = [
  "base64",
  "capy-image-gen",
+ "capy-poster",
  "capy-scroll-media",
  "capy-shell",
  "clap",
@@ -389,6 +390,15 @@ dependencies = [
 
 [[package]]
 name = "capy-image-gen"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "capy-poster"
 version = "0.2.0"
 dependencies = [
  "serde",
