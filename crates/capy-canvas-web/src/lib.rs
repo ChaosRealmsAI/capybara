@@ -1047,50 +1047,33 @@ mod web {
         Ok(found)
     }
 
-    /// JS-callable focus bridge for AI context export. It selects the node and
-    /// pans the canvas camera so screenshot-based attachments can see it.
     #[wasm_bindgen]
     pub fn focus_node(id: u32) -> Result<bool, JsValue> {
         let state_arc = shared_state().ok_or_else(|| {
             JsValue::from_str("focus_node(): no shared state · call start() first")
         })?;
-        let focused = {
-            let mut state = state_arc
-                .lock()
-                .map_err(|_| JsValue::from_str("focus_node(): state lock poisoned"))?;
-            let Some(idx) = state
-                .shapes
-                .iter()
-                .position(|shape| shape.id == u64::from(id))
-            else {
-                return Ok(false);
-            };
-            let shape = &state.shapes[idx];
-            let x = if shape.w < 0.0 {
-                shape.x + shape.w
-            } else {
-                shape.x
-            };
-            let y = if shape.h < 0.0 {
-                shape.y + shape.h
-            } else {
-                shape.y
-            };
-            let cx = x + shape.w.abs() / 2.0;
-            let cy = y + shape.h.abs() / 2.0;
-            let zoom = state.camera.zoom;
-            state.selected = vec![idx];
-            state.tool = Tool::Select;
-            state.camera.offset_x = state.viewport_w / 2.0 - cx * zoom;
-            state.camera.offset_y = state.viewport_h / 2.0 - cy * zoom;
-            state.target_zoom = zoom;
-            true
+        let mut state = state_arc
+            .lock()
+            .map_err(|_| JsValue::from_str("focus_node(): state lock poisoned"))?;
+        let Some(idx) = state
+            .shapes
+            .iter()
+            .position(|shape| shape.id == u64::from(id))
+        else {
+            return Ok(false);
         };
-        if focused {
-            redraw_via_shared();
-            log(&format!("[capy-canvas-web] focus_node(id={id}) ok"));
-        }
-        Ok(focused)
+        let shape = &state.shapes[idx];
+        let cx = shape.x + shape.w.min(0.0) + shape.w.abs() / 2.0;
+        let cy = shape.y + shape.h.min(0.0) + shape.h.abs() / 2.0;
+        let zoom = state.camera.zoom;
+        state.selected = vec![idx];
+        state.tool = Tool::Select;
+        state.camera.offset_x = state.viewport_w / 2.0 - cx * zoom;
+        state.camera.offset_y = state.viewport_h / 2.0 - cy * zoom;
+        state.target_zoom = zoom;
+        drop(state);
+        redraw_via_shared();
+        Ok(true)
     }
 
     /// JS-callable absolute move bridge for AI actions and desktop verification.
@@ -1114,15 +1097,7 @@ mod web {
         Ok(moved)
     }
 
-    // ── v0.8 introspection exports ──
-    //
-    // The desktop shell (capy-shell) routes `capy state --key=canvas.*` to the
-    // running webview by evaluating JS. These exports are the surface that
-    // those JS snippets call. They take no arguments and never await — they
-    // are safe to invoke synchronously from `evaluate_script_with_callback`.
-    //
-    // ADDITIVE: keep these at the bottom of `mod web {}` so concurrent v0.6
-    // edits at the top of the module don't conflict.
+    // v0.8 introspection exports used by desktop state-key scripts.
 
     /// Number of shapes currently on the canvas. Returns 0 before `start()`
     /// finishes wiring up `SHARED_STATE`, so the desktop state-key script can

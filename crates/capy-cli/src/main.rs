@@ -5,6 +5,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
 
 mod canvas;
+mod canvas_context;
 mod chat_context;
 mod cutout;
 mod desktop_verify;
