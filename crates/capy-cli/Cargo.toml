@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 capy-shell = { path = "../capy-shell" }
 clap.workspace = true
+image.workspace = true
 interprocess.workspace = true
 serde.workspace = true
 serde_json.workspace = true
