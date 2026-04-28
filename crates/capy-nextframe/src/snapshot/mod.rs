@@ -8,7 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub use report::{SnapshotError, SnapshotMode, SnapshotReport, SnapshotRequest};
 
 use self::report::{SnapshotFailure, SnapshotSuccess};
+use crate::adapter::crate_adapter::CrateAdapter;
 use crate::config::NextFrameMode;
+use crate::ports::{NextFrameRecorderPort, SnapshotOptions};
 
 pub fn snapshot(req: SnapshotRequest) -> SnapshotReport {
     let trace_id = trace_id();
@@ -74,44 +76,68 @@ pub fn snapshot(req: SnapshotRequest) -> SnapshotReport {
         }
     };
 
-    if mode == NextFrameMode::Binary {
-        match binary::snapshot_with_binary(&render_source_path, &snapshot_path, req.frame_ms) {
-            binary::BinarySnapshot::Snapshotted => {
+    match mode {
+        NextFrameMode::Crate => {
+            if CrateAdapter::default()
+                .snapshot(
+                    &render_source_path,
+                    &snapshot_path,
+                    SnapshotOptions {
+                        t_ms: req.frame_ms,
+                        resolution: None,
+                    },
+                )
+                .is_ok()
+            {
                 return metrics_success(
                     trace_id,
                     composition_path,
                     render_source_path,
                     snapshot_path,
                     req.frame_ms,
-                    SnapshotMode::Binary,
+                    SnapshotMode::Crate,
                 );
             }
-            binary::BinarySnapshot::Failed(error) => {
-                return failure(
-                    trace_id,
-                    composition_path,
-                    render_source_path,
-                    snapshot_path,
-                    req.frame_ms,
-                    error,
-                );
+        }
+        NextFrameMode::Binary => {
+            match binary::snapshot_with_binary(&render_source_path, &snapshot_path, req.frame_ms) {
+                binary::BinarySnapshot::Snapshotted => {
+                    return metrics_success(
+                        trace_id,
+                        composition_path,
+                        render_source_path,
+                        snapshot_path,
+                        req.frame_ms,
+                        SnapshotMode::Binary,
+                    );
+                }
+                binary::BinarySnapshot::Failed(error) => {
+                    return failure(
+                        trace_id,
+                        composition_path,
+                        render_source_path,
+                        snapshot_path,
+                        req.frame_ms,
+                        error,
+                    );
+                }
+                binary::BinarySnapshot::Missing if req.strict_binary => {
+                    return failure(
+                        trace_id,
+                        composition_path,
+                        render_source_path,
+                        snapshot_path,
+                        req.frame_ms,
+                        SnapshotError::new(
+                            "NEXTFRAME_NOT_FOUND",
+                            "$.binary",
+                            "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
+                            "next step · install nf-recorder or rerun without --strict-binary",
+                        ),
+                    );
+                }
+                binary::BinarySnapshot::Missing => {}
             }
-            binary::BinarySnapshot::Missing if req.strict_binary => {
-                return failure(
-                    trace_id,
-                    composition_path,
-                    render_source_path,
-                    snapshot_path,
-                    req.frame_ms,
-                    SnapshotError::new(
-                        "NEXTFRAME_NOT_FOUND",
-                        "$.binary",
-                        "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
-                        "next step · install nf-recorder or rerun without --strict-binary",
-                    ),
-                );
-            }
-            binary::BinarySnapshot::Missing => {}
         }
     }
 

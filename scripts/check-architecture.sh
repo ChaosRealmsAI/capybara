@@ -178,8 +178,12 @@ jq -e --arg active "$active_version" '
     ($deps | index("v0.6-canvas-chat-workbench") != null))
 ' spec/versions/REGISTRY.json >/dev/null || fail "active version must be v0.4 CEF foundation or depend on the CEF desktop foundation chain"
 
+if rg -n '\bwry\b|javascriptcore|WKWebView|WebKit' Cargo.toml Cargo.lock; then
+  fail "desktop mainline must not reintroduce wry/WebKit dependencies"
+fi
+
 if rg -n '\bwry\b|objc2-web-kit|javascriptcore|WKWebView|WebKit' \
-  Cargo.toml Cargo.lock crates/capy-shell/Cargo.toml crates/capy-shell/src; then
+  Cargo.toml crates/capy-shell/Cargo.toml crates/capy-shell/src; then
   fail "desktop mainline must not reintroduce wry/WebKit dependencies"
 fi
 

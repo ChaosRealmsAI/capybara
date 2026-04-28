@@ -6,7 +6,10 @@ use serde_json::Value;
 
 use crate::config::NextFrameConfig;
 use crate::error::{NextFrameError, NextFrameErrorCode};
-use crate::ports::{CompileReport, CompositionArtifact, NextFrameProjectPort, ValidationReport};
+use crate::ports::{
+    CompileReport, CompositionArtifact, ExportOptions, ExportReport, NextFrameProjectPort,
+    NextFrameRecorderPort, SnapshotOptions, SnapshotReport, ValidationReport,
+};
 
 #[derive(Debug, Clone)]
 pub struct CrateAdapter {
@@ -123,6 +126,26 @@ impl NextFrameProjectPort for CrateAdapter {
     }
 }
 
+impl NextFrameRecorderPort for CrateAdapter {
+    fn snapshot(
+        &self,
+        source: &Path,
+        out: &Path,
+        options: SnapshotOptions,
+    ) -> Result<SnapshotReport, NextFrameError> {
+        snapshot_with_recorder_crate(source, out, options)
+    }
+
+    fn export(
+        &self,
+        artifact: &CompositionArtifact,
+        out: &Path,
+        options: ExportOptions,
+    ) -> Result<ExportReport, NextFrameError> {
+        export_with_recorder_crate(artifact, out, options)
+    }
+}
+
 #[derive(Debug, Clone)]
 struct CrateContext {
     root: PathBuf,
@@ -139,6 +162,217 @@ fn crate_command(action: &str, project: &str, composition: &str) -> Vec<String> 
         "--composition".to_string(),
         composition.to_string(),
     ]
+}
+
+#[cfg(target_os = "macos")]
+fn snapshot_with_recorder_crate(
+    source: &Path,
+    out: &Path,
+    options: SnapshotOptions,
+) -> Result<SnapshotReport, NextFrameError> {
+    ensure_parent(out, NextFrameErrorCode::SnapshotFailed)?;
+    let resolution = options
+        .resolution
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(parse_resolution)
+        .transpose()?;
+    recorder_runtime()?
+        .block_on(nf_recorder::snapshot_from_source(
+            source,
+            out,
+            options.t_ms,
+            resolution,
+        ))
+        .map_err(|err| {
+            NextFrameError::new(
+                NextFrameErrorCode::SnapshotFailed,
+                format!("nf-recorder crate snapshot failed: {err}"),
+                "next step · rerun CAPY_NEXTFRAME_MODE=crate capy nextframe snapshot",
+            )
+        })?;
+
+    Ok(SnapshotReport {
+        ok: true,
+        output: out.to_path_buf(),
+        command: recorder_snapshot_command(source, out, options.t_ms),
+        stdout: String::new(),
+        stderr: String::new(),
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn snapshot_with_recorder_crate(
+    _source: &Path,
+    _out: &Path,
+    _options: SnapshotOptions,
+) -> Result<SnapshotReport, NextFrameError> {
+    Err(NextFrameError::new(
+        NextFrameErrorCode::NextframeNotFound,
+        "nf-recorder crate snapshot is only available on macOS",
+        "embedded mode required",
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn export_with_recorder_crate(
+    artifact: &CompositionArtifact,
+    out: &Path,
+    options: ExportOptions,
+) -> Result<ExportReport, NextFrameError> {
+    let source = render_source_path(&artifact.composition_path);
+    ensure_parent(out, NextFrameErrorCode::ExportFailed)?;
+    let summary = nf_recorder::validate_render_source_file(&source).map_err(|err| {
+        NextFrameError::new(
+            NextFrameErrorCode::ExportFailed,
+            format!("nf-recorder source validation failed: {err}"),
+            "next step · rerun capy nextframe compile",
+        )
+    })?;
+    let fps = options.fps.max(1);
+    let stats = recorder_runtime()?
+        .block_on(nf_recorder::run_export_from_source(
+            &source,
+            out,
+            nf_recorder::ExportOpts {
+                duration_s: summary.duration_ms as f64 / 1000.0,
+                viewport: summary.viewport,
+                fps,
+                ..Default::default()
+            },
+        ))
+        .map_err(|err| {
+            NextFrameError::new(
+                NextFrameErrorCode::ExportFailed,
+                format!("nf-recorder crate export failed: {err}"),
+                "next step · rerun CAPY_NEXTFRAME_MODE=crate capy nextframe export",
+            )
+        })?;
+
+    Ok(ExportReport {
+        ok: true,
+        output: out.to_path_buf(),
+        command: recorder_export_command(&source, out, fps),
+        stdout: serde_json::to_string(&serde_json::json!({
+            "path": stats.path,
+            "frames": stats.frames,
+            "duration_ms": stats.duration_ms,
+            "size_bytes": stats.size_bytes,
+            "moov_front": stats.moov_front
+        }))
+        .unwrap_or_default(),
+        stderr: String::new(),
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn export_with_recorder_crate(
+    _artifact: &CompositionArtifact,
+    _out: &Path,
+    _options: ExportOptions,
+) -> Result<ExportReport, NextFrameError> {
+    Err(NextFrameError::new(
+        NextFrameErrorCode::NextframeNotFound,
+        "nf-recorder crate export is only available on macOS",
+        "embedded mode required",
+    ))
+}
+
+fn render_source_path(composition_path: &Path) -> PathBuf {
+    composition_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("render_source.json")
+}
+
+fn recorder_snapshot_command(source: &Path, out: &Path, t_ms: u64) -> Vec<String> {
+    vec![
+        "nf-recorder".to_string(),
+        "snapshot-source".to_string(),
+        "--source".to_string(),
+        source.display().to_string(),
+        "--t-ms".to_string(),
+        t_ms.to_string(),
+        "--output".to_string(),
+        out.display().to_string(),
+    ]
+}
+
+fn recorder_export_command(source: &Path, out: &Path, fps: u32) -> Vec<String> {
+    vec![
+        "nf-recorder".to_string(),
+        "export".to_string(),
+        "--source".to_string(),
+        source.display().to_string(),
+        "--profile".to_string(),
+        "draft".to_string(),
+        "--output".to_string(),
+        out.display().to_string(),
+        "--fps".to_string(),
+        fps.to_string(),
+    ]
+}
+
+#[cfg(target_os = "macos")]
+fn parse_resolution(raw: &str) -> Result<nf_recorder::ExportResolution, NextFrameError> {
+    nf_recorder::ExportResolution::parse_str(raw).ok_or_else(|| {
+        NextFrameError::new(
+            NextFrameErrorCode::SnapshotFailed,
+            format!("unsupported snapshot resolution: {raw}"),
+            "next step · pass resolution 720p, 1080p, or 4k",
+        )
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn recorder_runtime() -> Result<tokio::runtime::Runtime, NextFrameError> {
+    if !current_exe_is_macos_app_bundle() {
+        return Err(NextFrameError::new(
+            NextFrameErrorCode::NextframeNotFound,
+            "nf-recorder crate mode requires a macOS app bundle CEF runtime",
+            "embedded mode required",
+        ));
+    }
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| {
+            NextFrameError::new(
+                NextFrameErrorCode::NextframeNotFound,
+                format!("create nf-recorder runtime failed: {err}"),
+                "embedded mode required",
+            )
+        })
+}
+
+#[cfg(target_os = "macos")]
+fn current_exe_is_macos_app_bundle() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| {
+            let contents_dir = exe.parent()?.parent()?;
+            let app_dir = contents_dir.parent()?;
+            let has_contents = contents_dir.file_name()?.to_str()? == "Contents";
+            let has_app_extension = app_dir.extension()?.to_str()? == "app";
+            Some(has_contents && has_app_extension)
+        })
+        .unwrap_or(false)
+}
+
+fn ensure_parent(path: &Path, code: NextFrameErrorCode) -> Result<(), NextFrameError> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(|err| {
+            NextFrameError::new(
+                code,
+                format!("create output parent failed: {err}"),
+                "next step · check output directory permissions",
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn read_json(path: &Path, code: NextFrameErrorCode) -> Result<Value, NextFrameError> {
@@ -209,7 +443,7 @@ mod tests {
 
     use serde_json::json;
 
-    use super::CrateAdapter;
+    use super::{CrateAdapter, recorder_export_command, recorder_snapshot_command};
     use crate::ports::{CompositionArtifact, NextFrameProjectPort};
 
     #[test]
@@ -259,6 +493,44 @@ mod tests {
         assert_eq!(value["errors"].as_array().map(Vec::len), Some(1));
         fs::remove_dir_all(project_parent(&dir)?)?;
         Ok(())
+    }
+
+    #[test]
+    fn recorder_snapshot_command_targets_source_api() {
+        let command = recorder_snapshot_command(
+            Path::new("/tmp/render_source.json"),
+            Path::new("/tmp/frame.png"),
+            42,
+        );
+
+        assert_eq!(command[0], "nf-recorder");
+        assert_eq!(command[1], "snapshot-source");
+        assert!(command.contains(&"--source".to_string()));
+        assert!(command.contains(&"--t-ms".to_string()));
+        assert!(command.contains(&"42".to_string()));
+        assert!(command.contains(&"/tmp/frame.png".to_string()));
+    }
+
+    #[test]
+    fn recorder_export_command_carries_fps() {
+        let command = recorder_export_command(
+            Path::new("/tmp/render_source.json"),
+            Path::new("/tmp/out.mp4"),
+            24,
+        );
+
+        assert_eq!(command[0], "nf-recorder");
+        assert_eq!(command[1], "export");
+        assert!(command.contains(&"--source".to_string()));
+        assert!(command.contains(&"--fps".to_string()));
+        assert!(command.contains(&"24".to_string()));
+        assert!(command.contains(&"/tmp/out.mp4".to_string()));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn unit_test_binary_is_not_treated_as_app_bundle() {
+        assert!(!super::current_exe_is_macos_app_bundle());
     }
 
     #[test]

@@ -88,6 +88,7 @@ pub struct SnapshotFailure {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotMode {
+    Crate,
     Binary,
     Embedded,
 }
@@ -95,6 +96,7 @@ pub enum SnapshotMode {
 impl SnapshotMode {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Crate => "crate",
             Self::Binary => "binary",
             Self::Embedded => "embedded",
         }
@@ -132,3 +134,13 @@ impl std::fmt::Display for SnapshotError {
 }
 
 impl std::error::Error for SnapshotError {}
+
+#[cfg(test)]
+mod tests {
+    use super::SnapshotMode;
+
+    #[test]
+    fn serializes_crate_snapshot_mode() {
+        assert_eq!(SnapshotMode::Crate.as_str(), "crate");
+    }
+}

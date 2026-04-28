@@ -9,7 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub use report::{ExportCompositionRequest, ExportError, ExportKind, ExportReport, ExportStatus};
 
 use self::report::{ExportFailure, ExportMode, ExportSuccess};
+use crate::adapter::crate_adapter::CrateAdapter;
 use crate::config::NextFrameMode;
+use crate::ports::{CompositionArtifact, ExportOptions, NextFrameRecorderPort};
 
 pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
     let composition_path = absolute_path(&req.composition_path);
@@ -82,36 +84,57 @@ pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
         }
     };
 
-    if mode == NextFrameMode::Binary {
-        match binary::export_with_binary(&context.render_source_path, &context.output_path, req.fps)
-        {
-            binary::BinaryExport::Exported => {
-                return metrics_success(context, duration_ms, frame_count, ExportMode::Binary);
+    match mode {
+        NextFrameMode::Crate => {
+            let artifact = artifact_for_path(&context.composition_path);
+            if CrateAdapter::default()
+                .export(
+                    &artifact,
+                    &context.output_path,
+                    ExportOptions {
+                        profile: "draft".to_string(),
+                        fps: req.fps,
+                    },
+                )
+                .is_ok()
+            {
+                return metrics_success(context, duration_ms, frame_count, ExportMode::Crate);
             }
-            binary::BinaryExport::Failed(error) => {
-                return failure(
-                    context,
-                    duration_ms,
-                    frame_count,
-                    Some(ExportMode::Binary),
-                    error,
-                );
+        }
+        NextFrameMode::Binary => {
+            match binary::export_with_binary(
+                &context.render_source_path,
+                &context.output_path,
+                req.fps,
+            ) {
+                binary::BinaryExport::Exported => {
+                    return metrics_success(context, duration_ms, frame_count, ExportMode::Binary);
+                }
+                binary::BinaryExport::Failed(error) => {
+                    return failure(
+                        context,
+                        duration_ms,
+                        frame_count,
+                        Some(ExportMode::Binary),
+                        error,
+                    );
+                }
+                binary::BinaryExport::Missing if req.strict_binary => {
+                    return failure(
+                        context,
+                        duration_ms,
+                        frame_count,
+                        None,
+                        ExportError::new(
+                            "NEXTFRAME_NOT_FOUND",
+                            "$.binary",
+                            "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
+                            "next step · install nf-recorder or rerun without --strict-binary",
+                        ),
+                    );
+                }
+                binary::BinaryExport::Missing => {}
             }
-            binary::BinaryExport::Missing if req.strict_binary => {
-                return failure(
-                    context,
-                    duration_ms,
-                    frame_count,
-                    None,
-                    ExportError::new(
-                        "NEXTFRAME_NOT_FOUND",
-                        "$.binary",
-                        "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
-                        "next step · install nf-recorder or rerun without --strict-binary",
-                    ),
-                );
-            }
-            binary::BinaryExport::Missing => {}
         }
     }
 
@@ -218,6 +241,33 @@ fn default_output_path(composition_path: &Path, kind: ExportKind) -> PathBuf {
         .unwrap_or_else(|| Path::new("."))
         .join("exports")
         .join(format!("export.{}", kind.as_str()))
+}
+
+fn artifact_for_path(composition_path: &Path) -> CompositionArtifact {
+    let composition_id = composition_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.trim().is_empty())
+        .unwrap_or("composition")
+        .to_string();
+    let project_root = composition_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let project_slug = project_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("capy-nextframe")
+        .to_string();
+
+    CompositionArtifact {
+        project_slug,
+        composition_id,
+        project_root,
+        composition_path: composition_path.to_path_buf(),
+        component_paths: Vec::new(),
+    }
 }
 
 fn render_source_path(composition_path: &Path) -> PathBuf {

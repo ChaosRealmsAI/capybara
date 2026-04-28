@@ -145,6 +145,7 @@ pub struct ExportFailure {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportMode {
+    Crate,
     Binary,
     Embedded,
 }
@@ -152,6 +153,7 @@ pub enum ExportMode {
 impl ExportMode {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Crate => "crate",
             Self::Binary => "binary",
             Self::Embedded => "embedded",
         }
@@ -189,3 +191,13 @@ impl std::fmt::Display for ExportError {
 }
 
 impl std::error::Error for ExportError {}
+
+#[cfg(test)]
+mod tests {
+    use super::ExportMode;
+
+    #[test]
+    fn serializes_crate_export_mode() {
+        assert_eq!(ExportMode::Crate.as_str(), "crate");
+    }
+}
