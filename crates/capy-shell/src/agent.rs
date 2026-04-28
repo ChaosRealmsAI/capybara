@@ -1,5 +1,6 @@
+use std::env;
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
@@ -9,6 +10,16 @@ use tao::event_loop::EventLoopProxy;
 
 use crate::app::ShellEvent;
 use crate::store::{Conversation, CreateRunEvent, Provider, Store};
+
+const GUI_TOOL_PATH_DIRS: &[&str] = &[
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/opt/local/bin",
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+];
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -153,18 +164,20 @@ fn run_claude(
     run_id: &str,
     prompt: &str,
 ) -> Result<RunOutput, String> {
-    let mut command = Command::new("claude");
+    let launch = tool_launch("claude");
+    let mut command = Command::new(&launch.program);
     let use_resume = store
         .messages_for(&conversation.id)?
         .iter()
         .any(|message| message.role == "assistant");
     command.args(claude_args(conversation, prompt, use_resume));
     command.current_dir(&conversation.cwd);
+    command.env("PATH", &launch.path_env);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let mut child = command
         .spawn()
-        .map_err(|err| format!("claude failed to start: {err}"))?;
+        .map_err(|err| format!("claude failed to start using {}: {err}", launch.display()))?;
     store.set_run_pid(run_id, child.id())?;
     let stdout = child
         .stdout
@@ -229,17 +242,22 @@ fn run_codex(
     run_id: &str,
     prompt: &str,
 ) -> Result<RunOutput, String> {
-    let mut command = Command::new("codex");
+    let launch = tool_launch("codex");
+    let mut command = Command::new(&launch.program);
     command.arg("app-server");
     command.args(codex_app_server_args(&conversation.config));
     command.arg("--listen").arg("stdio://");
     command
+        .env("PATH", &launch.path_env)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    let mut child = command
-        .spawn()
-        .map_err(|err| format!("codex app-server failed to start: {err}"))?;
+    let mut child = command.spawn().map_err(|err| {
+        format!(
+            "codex app-server failed to start using {}: {err}",
+            launch.display()
+        )
+    })?;
     store.set_run_pid(run_id, child.id())?;
 
     let mut stdin = child
@@ -705,13 +723,70 @@ fn codex_sandbox_policy(value: &str) -> Value {
 }
 
 fn tool_version(bin: &str, args: &[&str]) -> Value {
-    match Command::new(bin).args(args).output() {
+    let launch = tool_launch(bin);
+    match Command::new(&launch.program)
+        .env("PATH", &launch.path_env)
+        .args(args)
+        .output()
+    {
         Ok(output) => json!({
             "available": output.status.success(),
             "version": String::from_utf8_lossy(&output.stdout).trim(),
             "error": String::from_utf8_lossy(&output.stderr).trim()
         }),
         Err(err) => json!({ "available": false, "error": err.to_string() }),
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ToolLaunch {
+    program: PathBuf,
+    path_env: String,
+}
+
+impl ToolLaunch {
+    fn display(&self) -> String {
+        self.program.display().to_string()
+    }
+}
+
+fn tool_launch(bin: &str) -> ToolLaunch {
+    let path_env = desktop_tool_path_env();
+    let program = resolve_tool_path(bin, &path_env).unwrap_or_else(|| PathBuf::from(bin));
+    ToolLaunch { program, path_env }
+}
+
+fn resolve_tool_path(bin: &str, path_env: &str) -> Option<PathBuf> {
+    let path = Path::new(bin);
+    if path.is_absolute() || bin.contains('/') {
+        return path.is_file().then(|| path.to_path_buf());
+    }
+    env::split_paths(path_env)
+        .map(|dir| dir.join(bin))
+        .find(|candidate| candidate.is_file())
+}
+
+fn desktop_tool_path_env() -> String {
+    let mut dirs: Vec<PathBuf> = env::var_os("PATH")
+        .map(|value| env::split_paths(&value).collect())
+        .unwrap_or_default();
+    for fallback in GUI_TOOL_PATH_DIRS {
+        push_unique_path(&mut dirs, PathBuf::from(fallback));
+    }
+    if let Some(home) = env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        push_unique_path(&mut dirs, home.join(".local/bin"));
+        push_unique_path(&mut dirs, home.join(".cargo/bin"));
+    }
+    env::join_paths(dirs)
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn push_unique_path(dirs: &mut Vec<PathBuf>, dir: PathBuf) {
+    if !dirs.iter().any(|existing| existing == &dir) {
+        dirs.push(dir);
     }
 }
 
@@ -774,10 +849,14 @@ fn emit(proxy: &EventLoopProxy<ShellEvent>, event: AgentRuntimeEvent) {
 mod tests {
     use super::{
         claude_args, claude_delta, codex_app_server_args, codex_resume_params, codex_sandbox_mode,
-        codex_sandbox_policy, codex_start_params, codex_turn_params,
+        codex_sandbox_policy, codex_start_params, codex_turn_params, desktop_tool_path_env,
+        resolve_tool_path,
     };
     use crate::store::{Conversation, Provider};
     use serde_json::json;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn extracts_claude_assistant_text() {
@@ -1106,6 +1185,37 @@ mod tests {
         assert_eq!(turn["approvalPolicy"], json!("never"));
         assert_eq!(turn["sandboxPolicy"], json!({ "type": "dangerFullAccess" }));
 
+        Ok(())
+    }
+
+    #[test]
+    fn desktop_tool_path_env_includes_common_gui_missing_dirs() {
+        let path_env = desktop_tool_path_env();
+        let dirs: Vec<PathBuf> = std::env::split_paths(&path_env).collect();
+
+        assert!(dirs.contains(&PathBuf::from("/opt/homebrew/bin")));
+        assert!(dirs.contains(&PathBuf::from("/usr/local/bin")));
+    }
+
+    #[test]
+    fn resolves_tool_from_augmented_path_env() -> Result<(), Box<dyn std::error::Error>> {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|err| format!("time should be available: {err}"))?
+            .as_nanos();
+        let temp_dir =
+            std::env::temp_dir().join(format!("capy-tool-path-{}-{suffix}", std::process::id()));
+        fs::create_dir_all(&temp_dir)?;
+        let codex = temp_dir.join("codex");
+        fs::write(&codex, "#!/bin/sh\n")?;
+
+        let path_env = std::env::join_paths([temp_dir.clone()])?
+            .to_string_lossy()
+            .into_owned();
+        let resolved = resolve_tool_path("codex", &path_env);
+
+        let _cleanup = fs::remove_dir_all(&temp_dir);
+        assert_eq!(resolved, Some(codex));
         Ok(())
     }
 }
