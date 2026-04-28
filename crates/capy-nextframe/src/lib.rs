@@ -1,4 +1,5 @@
 pub mod adapter;
+pub mod compile;
 pub mod compose;
 pub mod config;
 pub mod doctor;
@@ -7,6 +8,7 @@ pub mod ports;
 pub mod validate;
 
 pub use adapter::binary::BinaryAdapter;
+pub use compile::{CompileCompositionRequest, CompileError, CompileReport, compile_composition};
 pub use compose::{
     ComposePosterFailure, ComposePosterRequest, ComposePosterResult, compose_poster,
 };
@@ -14,7 +16,7 @@ pub use config::{BinaryDiscovery, NextFrameConfig, ResolvedBinary, ResolvedNextF
 pub use doctor::{DoctorReport, doctor};
 pub use error::{ErrorBody, NextFrameError, NextFrameErrorCode};
 pub use ports::{
-    CompileReport, CompositionArtifact, ExportOptions, ExportReport, NextFrameProjectPort,
-    NextFrameRecorderPort, SnapshotOptions, SnapshotReport, ValidationReport,
+    CompositionArtifact, ExportOptions, ExportReport, NextFrameProjectPort, NextFrameRecorderPort,
+    SnapshotOptions, SnapshotReport, ValidationReport,
 };
 pub use validate::{ValidateCompositionRequest, validate_composition};

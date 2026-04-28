@@ -234,6 +234,134 @@ fn nextframe_validate_strict_binary_requires_nf() -> Result<(), Box<dyn std::err
     Ok(())
 }
 
+#[test]
+fn nextframe_compile_writes_render_source_embedded() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("compile-happy")?;
+    let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
+    let compose = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--out",
+            &dir.display().to_string(),
+        ])
+        .output()?;
+    assert!(compose.status.success());
+    let composed: serde_json::Value = serde_json::from_slice(&compose.stdout)?;
+    let composition_path = composed["composition_path"]
+        .as_str()
+        .ok_or("composition_path should be a string")?;
+
+    let output = capy_command()?
+        .env("PATH", "/definitely/not/on/path")
+        .env_remove("CAPY_NF")
+        .args(["nextframe", "compile", "--composition", composition_path])
+        .output()?;
+
+    assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["stage"], "compile");
+    assert_eq!(value["compile_mode"], "embedded");
+    assert_eq!(value["render_source_schema"], "nf.render_source.v1");
+    let render_source_path = value["render_source_path"]
+        .as_str()
+        .ok_or("render_source_path should be a string")?;
+    assert!(Path::new(render_source_path).is_file());
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn nextframe_compile_reports_missing_composition() -> Result<(), Box<dyn std::error::Error>> {
+    let output = capy_command()?
+        .env("PATH", "/definitely/not/on/path")
+        .env_remove("CAPY_NF")
+        .args([
+            "nextframe",
+            "compile",
+            "--composition",
+            "/definitely/not/composition.json",
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["errors"][0]["code"], "COMPOSITION_NOT_FOUND");
+    Ok(())
+}
+
+#[test]
+fn nextframe_compile_reports_invalid_composition() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("compile-invalid")?;
+    let composition = dir.join("composition.json");
+    fs::write(
+        &composition,
+        r#"{"schema":"nextframe.composition.v2","schema_version":"capy.composition.v1","id":"broken","title":"broken","name":"broken","duration_ms":1000,"duration":"1000ms","viewport":{"w":1920,"h":1080,"ratio":"16:9"},"theme":"default","tracks":[],"assets":[]}"#,
+    )?;
+
+    let output = capy_command()?
+        .env("PATH", "/definitely/not/on/path")
+        .env_remove("CAPY_NF")
+        .args([
+            "nextframe",
+            "compile",
+            "--composition",
+            &composition.display().to_string(),
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["errors"][0]["code"], "INVALID_COMPOSITION");
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn nextframe_compile_strict_binary_requires_nf() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = unique_dir("compile-strict")?;
+    let input = workspace_root()?.join("fixtures/poster/sample-poster.json");
+    let compose = capy_command()?
+        .args([
+            "nextframe",
+            "compose-poster",
+            "--input",
+            &input.display().to_string(),
+            "--out",
+            &dir.display().to_string(),
+        ])
+        .output()?;
+    assert!(compose.status.success());
+    let composed: serde_json::Value = serde_json::from_slice(&compose.stdout)?;
+    let composition_path = composed["composition_path"]
+        .as_str()
+        .ok_or("composition_path should be a string")?;
+
+    let output = capy_command()?
+        .env("PATH", "/definitely/not/on/path")
+        .env_remove("CAPY_NF")
+        .args([
+            "nextframe",
+            "compile",
+            "--composition",
+            composition_path,
+            "--strict-binary",
+        ])
+        .output()?;
+
+    assert!(!output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    assert_eq!(value["ok"], false);
+    assert_eq!(value["errors"][0]["code"], "NEXTFRAME_NOT_FOUND");
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
 fn capy_command() -> Result<Command, Box<dyn std::error::Error>> {
     let path = std::env::var("CARGO_BIN_EXE_capy")?;
     Ok(Command::new(path))

@@ -73,41 +73,32 @@ pub fn handle(args: PosterArgs) -> Result<(), String> {
 
 fn validate(args: PosterValidateArgs) -> Result<(), String> {
     let document = capy_poster::read_document(&args.input).map_err(|err| err.to_string())?;
-    let report =
-        capy_poster::compile_render_source(&document, capy_poster::CompileOptions::default())
-            .map_err(|err| err.to_string())?;
     print_json(&json!({
         "ok": true,
         "input": args.input,
         "version": document.version,
         "canvas": document.canvas,
-        "layers": report.layer_count,
-        "assets": report.asset_count,
-        "generated_assets": report.generated_assets
+        "layers": document.layers.len(),
+        "assets": document.assets.len(),
+        "generated_assets": document.assets.values().filter(|asset| asset.provenance.is_some()).count()
     }))
 }
 
 fn compile(args: PosterCompileArgs) -> Result<(), String> {
-    let document = capy_poster::read_document(&args.input).map_err(|err| err.to_string())?;
-    let report = capy_poster::compile_render_source(
-        &document,
-        capy_poster::CompileOptions {
-            duration_ms: args.duration_ms,
-        },
-    )
-    .map_err(|err| err.to_string())?;
-    capy_poster::write_render_source(&args.out, &report).map_err(|err| err.to_string())?;
+    let report = compile_to_file(PosterCompileArgs {
+        input: args.input.clone(),
+        out: args.out.clone(),
+        duration_ms: args.duration_ms,
+    })?;
     print_json(&json!({
         "ok": true,
         "input": args.input,
         "out": args.out,
-        "schema_version": report.schema_version,
-        "component": report.component,
+        "schema_version": report.render_source_schema,
         "duration_ms": report.duration_ms,
-        "viewport": report.viewport,
-        "layers": report.layer_count,
-        "assets": report.asset_count,
-        "generated_assets": report.generated_assets
+        "render_source_path": report.render_source_path,
+        "compile_mode": report.compile_mode,
+        "deprecated": "capy poster compile forwards to capy nextframe compile"
     }))
 }
 
@@ -152,16 +143,61 @@ fn snapshot(args: PosterSnapshotArgs) -> Result<(), String> {
     }))
 }
 
-fn compile_to_file(args: PosterCompileArgs) -> Result<(), String> {
-    let document = capy_poster::read_document(&args.input).map_err(|err| err.to_string())?;
-    let report = capy_poster::compile_render_source(
-        &document,
-        capy_poster::CompileOptions {
-            duration_ms: args.duration_ms,
-        },
-    )
-    .map_err(|err| err.to_string())?;
-    capy_poster::write_render_source(&args.out, &report).map_err(|err| err.to_string())
+fn compile_to_file(args: PosterCompileArgs) -> Result<capy_nextframe::CompileReport, String> {
+    let output = legacy_render_source_path(&args.out);
+    let composition_dir = output
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    let compose = capy_nextframe::compose_poster(capy_nextframe::ComposePosterRequest {
+        poster_path: args.input,
+        project_slug: None,
+        composition_id: None,
+        output_dir: Some(composition_dir),
+        duration_ms: args.duration_ms,
+    })
+    .map_err(|err| err.body.message)?;
+    let report = capy_nextframe::compile_composition(capy_nextframe::CompileCompositionRequest {
+        composition_path: compose.composition_path,
+        strict_binary: false,
+    });
+    if !report.ok {
+        let message = report
+            .errors
+            .first()
+            .map(|err| format!("{}: {} · {}", err.code, err.message, err.hint))
+            .unwrap_or_else(|| {
+                "COMPILE_FAILED: compile failed · next step · rerun capy nextframe validate"
+                    .to_string()
+            });
+        return Err(message);
+    }
+    if report.render_source_path != output {
+        if let Some(parent) = output
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            std::fs::create_dir_all(parent)
+                .map_err(|err| format!("create output directory {}: {err}", parent.display()))?;
+        }
+        std::fs::copy(&report.render_source_path, &output).map_err(|err| {
+            format!(
+                "copy render_source {} to {}: {err}",
+                report.render_source_path.display(),
+                output.display()
+            )
+        })?;
+    }
+    Ok(report)
+}
+
+fn legacy_render_source_path(out: &Path) -> PathBuf {
+    if out.extension().is_some() {
+        out.to_path_buf()
+    } else {
+        out.join("render_source.json")
+    }
 }
 
 fn default_render_source_path(output: &Path) -> PathBuf {

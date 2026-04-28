@@ -17,6 +17,8 @@ enum NextFrameCommand {
     ComposePoster(NextFrameComposePosterArgs),
     #[command(about = "Validate a NextFrame composition JSON document")]
     Validate(NextFrameValidateArgs),
+    #[command(about = "Compile a NextFrame composition JSON document")]
+    Compile(NextFrameCompileArgs),
 }
 
 #[derive(Debug, Args)]
@@ -51,11 +53,20 @@ struct NextFrameValidateArgs {
     strict_binary: bool,
 }
 
+#[derive(Debug, Args)]
+struct NextFrameCompileArgs {
+    #[arg(long)]
+    composition: PathBuf,
+    #[arg(long)]
+    strict_binary: bool,
+}
+
 pub fn handle(args: NextFrameArgs) -> Result<(), String> {
     match args.command {
         NextFrameCommand::Doctor(args) => doctor(args),
         NextFrameCommand::ComposePoster(args) => compose_poster(args),
         NextFrameCommand::Validate(args) => validate(args),
+        NextFrameCommand::Compile(args) => compile(args),
     }
 }
 
@@ -87,6 +98,19 @@ fn compose_poster(args: NextFrameComposePosterArgs) -> Result<(), String> {
 
 fn validate(args: NextFrameValidateArgs) -> Result<(), String> {
     let report = capy_nextframe::validate_composition(capy_nextframe::ValidateCompositionRequest {
+        composition_path: args.composition,
+        strict_binary: args.strict_binary,
+    });
+    print_json(&report)?;
+    if report.ok {
+        Ok(())
+    } else {
+        std::process::exit(1);
+    }
+}
+
+fn compile(args: NextFrameCompileArgs) -> Result<(), String> {
+    let report = capy_nextframe::compile_composition(capy_nextframe::CompileCompositionRequest {
         composition_path: args.composition,
         strict_binary: args.strict_binary,
     });

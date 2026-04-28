@@ -1,4 +1,6 @@
+#[allow(dead_code)]
 mod component;
+#[deprecated(note = "use capy-nextframe::compile instead · removed v0.13.14")]
 mod render_source;
 mod types;
 
@@ -8,7 +10,6 @@ use std::path::Path;
 
 use thiserror::Error;
 
-pub use render_source::{CompileOptions, RenderSourceReport, compile_render_source};
 pub use types::{PosterAsset, PosterCanvas, PosterDocument, PosterLayer, PosterLayerKind};
 
 #[derive(Debug, Error)]
@@ -41,7 +42,13 @@ pub fn read_document(path: &Path) -> Result<PosterDocument> {
     Ok(document)
 }
 
-pub fn write_render_source(path: &Path, report: &RenderSourceReport) -> Result<()> {
+#[deprecated(note = "use capy-nextframe::compile instead · removed v0.13.14")]
+#[doc(hidden)]
+#[allow(dead_code, deprecated)]
+pub(crate) fn write_render_source(
+    path: &Path,
+    report: &render_source::RenderSourceReport,
+) -> Result<()> {
     if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -165,6 +172,7 @@ fn validate_shape_layer(layer: &PosterLayer) -> Result<()> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -261,7 +269,10 @@ mod tests {
     #[test]
     fn compiles_render_source_contract() -> Result<()> {
         let document = sample_document()?;
-        let report = compile_render_source(&document, CompileOptions::default())?;
+        let report = render_source::compile_render_source(
+            &document,
+            render_source::CompileOptions::default(),
+        )?;
         assert_eq!(
             report
                 .source

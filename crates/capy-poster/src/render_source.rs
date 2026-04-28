@@ -1,3 +1,5 @@
+#![allow(dead_code, deprecated)]
+
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -37,7 +39,8 @@ pub struct RenderViewport {
     pub ratio: String,
 }
 
-pub fn compile_render_source(
+#[deprecated(note = "use capy-nextframe::compile instead · removed v0.13.14")]
+pub(crate) fn compile_render_source(
     document: &PosterDocument,
     options: CompileOptions,
 ) -> Result<RenderSourceReport> {

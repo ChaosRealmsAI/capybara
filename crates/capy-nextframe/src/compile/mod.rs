@@ -1,0 +1,353 @@
+pub mod binary;
+pub mod embedded;
+pub mod report;
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+use crate::compile::binary::BinaryCompile;
+use crate::compile::embedded::RENDER_SOURCE_SCHEMA;
+pub use crate::compile::report::{
+    CompileCompositionRequest, CompileError, CompileMode, CompileReport, CompileSuccess,
+};
+use crate::compose::CompositionDocument;
+use crate::validate;
+
+pub fn compile_composition(req: CompileCompositionRequest) -> CompileReport {
+    let started = Instant::now();
+    let trace_id = trace_id();
+    let composition_path = absolute_path(&req.composition_path);
+    let render_source_path = render_source_path(&composition_path);
+
+    let validation = validate::validate_composition(validate::ValidateCompositionRequest {
+        composition_path: composition_path.clone(),
+        strict_binary: false,
+    });
+    if !validation.ok {
+        return validation_failure(
+            trace_id,
+            composition_path,
+            render_source_path,
+            started,
+            validation,
+        );
+    }
+
+    match binary::compile_with_binary(&composition_path, &render_source_path) {
+        BinaryCompile::Compiled => {
+            return success(
+                trace_id,
+                composition_path,
+                render_source_path,
+                started,
+                validation.track_count,
+                CompileMode::Binary,
+            );
+        }
+        BinaryCompile::Failed(error) => {
+            return CompileReport::failure(
+                trace_id,
+                composition_path,
+                render_source_path,
+                started.elapsed().as_millis(),
+                vec![error],
+            );
+        }
+        BinaryCompile::Missing if req.strict_binary => {
+            return CompileReport::failure(
+                trace_id,
+                composition_path,
+                render_source_path,
+                started.elapsed().as_millis(),
+                vec![CompileError::new(
+                    "NEXTFRAME_NOT_FOUND",
+                    "$.binary",
+                    "nf was not found on PATH or CAPY_NF",
+                    "next step · install nf or rerun without --strict-binary",
+                )],
+            );
+        }
+        BinaryCompile::Missing => {}
+    }
+
+    let composition = match read_composition(&composition_path) {
+        Ok(composition) => composition,
+        Err(error) => {
+            return CompileReport::failure(
+                trace_id,
+                composition_path,
+                render_source_path,
+                started.elapsed().as_millis(),
+                vec![error],
+            );
+        }
+    };
+    embedded_result(
+        trace_id,
+        composition_path,
+        render_source_path,
+        started,
+        composition,
+    )
+}
+
+fn validation_failure(
+    trace_id: String,
+    composition_path: PathBuf,
+    render_source_path: PathBuf,
+    started: Instant,
+    validation: validate::ValidationReport,
+) -> CompileReport {
+    CompileReport::failure(
+        trace_id,
+        composition_path,
+        render_source_path,
+        started.elapsed().as_millis(),
+        validation
+            .errors
+            .into_iter()
+            .map(|err| {
+                let code = match err.code.as_str() {
+                    "COMPOSITION_NOT_FOUND" => err.code,
+                    _ => "INVALID_COMPOSITION".to_string(),
+                };
+                CompileError::new(code, err.path, err.message, err.hint)
+            })
+            .collect(),
+    )
+}
+
+fn embedded_result(
+    trace_id: String,
+    composition_path: PathBuf,
+    render_source_path: PathBuf,
+    started: Instant,
+    composition: CompositionDocument,
+) -> CompileReport {
+    match embedded::compile_embedded(&composition, &render_source_path) {
+        Ok(report) => success(
+            trace_id,
+            composition_path,
+            render_source_path,
+            started,
+            report.track_count,
+            CompileMode::Embedded,
+        ),
+        Err(error) => CompileReport::failure(
+            trace_id,
+            composition_path,
+            render_source_path,
+            started.elapsed().as_millis(),
+            vec![error],
+        ),
+    }
+}
+
+fn success(
+    trace_id: String,
+    composition_path: PathBuf,
+    render_source_path: PathBuf,
+    started: Instant,
+    track_count: usize,
+    compile_mode: CompileMode,
+) -> CompileReport {
+    CompileReport::success(CompileSuccess {
+        trace_id,
+        composition_path,
+        render_source_path,
+        render_source_schema: RENDER_SOURCE_SCHEMA.to_string(),
+        duration_ms: started.elapsed().as_millis(),
+        track_count,
+        compile_mode,
+        warnings: Vec::new(),
+    })
+}
+
+fn read_composition(path: &Path) -> Result<CompositionDocument, CompileError> {
+    let text = fs::read_to_string(path).map_err(|err| {
+        CompileError::new(
+            "COMPILE_FAILED",
+            "$",
+            format!("read composition failed: {err}"),
+            "next step · check composition path and permissions",
+        )
+    })?;
+    serde_json::from_str(&text).map_err(|err| {
+        CompileError::new(
+            "INVALID_COMPOSITION",
+            "$",
+            format!("composition JSON is invalid: {err}"),
+            "next step · rerun capy nextframe validate",
+        )
+    })
+}
+
+fn render_source_path(composition_path: &Path) -> PathBuf {
+    composition_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("render_source.json")
+}
+
+fn absolute_path(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    }
+}
+
+fn trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("compile-{millis}-{}", std::process::id())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    use serde_json::json;
+
+    use super::{CompileCompositionRequest, compile_composition};
+
+    #[test]
+    fn embedded_compile_writes_render_source() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_dir("happy")?;
+        let composition = write_composition(&dir, valid_composition())?;
+
+        let report = compile_composition(CompileCompositionRequest {
+            composition_path: composition,
+            strict_binary: false,
+        });
+
+        assert!(report.ok);
+        assert_eq!(report.compile_mode, "embedded");
+        assert_eq!(report.render_source_schema, "nf.render_source.v1");
+        assert!(report.render_source_path.is_file());
+        let source: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&report.render_source_path)?)?;
+        assert_eq!(source["schema_version"], "nf.render_source.v1");
+        assert_eq!(source["tracks"].as_array().map(Vec::len), Some(1));
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn reports_missing_composition() {
+        let report = compile_composition(CompileCompositionRequest {
+            composition_path: PathBuf::from("/definitely/not/composition.json"),
+            strict_binary: false,
+        });
+
+        assert!(!report.ok);
+        assert_eq!(report.errors[0].code, "COMPOSITION_NOT_FOUND");
+    }
+
+    #[test]
+    fn reports_invalid_composition_for_empty_tracks() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_dir("empty")?;
+        let composition = write_composition(&dir, json!({"tracks": []}))?;
+
+        let report = compile_composition(CompileCompositionRequest {
+            composition_path: composition,
+            strict_binary: false,
+        });
+
+        assert!(!report.ok);
+        assert_eq!(report.errors[0].code, "INVALID_COMPOSITION");
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn strict_binary_requires_nf() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = unique_dir("strict")?;
+        let composition = write_composition(&dir, valid_composition())?;
+        let old_path = std::env::var_os("PATH");
+        unsafe {
+            std::env::set_var("PATH", "/definitely/not/on/path");
+            std::env::remove_var("CAPY_NF");
+        }
+
+        let report = compile_composition(CompileCompositionRequest {
+            composition_path: composition,
+            strict_binary: true,
+        });
+
+        unsafe {
+            if let Some(path) = old_path {
+                std::env::set_var("PATH", path);
+            }
+        }
+        assert!(!report.ok);
+        assert_eq!(report.errors[0].code, "NEXTFRAME_NOT_FOUND");
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    fn valid_composition() -> serde_json::Value {
+        json!({
+            "schema": "nextframe.composition.v2",
+            "schema_version": "capy.composition.v1",
+            "id": "poster-snapshot",
+            "title": "Poster Snapshot",
+            "name": "Poster Snapshot",
+            "duration_ms": 1000,
+            "duration": "1000ms",
+            "viewport": {"w": 1920, "h": 1080, "ratio": "16:9"},
+            "theme": "default",
+            "tracks": [{
+                "id": "track-poster",
+                "kind": "component",
+                "component": "html.capy-poster",
+                "z": 10,
+                "time": {"start": "0ms", "end": "1000ms"},
+                "duration_ms": 1000,
+                "params": {"poster": {
+                    "version": "capy-poster-v0.1",
+                    "type": "poster",
+                    "canvas": {"width": 1920, "height": 1080, "aspectRatio": "16:9", "background": "#fff"},
+                    "assets": {},
+                    "layers": [{
+                        "id": "headline",
+                        "type": "text",
+                        "text": "Launch",
+                        "x": 10,
+                        "y": 10,
+                        "width": 100,
+                        "height": 40
+                    }]
+                }}
+            }],
+            "assets": []
+        })
+    }
+
+    fn write_composition(
+        dir: &Path,
+        value: serde_json::Value,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let path = dir.join("composition.json");
+        fs::write(&path, serde_json::to_vec_pretty(&value)?)?;
+        Ok(path)
+    }
+
+    fn unique_dir(label: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir().join(format!(
+            "capy-nextframe-compile-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_millis()
+        ));
+        fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+}
