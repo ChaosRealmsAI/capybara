@@ -62,7 +62,6 @@ pub fn attach_node(state: &ShellState, params: Value) -> Result<Value, String> {
     let validation =
         capy_nextframe::validate_composition(capy_nextframe::ValidateCompositionRequest {
             composition_path: path.clone(),
-            strict_binary: false,
         });
     let mut attached = AttachedCanvasNode {
         kind: KIND_NEXTFRAME_COMPOSITION.to_string(),
@@ -110,7 +109,6 @@ pub fn attach_node(state: &ShellState, params: Value) -> Result<Value, String> {
 
     let compile = capy_nextframe::compile_composition(capy_nextframe::CompileCompositionRequest {
         composition_path: path.clone(),
-        strict_binary: false,
     });
     if !compile.ok {
         let error = compile.errors.first();

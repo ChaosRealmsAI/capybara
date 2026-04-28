@@ -58,7 +58,7 @@ fn invalid_json_error(err: serde_json::Error) -> NextFrameError {
     NextFrameError::new(
         NextFrameErrorCode::PosterInvalid,
         format!("poster JSON is invalid: {err}"),
-        "next step · run capy poster validate --input <poster.json>",
+        "next step · run capy nextframe compose-poster --input <poster.json>",
     )
 }
 
@@ -66,6 +66,6 @@ fn invalid_poster_error(err: PosterError) -> NextFrameError {
     NextFrameError::new(
         NextFrameErrorCode::PosterInvalid,
         format!("poster document is invalid: {err}"),
-        "next step · run capy poster validate --input <poster.json>",
+        "next step · run capy nextframe compose-poster --input <poster.json>",
     )
 }

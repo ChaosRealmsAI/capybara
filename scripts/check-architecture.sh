@@ -50,19 +50,56 @@ check_no_new_render_source_builders() {
   local matches
   matches="$(
     rg -n '"nf\.render_source\.v1"' crates \
-      | rg -v 'capy-nextframe|capy-poster|tests|fixtures' || true
+      | rg -v 'capy-nextframe|tests|fixtures' || true
   )"
   if [[ -n "$matches" ]]; then
     echo "$matches" >&2
     fail_guardrail \
       "render_source.v1 must be produced by NextFrame compile, not new Capybara builders" \
-      "route generation through capy-nextframe or keep it in legacy capy-poster/tests/fixtures only"
+      "route generation through capy-nextframe only"
+  fi
+}
+
+check_no_nextframe_mode_env() {
+  local matches
+  local pattern="CAPY_NEXTFRAME_""MODE"
+  matches="$(rg -n "$pattern" crates frontend scripts | rg -v 'scripts/check-architecture.sh' || true)"
+  if [[ -n "$matches" ]]; then
+    echo "$matches" >&2
+    fail_guardrail \
+      "NextFrame mode env must not remain in product code" \
+      "remove mode env references; NextFrame now runs crate-only with embedded fallback"
+  fi
+}
+
+check_no_legacy_poster_render_source() {
+  local matches
+  matches="$(rg -n 'compile_render_source|write_render_source' crates || true)"
+  if [[ -n "$matches" ]]; then
+    echo "$matches" >&2
+    fail_guardrail \
+      "capy-poster legacy render_source builders must be removed" \
+      "delete legacy render_source APIs and route poster composition through capy nextframe compose-poster"
+  fi
+}
+
+check_no_binary_adapter() {
+  local matches
+  matches="$(rg -n 'BinaryAdapter|adapter/binary' crates || true)"
+  if [[ -n "$matches" ]]; then
+    echo "$matches" >&2
+    fail_guardrail \
+      "NextFrame binary adapter path must be removed" \
+      "delete BinaryAdapter references and keep CrateAdapter as the only adapter implementation"
   fi
 }
 
 check_no_nextframe_local_path
 check_nextframe_adapter_boundary
 check_no_new_render_source_builders
+check_no_nextframe_mode_env
+check_no_legacy_poster_render_source
+check_no_binary_adapter
 
 for path in \
   Cargo.toml \
@@ -123,7 +160,6 @@ rg -q '"crates/capy-poster"' Cargo.toml || fail "poster adapter crate must be a 
 rg -q '"crates/capy-scroll-media"' Cargo.toml || fail "scroll media crate must be a workspace member"
 rg -q '^capy-image-gen\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-image-gen through the workspace boundary"
 rg -q '^capy-nextframe\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-nextframe through the workspace boundary"
-rg -q '^capy-poster\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-poster through the workspace boundary"
 rg -q '^capy-image-gen\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must use capy-image-gen for desktop canvas tool calls"
 rg -q '^capy-scroll-media\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-scroll-media through the workspace boundary"
 rg -q 'CanvasCommand::GenerateImage' crates/capy-cli/src/canvas.rs || fail "capy canvas generate-image command must exist"
@@ -145,10 +181,8 @@ rg -q 'http_range' crates/capy-scroll-media/src/types.rs || fail "scroll media m
 rg -q '206' crates/capy-scroll-media/src/range_server.rs || fail "scroll media server must support HTTP 206 Partial Content"
 rg -q 'capy-multi-video-scroll-story' crates/capy-scroll-media/src/types.rs || fail "multi-video story manifest kind must be explicit"
 rg -q 'StoryPack' crates/capy-cli/src/media.rs || fail "capy media story-pack CLI must remain wired"
-rg -q 'Poster\(poster::PosterArgs\)' crates/capy-cli/src/main.rs || fail "capy poster CLI must remain wired"
 rg -q 'Nextframe\(nextframe::NextFrameArgs\)' crates/capy-cli/src/main.rs || fail "capy nextframe CLI must remain wired"
-rg -q 'nf.render_source.v1' crates/capy-poster/src/render_source.rs || fail "poster adapter must compile to NextFrame render_source.v1"
-rg -q 'capy.poster-document' crates/capy-poster/src/component.rs crates/capy-poster/src/render_source.rs || fail "poster adapter must use an explicit poster component id"
+rg -q 'capy.poster-document' crates/capy-poster/src/component.rs || fail "poster component id must remain explicit"
 if rg -n '/Users/Zhuanz/workspace/NextFrame|NextFrame/target/debug/nf-recorder' crates fixtures; then
   fail "poster adapter must not hardcode a local NextFrame checkout or recorder path"
 fi

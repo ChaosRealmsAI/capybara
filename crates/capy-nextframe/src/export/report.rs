@@ -8,7 +8,6 @@ pub struct ExportCompositionRequest {
     pub kind: ExportKind,
     pub out: Option<PathBuf>,
     pub fps: u32,
-    pub strict_binary: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,7 +145,6 @@ pub struct ExportFailure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportMode {
     Crate,
-    Binary,
     Embedded,
 }
 
@@ -154,7 +152,6 @@ impl ExportMode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Crate => "crate",
-            Self::Binary => "binary",
             Self::Embedded => "embedded",
         }
     }

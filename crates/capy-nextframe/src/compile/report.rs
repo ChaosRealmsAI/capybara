@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileCompositionRequest {
     pub composition_path: PathBuf,
-    pub strict_binary: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -78,7 +77,6 @@ pub struct CompileSuccess {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompileMode {
-    Binary,
     Crate,
     Embedded,
 }
@@ -86,7 +84,6 @@ pub enum CompileMode {
 impl CompileMode {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Binary => "binary",
             Self::Crate => "crate",
             Self::Embedded => "embedded",
         }

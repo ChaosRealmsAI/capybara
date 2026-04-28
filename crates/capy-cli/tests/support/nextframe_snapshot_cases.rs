@@ -93,34 +93,6 @@ fn nextframe_snapshot_reports_render_source_missing() -> Result<(), Box<dyn std:
     Ok(())
 }
 
-#[test]
-fn nextframe_snapshot_strict_binary_requires_recorder() -> Result<(), Box<dyn std::error::Error>> {
-    let dir = unique_dir("snapshot-strict")?;
-    let composition = dir.join("composition.json");
-    fs::write(&composition, valid_composition_text())?;
-    fs::write(dir.join("render_source.json"), valid_render_source_text())?;
-
-    let output = capy_command()?
-        .env("PATH", "/definitely/not/on/path")
-        .env_remove("CAPY_NF")
-        .env_remove("CAPY_NF_RECORDER")
-        .args([
-            "nextframe",
-            "snapshot",
-            "--composition",
-            &composition.display().to_string(),
-            "--strict-binary",
-        ])
-        .output()?;
-
-    assert!(!output.status.success());
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-    assert_eq!(value["ok"], false);
-    assert_eq!(value["errors"][0]["code"], "NEXTFRAME_NOT_FOUND");
-    fs::remove_dir_all(dir)?;
-    Ok(())
-}
-
 fn capy_command() -> Result<Command, Box<dyn std::error::Error>> {
     let path = std::env::var("CARGO_BIN_EXE_capy")?;
     Ok(Command::new(path))
@@ -144,12 +116,4 @@ fn unique_dir(label: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
     ));
     fs::create_dir_all(&dir)?;
     Ok(dir)
-}
-
-fn valid_composition_text() -> &'static str {
-    r#"{"schema":"nextframe.composition.v2","schema_version":"capy.composition.v1","id":"poster-snapshot","title":"Poster Snapshot","name":"Poster Snapshot","duration_ms":1000,"duration":"1000ms","viewport":{"w":1920,"h":1080,"ratio":"16:9"},"theme":"default","tracks":[{"id":"track-poster","kind":"component","component":"html.capy-poster","z":10,"time":{"start":"0ms","end":"1000ms"},"duration_ms":1000,"params":{"poster":{"type":"poster"}}}],"assets":[]}"#
-}
-
-fn valid_render_source_text() -> &'static str {
-    r##"{"schema_version":"nf.render_source.v1","viewport":{"w":64,"h":64},"tracks":[{"id":"poster.document","clips":[{"params":{"params":{"poster":{"canvas":{"background":"#ffffff"},"assets":{},"layers":[{"id":"box","type":"shape","shape":"rect","x":0,"y":0,"width":64,"height":64,"style":{"fill":"#eeeeee"}}]}}}}]}]}"##
 }

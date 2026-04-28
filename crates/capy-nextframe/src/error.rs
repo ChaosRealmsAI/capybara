@@ -93,12 +93,7 @@ impl NextFrameError {
 }
 
 pub fn nextframe_setup_hint() -> String {
-    [
-        "install nf via cargo install --path ",
-        "/Users/Zhuanz/workspace/",
-        "NextFrame/crates/nf-cli or set CAPY_NF env",
-    ]
-    .concat()
+    "run capy nextframe doctor, then rerun with crate adapter inputs available".to_string()
 }
 
 #[cfg(test)]
@@ -110,13 +105,13 @@ mod tests {
         let body = ErrorBody::new(
             NextFrameErrorCode::NextframeNotFound,
             "nf missing",
-            "set CAPY_NF",
+            "rerun capy nextframe doctor",
         );
         let value = serde_json::to_value(body)?;
 
         assert_eq!(value["code"], "NEXTFRAME_NOT_FOUND");
         assert_eq!(value["message"], "nf missing");
-        assert_eq!(value["hint"], "set CAPY_NF");
+        assert_eq!(value["hint"], "rerun capy nextframe doctor");
         Ok(())
     }
 }

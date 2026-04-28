@@ -28,24 +28,20 @@ pub fn verify_export(req: VerifyExportRequest) -> VerifyReport {
 
     let validate = validate_composition(ValidateCompositionRequest {
         composition_path: composition_path.clone(),
-        strict_binary: false,
     });
     let compile = compile_composition(CompileCompositionRequest {
         composition_path: composition_path.clone(),
-        strict_binary: false,
     });
     let snapshot = snapshot(SnapshotRequest {
         composition_path: composition_path.clone(),
         frame_ms: 0,
         out: None,
-        strict_binary: false,
     });
     let export = export_composition(ExportCompositionRequest {
         composition_path: composition_path.clone(),
         kind: ExportKind::Mp4,
         out: None,
         fps: 30,
-        strict_binary: false,
     });
 
     let title = composition_title(&composition_path);

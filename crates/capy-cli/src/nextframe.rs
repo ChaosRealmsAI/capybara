@@ -73,24 +73,18 @@ struct NextFrameComposePosterArgs {
 struct NextFrameValidateArgs {
     #[arg(long)]
     composition: PathBuf,
-    #[arg(long)]
-    strict_binary: bool,
 }
 
 #[derive(Debug, Args)]
 struct NextFrameCompileArgs {
     #[arg(long)]
     composition: PathBuf,
-    #[arg(long)]
-    strict_binary: bool,
 }
 
 #[derive(Debug, Args)]
 struct NextFrameRebuildArgs {
     #[arg(long)]
     composition: PathBuf,
-    #[arg(long)]
-    strict_binary: bool,
 }
 
 #[derive(Debug, Args)]
@@ -101,8 +95,6 @@ struct NextFrameSnapshotArgs {
     frame: u64,
     #[arg(long)]
     out: Option<PathBuf>,
-    #[arg(long)]
-    strict_binary: bool,
 }
 
 #[derive(Debug, Args)]
@@ -115,8 +107,6 @@ struct NextFrameExportArgs {
     out: Option<PathBuf>,
     #[arg(long, default_value_t = 30)]
     fps: u32,
-    #[arg(long)]
-    strict_binary: bool,
 }
 
 #[derive(Debug, Args)]
@@ -186,7 +176,6 @@ fn doctor(args: NextFrameDoctorArgs) -> Result<(), String> {
         nf_bin: args.nf,
         recorder_bin: args.recorder,
         home: args.home,
-        mode: None,
     });
     print_json(&report)
 }
@@ -212,7 +201,6 @@ fn compose_poster(args: NextFrameComposePosterArgs) -> Result<(), String> {
 fn rebuild(args: NextFrameRebuildArgs) -> Result<(), String> {
     let report = capy_nextframe::rebuild(capy_nextframe::RebuildRequest {
         composition_path: args.composition,
-        strict_binary: args.strict_binary,
     });
     print_json(&report)?;
     if report.ok {
@@ -225,7 +213,6 @@ fn rebuild(args: NextFrameRebuildArgs) -> Result<(), String> {
 fn validate(args: NextFrameValidateArgs) -> Result<(), String> {
     let report = capy_nextframe::validate_composition(capy_nextframe::ValidateCompositionRequest {
         composition_path: args.composition,
-        strict_binary: args.strict_binary,
     });
     print_json(&report)?;
     if report.ok {
@@ -238,7 +225,6 @@ fn validate(args: NextFrameValidateArgs) -> Result<(), String> {
 fn compile(args: NextFrameCompileArgs) -> Result<(), String> {
     let report = capy_nextframe::compile_composition(capy_nextframe::CompileCompositionRequest {
         composition_path: args.composition,
-        strict_binary: args.strict_binary,
     });
     print_json(&report)?;
     if report.ok {
@@ -253,7 +239,6 @@ fn snapshot(args: NextFrameSnapshotArgs) -> Result<(), String> {
         composition_path: args.composition,
         frame_ms: args.frame,
         out: args.out,
-        strict_binary: args.strict_binary,
     });
     print_json(&report)?;
     if report.ok {
@@ -281,7 +266,6 @@ fn export(args: NextFrameExportArgs) -> Result<(), String> {
         kind,
         out: args.out,
         fps: args.fps,
-        strict_binary: args.strict_binary,
     });
     print_json(&report)?;
     if report.ok {

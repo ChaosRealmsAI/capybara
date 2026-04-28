@@ -1,7 +1,5 @@
 #[allow(dead_code)]
 mod component;
-#[deprecated(note = "use capy-nextframe::compile instead · removed v0.13.14")]
-mod render_source;
 mod types;
 
 use std::collections::BTreeSet;
@@ -40,29 +38,6 @@ pub fn read_document(path: &Path) -> Result<PosterDocument> {
     let document = serde_json::from_str(&text).map_err(PosterError::Json)?;
     validate_document(&document)?;
     Ok(document)
-}
-
-#[deprecated(note = "use capy-nextframe::compile instead · removed v0.13.14")]
-#[doc(hidden)]
-#[allow(dead_code, deprecated)]
-pub(crate) fn write_render_source(
-    path: &Path,
-    report: &render_source::RenderSourceReport,
-) -> Result<()> {
-    if let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        fs::create_dir_all(parent).map_err(|source| PosterError::Write {
-            path: parent.display().to_string(),
-            source,
-        })?;
-    }
-    let text = serde_json::to_string_pretty(&report.source).map_err(PosterError::Json)?;
-    fs::write(path, text).map_err(|source| PosterError::Write {
-        path: path.display().to_string(),
-        source,
-    })
 }
 
 pub fn validate_document(document: &PosterDocument) -> Result<()> {
@@ -172,7 +147,6 @@ fn validate_shape_layer(layer: &PosterLayer) -> Result<()> {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -263,33 +237,6 @@ mod tests {
             .err()
             .map(|err| err.to_string());
         assert_eq!(error, Some("duplicate layer id 'bg'".to_string()));
-        Ok(())
-    }
-
-    #[test]
-    fn compiles_render_source_contract() -> Result<()> {
-        let document = sample_document()?;
-        let report = render_source::compile_render_source(
-            &document,
-            render_source::CompileOptions::default(),
-        )?;
-        assert_eq!(
-            report
-                .source
-                .get("schema_version")
-                .and_then(serde_json::Value::as_str),
-            Some("nf.render_source.v1")
-        );
-        assert_eq!(report.layer_count, 3);
-        assert_eq!(report.generated_assets, 1);
-        assert_eq!(
-            report
-                .source
-                .get("tracks")
-                .and_then(serde_json::Value::as_array)
-                .map(Vec::len),
-            Some(1)
-        );
         Ok(())
     }
 }

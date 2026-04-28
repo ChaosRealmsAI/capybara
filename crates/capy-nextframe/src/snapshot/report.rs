@@ -7,7 +7,6 @@ pub struct SnapshotRequest {
     pub composition_path: PathBuf,
     pub frame_ms: u64,
     pub out: Option<PathBuf>,
-    pub strict_binary: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -89,7 +88,6 @@ pub struct SnapshotFailure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotMode {
     Crate,
-    Binary,
     Embedded,
 }
 
@@ -97,7 +95,6 @@ impl SnapshotMode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Crate => "crate",
-            Self::Binary => "binary",
             Self::Embedded => "embedded",
         }
     }

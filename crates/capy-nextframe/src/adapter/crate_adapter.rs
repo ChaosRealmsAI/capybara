@@ -188,7 +188,7 @@ fn snapshot_with_recorder_crate(
             NextFrameError::new(
                 NextFrameErrorCode::SnapshotFailed,
                 format!("nf-recorder crate snapshot failed: {err}"),
-                "next step · rerun CAPY_NEXTFRAME_MODE=crate capy nextframe snapshot",
+                "next step · rerun capy nextframe snapshot",
             )
         })?;
 
@@ -245,7 +245,7 @@ fn export_with_recorder_crate(
             NextFrameError::new(
                 NextFrameErrorCode::ExportFailed,
                 format!("nf-recorder crate export failed: {err}"),
-                "next step · rerun CAPY_NEXTFRAME_MODE=crate capy nextframe export",
+                "next step · rerun capy nextframe export",
             )
         })?;
 

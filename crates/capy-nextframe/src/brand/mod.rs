@@ -33,7 +33,6 @@ pub struct RebuildReport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RebuildRequest {
     pub composition_path: PathBuf,
-    pub strict_binary: bool,
 }
 
 pub fn copy_tokens(
@@ -71,14 +70,7 @@ pub fn rebuild(req: RebuildRequest) -> RebuildReport {
         None => String::new(),
     };
     let Some(theme) = composition.theme.clone() else {
-        return compile_report(
-            trace_id,
-            composition_path,
-            render_source_path,
-            "",
-            "",
-            req.strict_binary,
-        );
+        return compile_report(trace_id, composition_path, render_source_path, "", "");
     };
     let project_root = match composition_path.parent() {
         Some(parent) => parent.to_path_buf(),
@@ -132,7 +124,6 @@ pub fn rebuild(req: RebuildRequest) -> RebuildReport {
         render_source_path,
         &new_theme.hash,
         &previous_theme_hash,
-        req.strict_binary,
     )
 }
 
@@ -222,11 +213,9 @@ fn compile_report(
     render_source_path: PathBuf,
     theme_hash: &str,
     previous_theme_hash: &str,
-    strict_binary: bool,
 ) -> RebuildReport {
     let compile = compile_composition(CompileCompositionRequest {
         composition_path: composition_path.clone(),
-        strict_binary,
     });
     RebuildReport {
         ok: compile.ok,

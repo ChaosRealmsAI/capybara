@@ -1,4 +1,3 @@
-pub mod binary;
 pub mod embedded;
 pub mod report;
 
@@ -10,7 +9,6 @@ pub use report::{ExportCompositionRequest, ExportError, ExportKind, ExportReport
 
 use self::report::{ExportFailure, ExportMode, ExportSuccess};
 use crate::adapter::crate_adapter::CrateAdapter;
-use crate::config::NextFrameMode;
 use crate::ports::{CompositionArtifact, ExportOptions, NextFrameRecorderPort};
 
 pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
@@ -62,80 +60,19 @@ pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
 
     let duration_ms = embedded::read_duration_ms(&context.render_source_path).unwrap_or(0);
     let frame_count = embedded::frame_count(duration_ms, req.fps).unwrap_or(0);
-    let mode = match req.strict_binary {
-        true => Ok(NextFrameMode::Binary),
-        false => NextFrameMode::resolve(None),
-    };
-    let mode = match mode {
-        Ok(mode) => mode,
-        Err(err) => {
-            return failure(
-                context,
-                duration_ms,
-                frame_count,
-                None,
-                ExportError::new(
-                    err.body.code,
-                    "$.mode",
-                    err.body.message,
-                    format!("next step · {}", err.body.hint),
-                ),
-            );
-        }
-    };
-
-    match mode {
-        NextFrameMode::Crate => {
-            let artifact = artifact_for_path(&context.composition_path);
-            if CrateAdapter::default()
-                .export(
-                    &artifact,
-                    &context.output_path,
-                    ExportOptions {
-                        profile: "draft".to_string(),
-                        fps: req.fps,
-                    },
-                )
-                .is_ok()
-            {
-                return metrics_success(context, duration_ms, frame_count, ExportMode::Crate);
-            }
-        }
-        NextFrameMode::Binary => {
-            match binary::export_with_binary(
-                &context.render_source_path,
-                &context.output_path,
-                req.fps,
-            ) {
-                binary::BinaryExport::Exported => {
-                    return metrics_success(context, duration_ms, frame_count, ExportMode::Binary);
-                }
-                binary::BinaryExport::Failed(error) => {
-                    return failure(
-                        context,
-                        duration_ms,
-                        frame_count,
-                        Some(ExportMode::Binary),
-                        error,
-                    );
-                }
-                binary::BinaryExport::Missing if req.strict_binary => {
-                    return failure(
-                        context,
-                        duration_ms,
-                        frame_count,
-                        None,
-                        ExportError::new(
-                            "NEXTFRAME_NOT_FOUND",
-                            "$.binary",
-                            "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
-                            "next step · install nf-recorder or rerun without --strict-binary",
-                        ),
-                    );
-                }
-                binary::BinaryExport::Missing => {}
-            }
-        }
+    let artifact = artifact_for_path(&context.composition_path);
+    if CrateAdapter::default()
+        .export(
+            &artifact,
+            &context.output_path,
+            ExportOptions {
+                profile: "draft".to_string(),
+                fps: req.fps,
+            },
+        )
+        .is_ok()
+    {
+        return metrics_success(context, duration_ms, frame_count, ExportMode::Crate);
     }
 
     match embedded::export_embedded(
@@ -316,7 +253,6 @@ mod tests {
             kind: ExportKind::Mp4,
             out: None,
             fps: 30,
-            strict_binary: false,
         });
 
         assert!(!report.ok);
@@ -334,45 +270,10 @@ mod tests {
             kind: ExportKind::Mp4,
             out: None,
             fps: 30,
-            strict_binary: false,
         });
 
         assert!(!report.ok);
         assert_eq!(report.errors[0].code, "RENDER_SOURCE_MISSING");
-        fs::remove_dir_all(dir)?;
-        Ok(())
-    }
-
-    #[test]
-    fn strict_binary_requires_recorder() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = unique_dir("strict")?;
-        let composition = dir.join("composition.json");
-        fs::write(&composition, "{}")?;
-        fs::write(
-            dir.join("render_source.json"),
-            r#"{"schema_version":"nf.render_source.v1","duration_ms":1000,"viewport":{"w":64,"h":64},"tracks":[{"clips":[]}]}"#,
-        )?;
-        let old_path = std::env::var_os("PATH");
-        unsafe {
-            std::env::set_var("PATH", "/definitely/not/on/path");
-            std::env::remove_var("CAPY_NF_RECORDER");
-        }
-
-        let report = export_composition(ExportCompositionRequest {
-            composition_path: composition,
-            kind: ExportKind::Mp4,
-            out: None,
-            fps: 30,
-            strict_binary: true,
-        });
-
-        unsafe {
-            if let Some(path) = old_path {
-                std::env::set_var("PATH", path);
-            }
-        }
-        assert!(!report.ok);
-        assert_eq!(report.errors[0].code, "NEXTFRAME_NOT_FOUND");
         fs::remove_dir_all(dir)?;
         Ok(())
     }

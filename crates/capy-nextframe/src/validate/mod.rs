@@ -9,12 +9,11 @@ pub use report::{BinaryPassthroughResult, ValidationError, ValidationReport, Val
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidateCompositionRequest {
     pub composition_path: PathBuf,
-    pub strict_binary: bool,
 }
 
 pub fn validate_composition(req: ValidateCompositionRequest) -> ValidationReport {
     let mut report = structural::validate_structure(&req.composition_path);
-    adapter::append_binary_passthrough(&mut report, req.strict_binary);
+    adapter::append_crate_passthrough(&mut report);
     report.refresh_ok();
     report
 }

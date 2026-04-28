@@ -12,7 +12,6 @@ mod desktop_verify;
 mod ipc_client;
 mod media;
 mod nextframe;
-mod poster;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -55,8 +54,6 @@ enum Command {
     Media(media::MediaArgs),
     #[command(about = "Operate NextFrame composition and recorder integration")]
     Nextframe(nextframe::NextFrameArgs),
-    #[command(about = "Validate, compile, and snapshot poster JSON documents")]
-    Poster(poster::PosterArgs),
     #[command(about = "Inspect local agent runtimes")]
     Agent(AgentArgs),
     #[command(about = "Quit the Capybara shell")]
@@ -480,7 +477,6 @@ fn run() -> Result<(), String> {
         Command::Image(args) => handle_image_command(args),
         Command::Media(args) => media::handle(args),
         Command::Nextframe(args) => nextframe::handle(args),
-        Command::Poster(args) => poster::handle(args),
         Command::Agent(args) => match args.command {
             AgentCommand::Doctor => {
                 println!("{}", capy_shell::agent::doctor());

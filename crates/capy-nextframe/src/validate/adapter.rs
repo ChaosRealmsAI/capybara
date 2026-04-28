@@ -2,84 +2,21 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::adapter::binary::BinaryAdapter;
 use crate::adapter::crate_adapter::CrateAdapter;
-use crate::config::{NextFrameConfig, NextFrameMode};
-use crate::error::nextframe_setup_hint;
+use crate::config::NextFrameConfig;
 use crate::ports::{CompositionArtifact, NextFrameProjectPort};
 use crate::validate::report::{BinaryPassthroughResult, ValidationError, ValidationReport};
 
-pub fn append_binary_passthrough(report: &mut ValidationReport, strict_binary: bool) {
+pub fn append_crate_passthrough(report: &mut ValidationReport) {
     if !report.errors.is_empty() {
         return;
     }
 
-    let config = NextFrameConfig::default();
-    let mode_result = match strict_binary {
-        true => Ok(NextFrameMode::Binary),
-        false => NextFrameMode::resolve(config.mode),
-    };
-    let mode = match mode_result {
-        Ok(mode) => mode,
-        Err(err) => {
-            if strict_binary {
-                report.push_error(error_from_body(
-                    "$.binary_passthrough",
-                    err.body.code,
-                    err.body.message,
-                    err.body.hint,
-                ));
-            }
-            return;
-        }
-    };
-
-    let result = match mode {
-        NextFrameMode::Crate => {
-            validate_with_port(&CrateAdapter::new(config), &report.composition_path)
-        }
-        NextFrameMode::Binary => {
-            let resolved = match config.resolve() {
-                Ok(resolved) => resolved,
-                Err(err) => {
-                    if strict_binary {
-                        report.push_error(error_from_body(
-                            "$.binary_passthrough",
-                            err.body.code,
-                            err.body.message,
-                            err.body.hint,
-                        ));
-                    }
-                    return;
-                }
-            };
-
-            if !resolved.nf.found {
-                if strict_binary {
-                    report.push_error(nextframe_not_found_error());
-                }
-                return;
-            }
-
-            let adapter = match BinaryAdapter::new(config) {
-                Ok(adapter) => adapter,
-                Err(err) => {
-                    if strict_binary {
-                        report.push_error(error_from_body(
-                            "$.binary_passthrough",
-                            err.body.code,
-                            err.body.message,
-                            err.body.hint,
-                        ));
-                    }
-                    return;
-                }
-            };
-            validate_with_port(&adapter, &report.composition_path)
-        }
-    };
-
-    if strict_binary && !result.ok {
+    let result = validate_with_port(
+        &CrateAdapter::new(NextFrameConfig::default()),
+        &report.composition_path,
+    );
+    if !result.ok {
         if let Some(error) = result.error.clone() {
             report.push_error(error);
         }
@@ -152,15 +89,6 @@ fn artifact_for_path(composition_path: &Path) -> CompositionArtifact {
     }
 }
 
-fn nextframe_not_found_error() -> ValidationError {
-    ValidationError::new(
-        "NEXTFRAME_NOT_FOUND",
-        "$.binary_passthrough",
-        "nf binary was not found",
-        format!("next step · {}", nextframe_setup_hint()),
-    )
-}
-
 fn error_from_body(
     path: impl Into<String>,
     code: impl Into<String>,
@@ -182,7 +110,7 @@ mod tests {
     use super::validate_with_port;
 
     #[test]
-    fn binary_passthrough_reports_ok() {
+    fn crate_passthrough_reports_ok() {
         let result = validate_with_port(
             &MockProjectPort::Ok,
             Path::new("target/sample/composition.json"),
@@ -201,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn binary_passthrough_reports_failure() {
+    fn crate_passthrough_reports_failure() {
         let result = validate_with_port(
             &MockProjectPort::Fail,
             Path::new("target/sample/composition.json"),
@@ -215,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn binary_passthrough_reports_not_found() {
+    fn crate_passthrough_reports_not_found() {
         let result = validate_with_port(
             &MockProjectPort::NotFound,
             Path::new("target/sample/composition.json"),

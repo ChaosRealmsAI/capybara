@@ -1,11 +1,10 @@
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
 use crate::config::{NextFrameConfig, ResolvedBinary};
-use crate::error::{ErrorBody, NextFrameError, NextFrameErrorCode, nextframe_setup_hint};
+use crate::error::{ErrorBody, NextFrameError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DoctorReport {
@@ -38,21 +37,10 @@ pub fn doctor(config: NextFrameConfig) -> DoctorReport {
     let trace_id = trace_id();
     match config.resolve() {
         Ok(resolved) => {
-            let mode = resolved.mode;
-            let nf = enrich_version(resolved.nf, &["--version"]);
-            let recorder = enrich_version(resolved.recorder, &["--version"]);
-            let ok = mode == crate::config::NextFrameMode::Crate || (nf.found && recorder.found);
-            let error = if ok {
-                None
-            } else {
-                Some(ErrorBody::new(
-                    NextFrameErrorCode::NextframeNotFound,
-                    "nf or nf-recorder was not found",
-                    nextframe_setup_hint(),
-                ))
-            };
+            let nf = resolved.nf;
+            let recorder = resolved.recorder;
             DoctorReport {
-                ok,
+                ok: true,
                 trace_id,
                 stage: "doctor",
                 config: DoctorConfigReport {
@@ -60,8 +48,8 @@ pub fn doctor(config: NextFrameConfig) -> DoctorReport {
                 },
                 nf: BinaryReport::from(nf),
                 nf_recorder: BinaryReport::from(recorder),
-                mode: mode.as_str(),
-                error,
+                mode: "crate-only",
+                error: None,
             }
         }
         Err(err) => failed_report(trace_id, err),
@@ -83,28 +71,12 @@ fn failed_report(trace_id: String, err: NextFrameError) -> DoctorReport {
             path: None,
             version: None,
         },
-        mode: "binary",
+        mode: "crate-only",
         config: DoctorConfigReport {
             discovery: "MISSING".to_string(),
         },
         error: Some(err.body),
     }
-}
-
-fn enrich_version(binary: ResolvedBinary, args: &[&str]) -> ResolvedBinary {
-    if !binary.found {
-        return binary;
-    }
-    let version = binary.path.as_ref().and_then(|path| {
-        Command::new(path)
-            .args(args)
-            .output()
-            .ok()
-            .filter(|output| output.status.success())
-            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-            .filter(|value| !value.is_empty())
-    });
-    ResolvedBinary { version, ..binary }
 }
 
 fn combined_discovery(nf: &ResolvedBinary, recorder: &ResolvedBinary) -> &'static str {
@@ -137,25 +109,22 @@ impl From<ResolvedBinary> for BinaryReport {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{NextFrameConfig, NextFrameMode};
+    use crate::config::NextFrameConfig;
     use crate::doctor::doctor;
 
     #[test]
-    fn doctor_reports_structured_error_when_binaries_are_missing() -> Result<(), String> {
+    fn doctor_reports_crate_only_when_binaries_are_missing() -> Result<(), String> {
         let report = doctor(NextFrameConfig {
             nf_bin: Some("/definitely/not/nf".into()),
             recorder_bin: Some("/definitely/not/nf-recorder".into()),
             home: None,
-            mode: Some(NextFrameMode::Binary),
         });
 
-        assert!(!report.ok);
+        assert!(report.ok);
         assert_eq!(report.stage, "doctor");
         assert_eq!(report.config.discovery, "MISSING");
-        let error = report
-            .error
-            .ok_or_else(|| "missing binaries should include error".to_string())?;
-        assert_eq!(error.code, "NEXTFRAME_NOT_FOUND");
+        assert_eq!(report.mode, "crate-only");
+        assert!(report.error.is_none());
         Ok(())
     }
 }

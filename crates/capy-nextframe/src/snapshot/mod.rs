@@ -1,4 +1,3 @@
-pub mod binary;
 pub mod embedded;
 pub mod report;
 
@@ -9,7 +8,6 @@ pub use report::{SnapshotError, SnapshotMode, SnapshotReport, SnapshotRequest};
 
 use self::report::{SnapshotFailure, SnapshotSuccess};
 use crate::adapter::crate_adapter::CrateAdapter;
-use crate::config::NextFrameMode;
 use crate::ports::{NextFrameRecorderPort, SnapshotOptions};
 
 pub fn snapshot(req: SnapshotRequest) -> SnapshotReport {
@@ -53,92 +51,25 @@ pub fn snapshot(req: SnapshotRequest) -> SnapshotReport {
         );
     }
 
-    let mode = match req.strict_binary {
-        true => Ok(NextFrameMode::Binary),
-        false => NextFrameMode::resolve(None),
-    };
-    let mode = match mode {
-        Ok(mode) => mode,
-        Err(err) => {
-            return failure(
-                trace_id,
-                composition_path,
-                render_source_path,
-                snapshot_path,
-                req.frame_ms,
-                SnapshotError::new(
-                    err.body.code,
-                    "$.mode",
-                    err.body.message,
-                    format!("next step · {}", err.body.hint),
-                ),
-            );
-        }
-    };
-
-    match mode {
-        NextFrameMode::Crate => {
-            if CrateAdapter::default()
-                .snapshot(
-                    &render_source_path,
-                    &snapshot_path,
-                    SnapshotOptions {
-                        t_ms: req.frame_ms,
-                        resolution: None,
-                    },
-                )
-                .is_ok()
-            {
-                return metrics_success(
-                    trace_id,
-                    composition_path,
-                    render_source_path,
-                    snapshot_path,
-                    req.frame_ms,
-                    SnapshotMode::Crate,
-                );
-            }
-        }
-        NextFrameMode::Binary => {
-            match binary::snapshot_with_binary(&render_source_path, &snapshot_path, req.frame_ms) {
-                binary::BinarySnapshot::Snapshotted => {
-                    return metrics_success(
-                        trace_id,
-                        composition_path,
-                        render_source_path,
-                        snapshot_path,
-                        req.frame_ms,
-                        SnapshotMode::Binary,
-                    );
-                }
-                binary::BinarySnapshot::Failed(error) => {
-                    return failure(
-                        trace_id,
-                        composition_path,
-                        render_source_path,
-                        snapshot_path,
-                        req.frame_ms,
-                        error,
-                    );
-                }
-                binary::BinarySnapshot::Missing if req.strict_binary => {
-                    return failure(
-                        trace_id,
-                        composition_path,
-                        render_source_path,
-                        snapshot_path,
-                        req.frame_ms,
-                        SnapshotError::new(
-                            "NEXTFRAME_NOT_FOUND",
-                            "$.binary",
-                            "nf-recorder was not found on PATH or CAPY_NF_RECORDER",
-                            "next step · install nf-recorder or rerun without --strict-binary",
-                        ),
-                    );
-                }
-                binary::BinarySnapshot::Missing => {}
-            }
-        }
+    if CrateAdapter::default()
+        .snapshot(
+            &render_source_path,
+            &snapshot_path,
+            SnapshotOptions {
+                t_ms: req.frame_ms,
+                resolution: None,
+            },
+        )
+        .is_ok()
+    {
+        return metrics_success(
+            trace_id,
+            composition_path,
+            render_source_path,
+            snapshot_path,
+            req.frame_ms,
+            SnapshotMode::Crate,
+        );
     }
 
     match embedded::snapshot_embedded(&render_source_path, &snapshot_path) {
@@ -263,7 +194,6 @@ mod tests {
             composition_path: composition,
             frame_ms: 0,
             out: None,
-            strict_binary: false,
         });
 
         assert!(!report.ok);
@@ -278,7 +208,6 @@ mod tests {
             composition_path: PathBuf::from("/definitely/not/composition.json"),
             frame_ms: 0,
             out: None,
-            strict_binary: false,
         });
 
         assert!(!report.ok);

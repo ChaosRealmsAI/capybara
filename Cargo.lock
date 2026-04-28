@@ -385,7 +385,6 @@ dependencies = [
  "base64",
  "capy-image-gen",
  "capy-nextframe",
- "capy-poster",
  "capy-scroll-media",
  "capy-shell",
  "clap",

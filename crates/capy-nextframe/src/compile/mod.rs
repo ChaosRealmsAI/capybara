@@ -1,4 +1,3 @@
-pub mod binary;
 pub mod embedded;
 pub mod report;
 
@@ -7,13 +6,12 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use crate::adapter::crate_adapter::CrateAdapter;
-use crate::compile::binary::BinaryCompile;
 use crate::compile::embedded::RENDER_SOURCE_SCHEMA;
 pub use crate::compile::report::{
     CompileCompositionRequest, CompileError, CompileMode, CompileReport, CompileSuccess,
 };
 use crate::compose::CompositionDocument;
-use crate::config::{NextFrameConfig, NextFrameMode};
+use crate::config::NextFrameConfig;
 use crate::ports::{CompositionArtifact, NextFrameProjectPort};
 use crate::validate;
 
@@ -23,10 +21,7 @@ pub fn compile_composition(req: CompileCompositionRequest) -> CompileReport {
     let composition_path = absolute_path(&req.composition_path);
     let render_source_path = render_source_path(&composition_path);
 
-    let validation = validate::validate_composition(validate::ValidateCompositionRequest {
-        composition_path: composition_path.clone(),
-        strict_binary: false,
-    });
+    let validation = validate::structural::validate_structure(&composition_path);
     if !validation.ok {
         return validation_failure(
             trace_id,
@@ -37,76 +32,14 @@ pub fn compile_composition(req: CompileCompositionRequest) -> CompileReport {
         );
     }
 
-    let mode_result = match req.strict_binary {
-        true => Ok(NextFrameMode::Binary),
-        false => NextFrameMode::resolve(None),
-    };
-    let mode = match mode_result {
-        Ok(mode) => mode,
-        Err(err) => {
-            return CompileReport::failure(
-                trace_id,
-                composition_path,
-                render_source_path,
-                started.elapsed().as_millis(),
-                vec![CompileError::new(
-                    err.body.code,
-                    "$.mode",
-                    err.body.message,
-                    format!("next step · {}", err.body.hint),
-                )],
-            );
-        }
-    };
-
-    match mode {
-        NextFrameMode::Crate => {
-            return compile_with_project_port(
-                &CrateAdapter::new(NextFrameConfig::default()),
-                trace_id,
-                composition_path,
-                render_source_path,
-                started,
-            );
-        }
-        NextFrameMode::Binary => {
-            match binary::compile_with_binary(&composition_path, &render_source_path) {
-                BinaryCompile::Compiled => {
-                    return success(
-                        trace_id,
-                        composition_path,
-                        render_source_path,
-                        started,
-                        validation.track_count,
-                        CompileMode::Binary,
-                    );
-                }
-                BinaryCompile::Failed(error) => {
-                    return CompileReport::failure(
-                        trace_id,
-                        composition_path,
-                        render_source_path,
-                        started.elapsed().as_millis(),
-                        vec![error],
-                    );
-                }
-                BinaryCompile::Missing if req.strict_binary => {
-                    return CompileReport::failure(
-                        trace_id,
-                        composition_path,
-                        render_source_path,
-                        started.elapsed().as_millis(),
-                        vec![CompileError::new(
-                            "NEXTFRAME_NOT_FOUND",
-                            "$.binary",
-                            "nf was not found on PATH or CAPY_NF",
-                            "next step · install nf or rerun without --strict-binary",
-                        )],
-                    );
-                }
-                BinaryCompile::Missing => {}
-            }
-        }
+    if let report @ CompileReport { ok: true, .. } = compile_with_project_port(
+        &CrateAdapter::new(NextFrameConfig::default()),
+        trace_id.clone(),
+        composition_path.clone(),
+        render_source_path.clone(),
+        started,
+    ) {
+        return report;
     }
 
     let composition = match read_composition(&composition_path) {
@@ -330,21 +263,17 @@ mod tests {
     fn embedded_compile_writes_render_source() -> Result<(), Box<dyn std::error::Error>> {
         let dir = unique_dir("happy")?;
         let composition = write_composition(&dir, valid_composition())?;
-        let old_mode = std::env::var_os("CAPY_NEXTFRAME_MODE");
         let old_path = std::env::var_os("PATH");
         unsafe {
-            std::env::set_var("CAPY_NEXTFRAME_MODE", "binary");
             std::env::set_var("PATH", "/definitely/not/on/path");
             std::env::remove_var("CAPY_NF");
         }
 
         let report = compile_composition(CompileCompositionRequest {
             composition_path: composition,
-            strict_binary: false,
         });
 
         unsafe {
-            restore_env("CAPY_NEXTFRAME_MODE", old_mode);
             restore_env("PATH", old_path);
         }
         assert!(report.ok);
@@ -363,7 +292,6 @@ mod tests {
     fn reports_missing_composition() {
         let report = compile_composition(CompileCompositionRequest {
             composition_path: PathBuf::from("/definitely/not/composition.json"),
-            strict_binary: false,
         });
 
         assert!(!report.ok);
@@ -377,37 +305,10 @@ mod tests {
 
         let report = compile_composition(CompileCompositionRequest {
             composition_path: composition,
-            strict_binary: false,
         });
 
         assert!(!report.ok);
         assert_eq!(report.errors[0].code, "INVALID_COMPOSITION");
-        fs::remove_dir_all(dir)?;
-        Ok(())
-    }
-
-    #[test]
-    fn strict_binary_requires_nf() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = unique_dir("strict")?;
-        let composition = write_composition(&dir, valid_composition())?;
-        let old_path = std::env::var_os("PATH");
-        unsafe {
-            std::env::set_var("PATH", "/definitely/not/on/path");
-            std::env::remove_var("CAPY_NF");
-        }
-
-        let report = compile_composition(CompileCompositionRequest {
-            composition_path: composition,
-            strict_binary: true,
-        });
-
-        unsafe {
-            if let Some(path) = old_path {
-                std::env::set_var("PATH", path);
-            }
-        }
-        assert!(!report.ok);
-        assert_eq!(report.errors[0].code, "NEXTFRAME_NOT_FOUND");
         fs::remove_dir_all(dir)?;
         Ok(())
     }

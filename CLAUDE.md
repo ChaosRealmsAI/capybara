@@ -36,7 +36,7 @@ Use the same `CAPYBARA_SOCKET` value for both shell and CLI when multiple worktr
 ## AI 验证接口
 
 ```bash
-CAPY_NEXTFRAME_MODE=crate|binary target/debug/capy nextframe doctor
+target/debug/capy nextframe doctor
 ```
 
 ## Public Repo Rules
