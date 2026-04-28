@@ -151,6 +151,8 @@ pub struct ExportJob {
     pub status: ExportJobStatus,
     pub progress: u8,
     pub output_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub byte_size: Option<u64>,
     pub started_at: String,
 }
 

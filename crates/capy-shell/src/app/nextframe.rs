@@ -285,25 +285,6 @@ pub fn export_cancel(state: &ShellState, params: Value) -> Result<Value, String>
     }))
 }
 
-pub(crate) fn open_response(req_id: String, state: &ShellState, params: Value) -> IpcResponse {
-    match open_node(state, params) {
-        Ok(data) => IpcResponse {
-            req_id,
-            ok: true,
-            data: Some(data),
-            error: None,
-        },
-        Err(error) => IpcResponse {
-            req_id,
-            ok: false,
-            data: None,
-            error: serde_json::from_str(&error)
-                .ok()
-                .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
-        },
-    }
-}
-
 pub(crate) fn export_status_response(
     req_id: String,
     state: &ShellState,
@@ -724,6 +705,7 @@ mod tests {
             status: ExportJobStatus::Running,
             progress: 50,
             output_path: Some(dir.join("out.mp4").display().to_string()),
+            byte_size: None,
             started_at: "1970-01-01T00:00:00Z".to_string(),
         });
         state.attach_nextframe_node(0, node)?;

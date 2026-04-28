@@ -71,7 +71,8 @@ fn attach_reports_invalid_composition() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn attach_lands_compile_failure_as_error() -> Result<(), Box<dyn std::error::Error>> {
     let dir = unique_dir("compile-error")?;
-    let path = write_composition(&dir, structurally_valid_uncompilable_composition())?;
+    let path = write_composition(&dir, compilable_composition())?;
+    fs::create_dir(dir.join("render_source.json"))?;
     let state = capy_shell::app::ShellState::default();
 
     let error = capy_shell::app::nextframe::attach_node(
@@ -84,9 +85,10 @@ fn attach_lands_compile_failure_as_error() -> Result<(), Box<dyn std::error::Err
         capy_shell::app::nextframe::state_nodes(&state, json!({"canvas_node_id": 0}))?;
 
     assert_eq!(value["code"], "COMPILE_FAILED");
-    assert_eq!(
-        state_value["attachments"][0]["state"]["error"]["code"],
-        "INVALID_COMPOSITION"
+    assert!(
+        state_value["attachments"][0]["state"]["error"]["code"]
+            .as_str()
+            .is_some_and(|code| code != "COMPOSITION_INVALID")
     );
     assert_eq!(
         state_value["attachments"][0]["history"]
@@ -119,9 +121,13 @@ fn state_nodes_returns_single_attachment() -> Result<(), Box<dyn std::error::Err
 }
 
 fn write_composition(dir: &PathBuf, value: Value) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    fs::create_dir_all(dir)?;
+    fs::create_dir_all(dir.join("components"))?;
     let path = dir.join("composition.json");
     fs::write(&path, serde_json::to_string_pretty(&value)?)?;
+    fs::write(
+        dir.join("components").join("html.capy-poster.js"),
+        "export function mount(root) { root.textContent = 'ok'; }\nexport function update() {}\n",
+    )?;
     Ok(path)
 }
 

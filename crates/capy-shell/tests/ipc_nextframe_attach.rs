@@ -8,8 +8,13 @@ use serde_json::{Value, json};
 fn nextframe_attach_contract_updates_shell_state() -> Result<(), Box<dyn std::error::Error>> {
     let dir = unique_dir("contract")?;
     fs::create_dir_all(&dir)?;
+    fs::create_dir_all(dir.join("components"))?;
     let composition = dir.join("composition.json");
     fs::write(&composition, valid_composition_text())?;
+    fs::write(
+        dir.join("components").join("html.capy-poster.js"),
+        "export function mount(root) { root.textContent = 'ok'; }\nexport function update() {}\n",
+    )?;
     let state = capy_shell::app::ShellState::default();
 
     let value = capy_shell::app::nextframe::attach_node(

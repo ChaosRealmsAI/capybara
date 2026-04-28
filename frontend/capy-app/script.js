@@ -73,6 +73,10 @@ const plannerContextEl = $("#planner-context");
 const contextTitleEl = $("#context-title");
 const contextMetaEl = $("#context-meta");
 const contextAttachmentsEl = $("#context-attachments");
+const nextFrameInspectorEl = $('[data-section="nextframe-inspector"]');
+const nextFrameInspectorTitleEl = $("#nextframe-inspector-title");
+const nextFrameInspectorStatusEl = $("#nextframe-inspector-status");
+const nextFrameInspectorStagesEl = $("#nextframe-inspector-stages");
 const cmdPaletteEl = $("#cmd-palette");
 const cmdSearchEl = $("#cmd-search");
 const cmdCloseEl = $("#cmd-close");
@@ -133,7 +137,13 @@ const state = {
     lastError: null
   },
   nextframe: {
-    attachments: new Map()
+    attachments: new Map(),
+    inspector: {
+      nodeId: null,
+      loading: false,
+      detail: null,
+      error: null
+    }
   }
 };
 
@@ -175,6 +185,7 @@ window.capyWorkbench = {
   stateSnapshot,
   attachNextFrameComposition,
   openNextFrameComposition,
+  openNextFrameInspector,
   startCanvasImageTool,
   verifyCanvasImageTool,
   verifyLabelMoveSync,
@@ -1129,6 +1140,7 @@ function refreshPlannerContext() {
   renderNodeLabels(nodes, state.selectedId, snapshot.viewport || null);
   renderRegionOverlay();
   renderPlannerContext(selectedItem);
+  syncNextFrameInspector(selectedItem);
   updateCanvasStatus(`${state.canvas.nodeCount} nodes · ${state.canvas.currentTool}`);
   return stateSnapshot();
 }
@@ -1289,6 +1301,224 @@ async function openNextFrameComposition(canvasNodeId) {
   });
   mountNextFramePreview(String(canvasNodeId), report.preview_url);
   return report;
+}
+
+async function openNextFrameInspector(canvasNodeId) {
+  const nodeId = String(canvasNodeId);
+  showNextFrameInspector(nodeId);
+  if (state.nextframe.inspector.loading && state.nextframe.inspector.nodeId === nodeId) {
+    return state.nextframe.inspector.detail;
+  }
+  state.nextframe.inspector.loading = true;
+  state.nextframe.inspector.nodeId = nodeId;
+  state.nextframe.inspector.error = null;
+  renderNextFrameInspector();
+  try {
+    const detail = await rpc("nextframe-state-detail", {
+      canvas_node_id: Number(canvasNodeId)
+    });
+    if (state.nextframe.inspector.nodeId !== nodeId) return detail;
+    state.nextframe.inspector.detail = detail.attachment || null;
+    state.nextframe.inspector.error = null;
+    renderNextFrameInspector();
+    return detail;
+  } catch (error) {
+    if (state.nextframe.inspector.nodeId !== nodeId) throw error;
+    state.nextframe.inspector.error = stringifyError(error);
+    renderNextFrameInspector();
+    throw error;
+  } finally {
+    if (state.nextframe.inspector.nodeId === nodeId) {
+      state.nextframe.inspector.loading = false;
+      renderNextFrameInspector();
+    }
+  }
+}
+
+function syncNextFrameInspector(selectedItem) {
+  const selectedBlock = state.blocks.find((node) => String(node.id) === String(selectedItem?.id));
+  if (!selectedBlock || inferType(selectedBlock) !== "nextframe-composition") {
+    hideNextFrameInspector();
+    return;
+  }
+  const nodeId = String(selectedBlock.id);
+  if (state.nextframe.inspector.nodeId === nodeId && state.nextframe.inspector.detail) {
+    showNextFrameInspector(nodeId);
+    return;
+  }
+  openNextFrameInspector(nodeId).catch(() => {});
+}
+
+function showNextFrameInspector(nodeId) {
+  if (!nextFrameInspectorEl) return;
+  nextFrameInspectorEl.hidden = false;
+  state.nextframe.inspector.nodeId = String(nodeId);
+}
+
+function hideNextFrameInspector() {
+  if (nextFrameInspectorEl) nextFrameInspectorEl.hidden = true;
+  state.nextframe.inspector.nodeId = null;
+  state.nextframe.inspector.detail = null;
+  state.nextframe.inspector.error = null;
+}
+
+function renderNextFrameInspector() {
+  if (!nextFrameInspectorEl || !nextFrameInspectorStagesEl) return;
+  const inspector = state.nextframe.inspector;
+  const detail = inspector.detail;
+  nextFrameInspectorTitleEl.textContent = detail
+    ? `Node ${detail.canvas_node_id}`
+    : `Node ${inspector.nodeId || ""}`;
+  nextFrameInspectorStatusEl.textContent = inspector.loading
+    ? "loading"
+    : inspector.error
+      ? "error"
+      : stageLabel(detail?.state || "idle");
+  nextFrameInspectorStatusEl.dataset.status = inspector.error ? "error" : stageLabel(detail?.state || "idle");
+  if (inspector.error) {
+    nextFrameInspectorStagesEl.replaceChildren(inspectorMessage("State detail unavailable", inspector.error));
+    return;
+  }
+  if (!detail) {
+    nextFrameInspectorStagesEl.replaceChildren(inspectorMessage("Waiting for selection", "Select an attached NextFrame composition."));
+    return;
+  }
+  nextFrameInspectorStagesEl.replaceChildren(
+    stageCard("Source", "asset", sourceRows(detail.source)),
+    stageCard("Composition", "json", compositionRows(detail.composition)),
+    stageCard("Compile", detail.compile?.status || "missing", compileRows(detail.compile)),
+    stageCard("Export", exportStatus(detail.export_jobs), exportRows(detail.export_jobs)),
+    stageCard("Evidence", detail.evidence?.exists ? "linked" : "missing", evidenceRows(detail.evidence))
+  );
+}
+
+function stageCard(title, status, rows) {
+  const card = document.createElement("section");
+  card.className = "inspector-stage";
+  card.dataset.status = String(status || "idle");
+  const head = document.createElement("header");
+  head.innerHTML = `<span class="stage-icon"></span><h3></h3>`;
+  head.querySelector("h3").textContent = title;
+  const body = document.createElement("div");
+  body.className = "stage-body";
+  for (const row of rows) body.append(row);
+  card.append(head, body);
+  return card;
+}
+
+function sourceRows(source) {
+  const posterRefs = Array.isArray(source?.poster_refs) ? source.poster_refs : [];
+  const scrollRefs = Array.isArray(source?.scroll_media_refs) ? source.scroll_media_refs : [];
+  return [
+    kvRow("poster", refsText(posterRefs)),
+    kvRow("scroll-media", refsText(scrollRefs)),
+    kvRow("brand_tokens", source?.brand_tokens?.source_path || source?.brand_tokens?.tokens_ref || "none")
+  ];
+}
+
+function compositionRows(composition) {
+  return [
+    linkRow("composition.json", composition?.path),
+    codeRow(Array.isArray(composition?.preview_lines) ? composition.preview_lines.join("\n") : "")
+  ];
+}
+
+function compileRows(compile) {
+  return [
+    kvRow("render_source.json", compile?.status || "missing"),
+    linkRow("path", compile?.render_source_path),
+    kvRow("compile_mode", compile?.compile_mode || "unknown"),
+    kvRow("timestamp", compile?.timestamp || "not recorded")
+  ];
+}
+
+function exportRows(jobs) {
+  if (!Array.isArray(jobs) || jobs.length === 0) return [kvRow("jobs", "none")];
+  return jobs.map((job) => {
+    const row = document.createElement("div");
+    row.className = "export-job-row";
+    row.append(statusBadge(job.status), textSpan(job.output_path || job.job_id), textSpan(formatBytes(job.byte_size)));
+    return row;
+  });
+}
+
+function evidenceRows(evidence) {
+  if (!evidence?.exists) return [kvRow("evidence/index.html", "not found")];
+  return [linkRow("evidence/index.html", evidence.index_html)];
+}
+
+function kvRow(label, value) {
+  const row = document.createElement("div");
+  row.className = "stage-row";
+  row.append(textSpan(label, "stage-key"), textSpan(value || "none", "stage-value"));
+  return row;
+}
+
+function linkRow(label, path) {
+  const row = kvRow(label, path || "missing");
+  if (path) {
+    const value = row.querySelector(".stage-value");
+    const link = document.createElement("a");
+    link.href = path;
+    link.textContent = path;
+    value.replaceChildren(link);
+  }
+  return row;
+}
+
+function codeRow(text) {
+  const pre = document.createElement("pre");
+  pre.className = "composition-preview";
+  pre.textContent = text || "preview unavailable";
+  return pre;
+}
+
+function statusBadge(status) {
+  const badge = textSpan(stageLabel(status), "status-badge");
+  badge.dataset.status = stageLabel(status);
+  return badge;
+}
+
+function inspectorMessage(title, message) {
+  const box = document.createElement("div");
+  box.className = "inspector-message";
+  box.append(textSpan(title, "message-title"), textSpan(message, "message-copy"));
+  return box;
+}
+
+function textSpan(value, className = "") {
+  const span = document.createElement("span");
+  if (className) span.className = className;
+  span.textContent = String(value || "");
+  return span;
+}
+
+function refsText(refs) {
+  if (!refs.length) return "none";
+  return refs.map((item) => item.source_path || item.original_path || item.src || item.id).filter(Boolean).join(", ");
+}
+
+function exportStatus(jobs) {
+  if (!Array.isArray(jobs) || jobs.length === 0) return "idle";
+  if (jobs.some((job) => stageLabel(job.status) === "failed")) return "failed";
+  if (jobs.some((job) => stageLabel(job.status) === "running")) return "running";
+  if (jobs.some((job) => stageLabel(job.status) === "done")) return "done";
+  return stageLabel(jobs[0].status);
+}
+
+function stageLabel(value) {
+  if (!value) return "idle";
+  if (typeof value === "string") return value;
+  if (value.error) return "error";
+  return String(value);
+}
+
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "bytes unknown";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function handleCanvasNodeAttached(detail) {
