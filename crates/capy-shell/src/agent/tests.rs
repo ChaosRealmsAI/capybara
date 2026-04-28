@@ -1,7 +1,7 @@
 use super::{
-    claude_args, claude_delta, codex_app_server_args, codex_resume_params, codex_sandbox_mode,
-    codex_sandbox_policy, codex_start_params, codex_turn_params, desktop_tool_path_env,
-    resolve_tool_path,
+    agent_tool_env, claude_append_system_prompt, claude_args, claude_delta, codex_app_server_args,
+    codex_developer_instructions, codex_resume_params, codex_sandbox_mode, codex_sandbox_policy,
+    codex_start_params, codex_turn_params, desktop_tool_path_env, resolve_tool_path,
 };
 use crate::store::{Conversation, Provider};
 use serde_json::json;
@@ -205,6 +205,66 @@ fn write_code_preset_maps_to_claude_permission_bypass() {
     );
     assert!(args.contains(&"--allow-dangerously-skip-permissions".to_string()));
     assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
+}
+
+#[test]
+fn capy_canvas_tools_extend_claude_and_codex_instructions() -> Result<(), String> {
+    let claude = Conversation {
+        id: "conv".to_string(),
+        title: "Test".to_string(),
+        provider: Provider::Claude,
+        cwd: "/tmp".to_string(),
+        native_session_id: None,
+        native_thread_id: None,
+        model: None,
+        config: json!({
+            "appendSystemPrompt": "Existing Claude instruction.",
+            "capyCanvasTools": true,
+            "capyToolLog": "/tmp/capy-tools.jsonl"
+        }),
+        status: "idle".to_string(),
+        archived: false,
+        created_at: 0,
+        updated_at: 0,
+    };
+    let prompt = claude_append_system_prompt(
+        Some("Existing Claude instruction.".to_string()),
+        &claude.config,
+    )
+    .ok_or_else(|| "claude prompt missing".to_string())?;
+    assert!(prompt.contains("Existing Claude instruction."));
+    assert!(prompt.contains("target/debug/capy canvas snapshot"));
+    assert!(prompt.contains("selected.geometry.x + selected.geometry.w + 48"));
+
+    let codex = Conversation {
+        provider: Provider::Codex,
+        config: json!({
+            "developerInstructions": "Existing Codex instruction.",
+            "capyCanvasTools": true
+        }),
+        ..claude
+    };
+    let instructions = codex_developer_instructions(
+        Some("Existing Codex instruction.".to_string()),
+        &codex.config,
+    )
+    .ok_or_else(|| "codex instructions missing".to_string())?;
+    assert!(instructions.contains("Existing Codex instruction."));
+    assert!(instructions.contains("target/debug/capy canvas generate-image --dry-run"));
+
+    assert_eq!(
+        agent_tool_env(&codex.config),
+        Vec::<(String, String)>::new(),
+        "tool log env only appears when capyToolLog is configured"
+    );
+    assert_eq!(
+        agent_tool_env(&json!({ "capyToolLog": "/tmp/capy-tools.jsonl" })),
+        vec![(
+            "CAPY_TOOL_CALL_LOG".to_string(),
+            "/tmp/capy-tools.jsonl".to_string()
+        )]
+    );
+    Ok(())
 }
 
 #[test]

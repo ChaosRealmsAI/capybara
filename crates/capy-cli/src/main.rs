@@ -294,6 +294,13 @@ struct AgentRuntimeOptions {
     search: bool,
     #[arg(long, help = "Start Codex thread as ephemeral")]
     ephemeral: bool,
+    #[arg(
+        long,
+        help = "Inject Capybara Canvas CLI instructions into the agent runtime"
+    )]
+    capy_canvas_tools: bool,
+    #[arg(long, help = "JSONL path for capy canvas tool calls made by the agent")]
+    capy_tool_log: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -586,6 +593,7 @@ fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) {
     set_opt(config, "reasoningSummary", args.reasoning_summary);
     set_opt(config, "outputSchema", args.output_schema);
     set_opt(config, "personality", args.personality);
+    set_opt(config, "capyToolLog", args.capy_tool_log);
     if !args.add_dir.is_empty() {
         config["addDirs"] = json!(args.add_dir);
     }
@@ -627,6 +635,9 @@ fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) {
     }
     if args.ephemeral {
         config["ephemeral"] = json!(true);
+    }
+    if args.capy_canvas_tools {
+        config["capyCanvasTools"] = json!(true);
     }
     if args.write_code {
         config["writeCode"] = json!(true);

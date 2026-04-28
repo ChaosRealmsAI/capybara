@@ -1,5 +1,8 @@
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use clap::{Args, Subcommand, ValueEnum};
@@ -138,19 +141,20 @@ impl CanvasImageProviderArg {
 }
 
 pub fn handle(args: CanvasArgs) -> Result<(), String> {
-    let data = match args.command {
-        CanvasCommand::Snapshot(args) => snapshot(args.window)?,
+    let command_name = args.command.name();
+    let result = match args.command {
+        CanvasCommand::Snapshot(args) => snapshot(args.window),
         CanvasCommand::Select(args) => canvas_eval(
             &format!("window.capyWorkbench.selectNode({})", args.id),
             args.window,
-        )?,
+        ),
         CanvasCommand::Move(args) => canvas_eval(
             &format!(
                 "window.capyWorkbench.moveNodeById({}, {}, {})",
                 args.id, args.x, args.y
             ),
             args.window,
-        )?,
+        ),
         CanvasCommand::CreateCard(args) => canvas_eval(
             &format!(
                 "window.capyWorkbench.createContentCard({}, {}, {}, {})",
@@ -160,7 +164,7 @@ pub fn handle(args: CanvasArgs) -> Result<(), String> {
                 args.y
             ),
             args.window,
-        )?,
+        ),
         CanvasCommand::InsertImage(args) => insert_image(InsertImageRequest {
             path: args.path,
             x: args.x,
@@ -169,10 +173,25 @@ pub fn handle(args: CanvasArgs) -> Result<(), String> {
             provider: args.provider,
             prompt_summary: args.prompt_summary,
             window: args.window,
-        })?,
-        CanvasCommand::GenerateImage(args) => generate_image(args)?,
+        }),
+        CanvasCommand::GenerateImage(args) => generate_image(args),
     };
+    append_tool_call_log(command_name, &result);
+    let data = result?;
     print_json(&data)
+}
+
+impl CanvasCommand {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Snapshot(_) => "snapshot",
+            Self::Select(_) => "select",
+            Self::Move(_) => "move",
+            Self::CreateCard(_) => "create-card",
+            Self::InsertImage(_) => "insert-image",
+            Self::GenerateImage(_) => "generate-image",
+        }
+    }
 }
 
 struct InsertImageRequest {
@@ -393,4 +412,45 @@ fn print_json(data: &Value) -> Result<(), String> {
         serde_json::to_string_pretty(data).map_err(|err| err.to_string())?
     );
     Ok(())
+}
+
+fn append_tool_call_log(command_name: &str, result: &Result<Value, String>) {
+    let Some(path) = std::env::var_os("CAPY_TOOL_CALL_LOG").map(PathBuf::from) else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _create_result = fs::create_dir_all(parent);
+    }
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    let entry = match result {
+        Ok(data) => json!({
+            "timestamp_ms": timestamp_ms,
+            "tool": "capy canvas",
+            "command": command_name,
+            "argv": std::env::args().collect::<Vec<_>>(),
+            "cwd": std::env::current_dir().ok().map(|path| path.display().to_string()),
+            "socket": std::env::var("CAPYBARA_SOCKET").ok(),
+            "ok": true,
+            "result": data
+        }),
+        Err(error) => json!({
+            "timestamp_ms": timestamp_ms,
+            "tool": "capy canvas",
+            "command": command_name,
+            "argv": std::env::args().collect::<Vec<_>>(),
+            "cwd": std::env::current_dir().ok().map(|path| path.display().to_string()),
+            "socket": std::env::var("CAPYBARA_SOCKET").ok(),
+            "ok": false,
+            "error": error
+        }),
+    };
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+    if let Ok(line) = serde_json::to_string(&entry) {
+        let _write_result = writeln!(file, "{line}");
+    }
 }
