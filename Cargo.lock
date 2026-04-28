@@ -368,6 +368,7 @@ name = "capy-cli"
 version = "0.2.0"
 dependencies = [
  "capy-image-gen",
+ "capy-scroll-media",
  "capy-shell",
  "clap",
  "image",
@@ -381,6 +382,15 @@ dependencies = [
 
 [[package]]
 name = "capy-image-gen"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "capy-scroll-media"
 version = "0.2.0"
 dependencies = [
  "serde",

@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 capy-image-gen.workspace = true
+capy-scroll-media.workspace = true
 capy-shell = { path = "../capy-shell" }
 clap.workspace = true
 image.workspace = true
