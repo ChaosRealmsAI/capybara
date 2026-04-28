@@ -19,6 +19,8 @@ for path in \
   crates/capy-canvas-web/Cargo.toml \
   crates/capy-image-gen/Cargo.toml \
   crates/capy-image-gen/src/lib.rs \
+  crates/capy-scroll-media/Cargo.toml \
+  crates/capy-scroll-media/src/lib.rs \
   scripts/image-provider-apimart.mjs \
   scripts/build-canvas-for-app.sh \
   crates/capy-shell/Cargo.toml \
@@ -48,9 +50,13 @@ rg -q 'data-capy-browser", "cef"' crates/capy-shell/src/browser/assets.rs || fai
 rg -q '"crates/capy-canvas-core"' Cargo.toml || fail "canvas core crate must be a workspace member"
 rg -q '"crates/capy-canvas-web"' Cargo.toml || fail "canvas web crate must be a workspace member"
 rg -q '"crates/capy-image-gen"' Cargo.toml || fail "image generation crate must be a workspace member"
+rg -q '"crates/capy-scroll-media"' Cargo.toml || fail "scroll media crate must be a workspace member"
 rg -q '^capy-image-gen\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-image-gen through the workspace boundary"
+rg -q '^capy-scroll-media\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-scroll-media through the workspace boundary"
 rg -q 'provider-adapter' crates/capy-image-gen/src/apimart.rs || fail "first image provider must remain an adapter, not the top-level abstraction"
 rg -q 'default_no_spend_gate: true' crates/capy-image-gen/src/apimart.rs || fail "image provider must expose no-spend default gate metadata"
+rg -q 'http_range' crates/capy-scroll-media/src/types.rs || fail "scroll media manifest must record HTTP Range requirement"
+rg -q '206' crates/capy-scroll-media/src/range_server.rs || fail "scroll media server must support HTTP 206 Partial Content"
 
 active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"
 [[ -n "$active_version" ]] || fail "spec active_version is missing"

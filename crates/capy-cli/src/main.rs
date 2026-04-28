@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 
 mod cutout;
 mod ipc_client;
+mod media;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -42,6 +43,8 @@ enum Command {
     Chat(Box<ChatArgs>),
     #[command(about = "Run AI-usable creative generation tools")]
     Image(ImageArgs),
+    #[command(about = "Package video clips for scroll-driven HTML pages")]
+    Media(media::MediaArgs),
     #[command(about = "Inspect local agent runtimes")]
     Agent(AgentArgs),
     #[command(about = "Quit the Capybara shell")]
@@ -500,6 +503,7 @@ fn run() -> Result<(), String> {
             ChatCommand::Stop(args) => send("conversation-stop", json!({ "id": args.id })),
         },
         Command::Image(args) => handle_image_command(args),
+        Command::Media(args) => media::handle(args),
         Command::Agent(args) => match args.command {
             AgentCommand::Doctor => {
                 println!("{}", capy_shell::agent::doctor());
