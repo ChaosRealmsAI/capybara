@@ -6,7 +6,7 @@ The open-source core is a thin Rust desktop shell with a CLI-first control surfa
 
 ## Status
 
-`v0.4` has a runnable bundled CEF/Chromium + tao macOS shell POC. `v0.2` remains the legacy wry/tao baseline and rollback reference.
+`v0.4` is the desktop foundation: bundled CEF/Chromium + tao is merged on `main`. `v0.2` remains only as the legacy wry/tao baseline and rollback reference.
 
 - `capy` CLI for AI-friendly operation.
 - `capy-shell` CEF/Chromium + tao desktop shell POC.
@@ -21,7 +21,7 @@ The open-source core is a thin Rust desktop shell with a CLI-first control surfa
 
 ```text
 crates/capy-cli/      CLI entrypoint
-crates/capy-shell/    desktop shell, IPC, capture, store, agent runtime
+crates/capy-shell/    CEF desktop shell, IPC, capture, store, agent runtime
 frontend/capy-app/    native HTML/CSS/JS UI loaded by the shell
 scripts/              local developer gates
 ```
@@ -32,7 +32,8 @@ Private product specs, research, evidence, and concept assets are not tracked in
 
 ```bash
 scripts/check-project.sh
-CAPYBARA_SOCKET=/tmp/capybara-cef-v0.4-$(id -u).sock scripts/verify-cef-shell.sh --keep-open
+scripts/check-architecture.sh
+CAPYBARA_SOCKET=/tmp/capybara-main-cef-$(id -u).sock scripts/verify-cef-shell.sh --keep-open
 cargo wef build -p capy-shell
 cargo run -p capy-cli -- --help
 target/debug/capy open --project=demo

@@ -13,10 +13,10 @@ use tao::window::{UserAttentionType, Window, WindowBuilder, WindowId};
 use tokio::sync::oneshot;
 
 use crate::agent::{self, AgentRuntimeEvent};
+use crate::browser::ShellBrowser;
 use crate::capture;
 use crate::ipc::{self, IpcRequest, IpcResponse, error_response, ok_response};
 use crate::store::{CreateConversation, Provider, Store};
-use crate::webview::ShellBrowser;
 
 pub enum ShellEvent {
     OpenWindow {
@@ -114,7 +114,7 @@ impl ShellState {
 }
 
 pub fn run() {
-    match crate::webview::maybe_run_cef_subprocess() {
+    match crate::browser::maybe_run_cef_subprocess() {
         Ok(true) => return,
         Ok(false) => {}
         Err(err) => {
@@ -122,7 +122,7 @@ pub fn run() {
             std::process::exit(1);
         }
     }
-    let mut cef_runtime = Some(match crate::webview::init_cef_runtime() {
+    let mut cef_runtime = Some(match crate::browser::init_cef_runtime() {
         Ok(runtime) => runtime,
         Err(err) => {
             eprintln!("capy-shell CEF init failed: {err}");
@@ -881,7 +881,7 @@ impl WindowManager {
     ) -> Result<String, String> {
         let window_id = self.allocate_window_id();
         let (window, webview) =
-            crate::webview::create_window(target, proxy.clone(), &window_id, project)?;
+            crate::browser::create_window(target, proxy.clone(), &window_id, project)?;
         if let Some(window_number) = native_window_number(&window) {
             self.window_numbers.insert(window_id.clone(), window_number);
         }

@@ -6,17 +6,18 @@ Private product specs, roadmap, research, concept assets, and evidence live at `
 
 ## Current State
 
-`v0.4` has a runnable CEF/Chromium + tao mac shell POC. `v0.2` remains the legacy wry/tao baseline and rollback reference.
+`v0.4` is the desktop foundation: bundled CEF/Chromium + tao is merged on `main`. `v0.2` remains only as the legacy wry/tao baseline and rollback reference.
 
 - `crates/capy-cli` - `capy` CLI and AI verification entrypoint.
-- `crates/capy-shell` - CEF/Chromium + tao shell, Unix socket IPC, native capture, traffic light alignment, SQLite store, and agent runtime adapters.
+- `crates/capy-shell` - CEF/Chromium + tao shell, browser adapter boundary, Unix socket IPC, native capture, traffic light alignment, SQLite store, and agent runtime adapters.
 - `frontend/capy-app` - native HTML/CSS/JS desktop UI.
 
 ## Commands
 
 ```bash
 scripts/check-project.sh
-CAPYBARA_SOCKET=/tmp/capybara-cef-v0.4-$(id -u).sock scripts/verify-cef-shell.sh --keep-open
+scripts/check-architecture.sh
+CAPYBARA_SOCKET=/tmp/capybara-main-cef-$(id -u).sock scripts/verify-cef-shell.sh --keep-open
 cargo wef build -p capy-shell
 cargo run -p capy-cli -- --help
 target/debug/capy open --project=demo

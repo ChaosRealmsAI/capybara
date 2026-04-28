@@ -1,263 +1,24 @@
-use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
-
-use raw_window_handle::HasWindowHandle;
-use tao::dpi::{LogicalPosition, LogicalSize};
-use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
-#[cfg(target_os = "macos")]
-use tao::platform::macos::WindowBuilderExtMacOS;
-use tao::window::{Window, WindowBuilder};
-use wef::{Browser, BrowserHandler, FuncRegistry, LogSeverity, PhysicalUnit, Settings, Size};
-
-use crate::app::ShellEvent;
-
-type EvalCallback = Box<dyn Fn(String) + Send + 'static>;
-type EvalCallbacks = Arc<Mutex<HashMap<String, EvalCallback>>>;
-
-pub struct ShellBrowser {
-    browser: Browser,
-    callbacks: EvalCallbacks,
-    next_eval: AtomicU64,
-}
-
-impl ShellBrowser {
-    pub fn evaluate_script(&self, script: &str) -> Result<(), String> {
-        self.execute(script)
-    }
-
-    pub fn evaluate_script_with_callback<F>(&self, script: &str, callback: F) -> Result<(), String>
-    where
-        F: Fn(String) + Send + 'static,
-    {
-        let seq = self.next_eval.fetch_add(1, Ordering::Relaxed);
-        let req_id = format!("eval-{seq}");
-        self.callbacks
-            .lock()
-            .map_err(|_| "browser eval callback lock poisoned".to_string())?
-            .insert(req_id.clone(), Box::new(callback));
-        let req_json = serde_json::to_string(&req_id)
-            .map_err(|err| format!("eval id encode failed: {err}"))?;
-        let script = format!(
-            r#"(async () => {{
-  try {{
-    const value = await Promise.resolve({script});
-    let raw = JSON.stringify(value);
-    if (raw === undefined) raw = "null";
-    await window.jsBridge.capyEvalResult({req_json}, raw);
-  }} catch (err) {{
-    const message = err && err.stack ? err.stack : String(err);
-    await window.jsBridge.capyEvalResult({req_json}, JSON.stringify({{ ok: false, error: message }}));
-  }}
-}})();"#
-        );
-        if let Err(err) = self.execute(&script) {
-            let _removed = self
-                .callbacks
-                .lock()
-                .ok()
-                .and_then(|mut callbacks| callbacks.remove(&req_id));
-            return Err(err);
-        }
-        Ok(())
-    }
-
-    pub fn resize(&self, width: u32, height: u32) {
-        self.browser.resize(Size::new(
-            PhysicalUnit(width.max(1) as i32),
-            PhysicalUnit(height.max(1) as i32),
-        ));
-    }
-
-    pub fn set_focus(&self, focus: bool) {
-        self.browser.set_focus(focus);
-    }
-
-    fn execute(&self, script: &str) -> Result<(), String> {
-        let frame = self
-            .browser
-            .main_frame()
-            .ok_or_else(|| "browser main frame unavailable".to_string())?;
-        frame.execute_javascript(script);
-        Ok(())
-    }
-}
-
-struct ShellHandler;
-
-impl BrowserHandler for ShellHandler {
-    fn on_console_message(
-        &mut self,
-        message: &str,
-        level: LogSeverity,
-        source: &str,
-        line_number: i32,
-    ) {
-        println!("CAPYCONSOLE [{level:?}] {message} ({source}:{line_number})");
-    }
-
-    fn on_load_error(&mut self, _frame: wef::Frame, error_text: &str, failed_url: &str) {
-        println!(
-            "{}",
-            serde_json::json!({
-                "event": "browser-load-error",
-                "error": error_text,
-                "url": failed_url
-            })
-        );
-    }
-}
-
-pub struct CefRuntime {
-    #[cfg(target_os = "macos")]
-    _loader: wef::FrameworkLoader,
-    cache_dir: PathBuf,
-}
-
-impl Drop for CefRuntime {
-    fn drop(&mut self) {
-        wef::shutdown();
-        let _remove_result = std::fs::remove_dir_all(&self.cache_dir);
-    }
-}
-
-pub fn maybe_run_cef_subprocess() -> Result<bool, String> {
-    if !std::env::args().any(|arg| arg.starts_with("--type=") || arg == "--type") {
-        return Ok(false);
-    }
-    #[cfg(target_os = "macos")]
-    let _sandbox = wef::SandboxContext::new().map_err(|err| err.to_string())?;
-    #[cfg(target_os = "macos")]
-    let _loader = wef::FrameworkLoader::load_in_helper().map_err(|err| err.to_string())?;
-    wef::exec_process().map_err(|err| err.to_string())
-}
-
-pub fn init_cef_runtime() -> Result<CefRuntime, String> {
-    let cache_dir = create_temp_dir("capy-shell-cef")?;
-    #[cfg(target_os = "macos")]
-    let loader = wef::FrameworkLoader::load_in_main().map_err(|err| err.to_string())?;
-
-    let mut settings = Settings::new()
-        .disable_gpu(false)
-        .root_cache_path(path_to_string(&cache_dir)?)
-        .cache_path(path_to_string(&cache_dir.join("profile"))?);
-    if let Some(helper) = browser_subprocess_path()? {
-        settings = settings.browser_subprocess_path(helper);
-    }
-    wef::init(settings).map_err(|err| err.to_string())?;
-
-    Ok(CefRuntime {
-        #[cfg(target_os = "macos")]
-        _loader: loader,
-        cache_dir,
-    })
-}
-
-pub fn create_window(
-    target: &EventLoopWindowTarget<ShellEvent>,
-    proxy: EventLoopProxy<ShellEvent>,
-    window_id: &str,
-    project: &str,
-) -> Result<(Window, ShellBrowser), String> {
-    let builder = WindowBuilder::new()
-        .with_title("Capybara")
-        .with_inner_size(LogicalSize::new(1440.0, 900.0))
-        .with_position(LogicalPosition::new(120.0, 80.0))
-        .with_resizable(true)
-        .with_min_inner_size(LogicalSize::new(960.0, 620.0));
-    #[cfg(target_os = "macos")]
-    let builder = builder
-        .with_title_hidden(true)
-        .with_titlebar_transparent(true)
-        .with_fullsize_content_view(true)
-        .with_has_shadow(true);
-
-    let window = builder
-        .build(target)
-        .map_err(|err| format!("window build failed: {err}"))?;
-    #[cfg(target_os = "macos")]
-    if let Some(observer) = crate::traffic_light::install_from_tao(&window) {
-        std::mem::forget(observer);
-    }
-
-    let server = asset_server()?;
-    let scale = window.scale_factor().max(1.0) as f32;
-    let url = frontend_url(&server.base_url, project, scale);
-    let ipc_window_id = window_id.to_string();
-    let ipc_proxy = proxy.clone();
-    let callbacks: EvalCallbacks = Arc::new(Mutex::new(HashMap::new()));
-    let result_callbacks = Arc::clone(&callbacks);
-    let registry = FuncRegistry::builder()
-        .register("capyShellIpc", move |body: String| -> bool {
-            let _send_result = ipc_proxy.send_event(ShellEvent::IpcFromJs {
-                window_id: ipc_window_id.clone(),
-                body: body.clone(),
-            });
-            println!("CAPYIPC {body}");
-            true
-        })
-        .register(
-            "capyEvalResult",
-            move |req_id: String, body: String| -> bool {
-                let callback = result_callbacks
-                    .lock()
-                    .ok()
-                    .and_then(|mut callbacks| callbacks.remove(&req_id));
-                if let Some(callback) = callback {
-                    callback(body);
-                }
-                true
-            },
-        )
-        .build();
-
-    let size = window.inner_size();
-    let parent = window
-        .window_handle()
-        .map_err(|err| format!("window handle unavailable: {err}"))?
-        .as_raw();
-    let browser = Browser::builder()
-        .parent(parent)
-        .size(size.width.max(1), size.height.max(1))
-        .device_scale_factor(scale)
-        .frame_rate(60)
-        .url(url)
-        .windowed()
-        .handler(ShellHandler)
-        .func_registry(registry)
-        .build();
-    browser.set_focus(true);
-
-    Ok((
-        window,
-        ShellBrowser {
-            browser,
-            callbacks,
-            next_eval: AtomicU64::new(1),
-        },
-    ))
-}
-
-fn frontend_url(base_url: &str, project: &str, dpr: f32) -> String {
-    format!(
-        "{base_url}/index.html?project={}&dpr={dpr:.3}",
-        url_encode(project)
-    )
-}
+use std::sync::OnceLock;
 
 #[derive(Clone)]
-struct AssetServer {
-    base_url: String,
+pub(crate) struct AssetServer {
+    pub(crate) base_url: String,
 }
 
 static ASSET_SERVER: OnceLock<Result<AssetServer, String>> = OnceLock::new();
 
-fn asset_server() -> Result<AssetServer, String> {
+pub(crate) fn asset_server() -> Result<AssetServer, String> {
     ASSET_SERVER.get_or_init(start_asset_server).clone()
+}
+
+pub(crate) fn frontend_url(base_url: &str, project: &str, dpr: f32) -> String {
+    format!(
+        "{base_url}/index.html?project={}&dpr={dpr:.3}",
+        url_encode(project)
+    )
 }
 
 fn start_asset_server() -> Result<AssetServer, String> {
@@ -611,54 +372,21 @@ fn mime_for_path(path: &Path) -> &'static str {
     }
 }
 
-fn create_temp_dir(prefix: &str) -> Result<PathBuf, String> {
-    let pid = std::process::id();
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let dir = std::env::temp_dir().join(format!("{prefix}-{pid}-{nanos}"));
-    std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
-    std::fs::canonicalize(&dir).map_err(|err| err.to_string())
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn path_to_string(path: &Path) -> Result<String, String> {
-    path.to_str()
-        .map(str::to_string)
-        .ok_or_else(|| format!("path is not valid UTF-8: {}", path.display()))
-}
-
-fn browser_subprocess_path() -> Result<Option<String>, String> {
-    if let Ok(helper) = std::env::var("CAPY_CEF_HELPER") {
-        return Ok(Some(helper));
-    }
-    let Some(path) = default_macos_helper_path() else {
-        return Ok(None);
-    };
-    Ok(Some(path_to_string(&path)?))
-}
-
-fn default_macos_helper_path() -> Option<PathBuf> {
-    #[cfg(not(target_os = "macos"))]
-    {
-        return None;
+    #[test]
+    fn percent_decode_rejects_invalid_escape() {
+        assert!(percent_decode("bad%zz").is_err());
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        let exe = std::env::current_exe().ok()?;
-        let exe_name = exe.file_name()?.to_str()?;
-        let contents_dir = exe.parent()?.parent()?;
-        if contents_dir.file_name()?.to_str()? != "Contents" {
-            return None;
-        }
-        let helper_name = format!("{exe_name} Helper");
-        let helper = contents_dir
-            .join("Frameworks")
-            .join(format!("{helper_name}.app"))
-            .join("Contents")
-            .join("MacOS")
-            .join(helper_name);
-        helper.exists().then_some(helper)
+    #[test]
+    fn frontend_url_escapes_project_query_value() {
+        let url = frontend_url("http://127.0.0.1:1", "demo project/alpha", 2.0);
+        assert_eq!(
+            url,
+            "http://127.0.0.1:1/index.html?project=demo%20project/alpha&dpr=2.000"
+        );
     }
 }

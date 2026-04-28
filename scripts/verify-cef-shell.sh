@@ -19,7 +19,7 @@ done
 
 VERSION_DIR="${CAPY_VERIFY_VERSION_DIR:-$ROOT/spec/versions/v0.4-cef-shell-poc}"
 ASSETS="${CAPY_VERIFY_ASSETS:-$VERSION_DIR/evidence/assets}"
-SOCKET="${CAPYBARA_SOCKET:-/tmp/capybara-cef-v0.4-$(id -u).sock}"
+SOCKET="${CAPYBARA_SOCKET:-/tmp/capybara-main-cef-$(id -u).sock}"
 LABEL="${CAPY_LAUNCH_LABEL:-com.capybara.cef.poc}"
 ROOT_JSON="$(printf '%s' "$ROOT" | jq -Rs .)"
 mkdir -p "$ASSETS" "$ROOT/tmp"
