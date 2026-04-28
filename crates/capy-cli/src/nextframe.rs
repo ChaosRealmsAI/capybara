@@ -25,6 +25,8 @@ enum NextFrameCommand {
     Compile(NextFrameCompileArgs),
     #[command(about = "Attach a NextFrame composition to a live canvas node")]
     Attach(NextFrameAttachArgs),
+    #[command(about = "Read live NextFrame attachment state from capy-shell")]
+    State(NextFrameStateArgs),
 }
 
 #[derive(Debug, Args)]
@@ -77,6 +79,12 @@ struct NextFrameAttachArgs {
     socket: Option<PathBuf>,
 }
 
+#[derive(Debug, Args)]
+struct NextFrameStateArgs {
+    #[arg(long)]
+    canvas_node: Option<u64>,
+}
+
 pub fn handle(args: NextFrameArgs) -> Result<(), String> {
     match args.command {
         NextFrameCommand::Doctor(args) => doctor(args),
@@ -84,6 +92,7 @@ pub fn handle(args: NextFrameArgs) -> Result<(), String> {
         NextFrameCommand::Validate(args) => validate(args),
         NextFrameCommand::Compile(args) => compile(args),
         NextFrameCommand::Attach(args) => attach(args),
+        NextFrameCommand::State(args) => state(args),
     }
 }
 
@@ -197,12 +206,69 @@ fn attach(args: NextFrameAttachArgs) -> Result<(), String> {
     }
 }
 
+fn state(args: NextFrameStateArgs) -> Result<(), String> {
+    let socket = ipc_client::socket_path();
+    let request = ipc_client::request(
+        "nextframe-state",
+        json!({
+            "canvas_node_id": args.canvas_node
+        }),
+    );
+    match ipc_client::send_to(request, socket) {
+        Ok(response) if response.ok => print_json(&response.data.unwrap_or(Value::Null)),
+        Ok(response) => {
+            let report = state_failure(
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("code"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("IPC_ERROR"),
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("message"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("capy-shell nextframe state failed"),
+                response
+                    .error
+                    .as_ref()
+                    .and_then(|error| error.get("hint"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("next step · run capy nextframe state --help"),
+            );
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+        Err(error) => {
+            let report = state_failure("SHELL_UNAVAILABLE", error, "next step · run capy shell");
+            print_json(&report)?;
+            std::process::exit(1);
+        }
+    }
+}
+
 fn print_json<T: Serialize>(data: &T) -> Result<(), String> {
     println!(
         "{}",
         serde_json::to_string_pretty(data).map_err(|err| err.to_string())?
     );
     Ok(())
+}
+
+fn state_failure(code: &str, message: impl Into<String>, hint: &str) -> Value {
+    let error = json!({
+        "code": code,
+        "message": message.into(),
+        "hint": hint
+    });
+    json!({
+        "ok": false,
+        "trace_id": state_trace_id(),
+        "stage": "state",
+        "code": code,
+        "errors": [error]
+    })
 }
 
 fn attach_failure(
@@ -246,4 +312,12 @@ fn trace_id() -> String {
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
     format!("attach-{millis}-{}", std::process::id())
+}
+
+fn state_trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("state-{millis}-{}", std::process::id())
 }

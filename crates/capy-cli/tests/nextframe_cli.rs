@@ -5,6 +5,9 @@ use std::process::Command;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+#[path = "support/nextframe_state_cases.rs"]
+mod nextframe_state_cases;
+
 #[test]
 fn nextframe_doctor_reports_happy_path_json() -> Result<(), Box<dyn std::error::Error>> {
     let dir = unique_dir("happy")?;

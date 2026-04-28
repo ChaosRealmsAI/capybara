@@ -5,6 +5,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::ShellState;
+pub use super::nextframe_state::{NextFrameNodeAction, NextFrameNodeState};
+use super::nextframe_state::{NextFrameTransition, iso_now};
+use crate::ipc::IpcResponse;
+
+const KIND_NEXTFRAME_COMPOSITION: &str = "nextframe-composition";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttachReport {
@@ -29,8 +34,9 @@ pub struct AttachError {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AttachedCanvasNode {
     pub kind: String,
-    pub state: String,
+    pub state: NextFrameNodeState,
     pub composition_ref: NextFrameCompositionRef,
+    pub history: Vec<NextFrameTransition>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,19 +50,46 @@ pub(crate) struct NextFrameCompositionRef {
 pub fn attach_node(state: &ShellState, params: Value) -> Result<Value, String> {
     let request = AttachRequest::from_params(params)?;
     let path = absolute_path(&request.composition_path)?;
-    let document = capy_nextframe::compose::CompositionDocument::load(&path).map_err(|err| {
-        attach_error(
-            "INVALID_COMPOSITION",
-            err,
-            "next step · rerun capy nextframe validate",
-        )
-    })?;
+    if !state.has_canvas_node(request.canvas_node_id) {
+        return Err(attach_error(
+            "CANVAS_NODE_NOT_FOUND",
+            format!("canvas node {} was not found", request.canvas_node_id),
+            "next step · run capy canvas snapshot",
+        ));
+    }
+
     let validation =
         capy_nextframe::validate_composition(capy_nextframe::ValidateCompositionRequest {
             composition_path: path.clone(),
             strict_binary: false,
         });
+    let mut attached = AttachedCanvasNode {
+        kind: KIND_NEXTFRAME_COMPOSITION.to_string(),
+        state: NextFrameNodeState::Draft,
+        composition_ref: NextFrameCompositionRef {
+            path: path.display().to_string(),
+            schema_version: validation.schema_version.clone(),
+            track_count: validation.track_count,
+            asset_count: validation.asset_count,
+        },
+        history: Vec::new(),
+    };
     if !validation.ok {
+        let error = validation.errors.first();
+        land_error(
+            &mut attached,
+            error
+                .map(|error| error.code.as_str())
+                .unwrap_or("INVALID_COMPOSITION"),
+            error
+                .map(|error| error.message.as_str())
+                .unwrap_or("composition validation failed"),
+            error.map(|error| error.hint.clone()).or_else(|| {
+                Some("next step · run capy nextframe validate --composition <path>".to_string())
+            }),
+            "structural validate failed",
+        )?;
+        state.attach_nextframe_node(request.canvas_node_id, attached)?;
         return Err(attach_error(
             "INVALID_COMPOSITION",
             validation
@@ -67,25 +100,52 @@ pub fn attach_node(state: &ShellState, params: Value) -> Result<Value, String> {
             "next step · run capy nextframe validate --composition <path>",
         ));
     }
-    if !state.has_canvas_node(request.canvas_node_id) {
+    transition_node(
+        &mut attached,
+        NextFrameNodeAction::ValidateOk,
+        "structural validate ok",
+    )?;
+
+    let compile = capy_nextframe::compile_composition(capy_nextframe::CompileCompositionRequest {
+        composition_path: path.clone(),
+        strict_binary: false,
+    });
+    if !compile.ok {
+        let error = compile.errors.first();
+        land_error(
+            &mut attached,
+            error
+                .map(|error| error.code.as_str())
+                .unwrap_or("COMPILE_FAILED"),
+            error
+                .map(|error| error.message.as_str())
+                .unwrap_or("composition compile failed"),
+            error.map(|error| error.hint.clone()).or_else(|| {
+                Some("next step · run capy nextframe compile --composition <path>".to_string())
+            }),
+            "compile failed",
+        )?;
+        state.attach_nextframe_node(request.canvas_node_id, attached)?;
         return Err(attach_error(
-            "CANVAS_NODE_NOT_FOUND",
-            format!("canvas node {} was not found", request.canvas_node_id),
-            "next step · run capy canvas snapshot",
+            "COMPILE_FAILED",
+            compile
+                .errors
+                .first()
+                .map(|error| error.message.clone())
+                .unwrap_or_else(|| "composition compile failed".to_string()),
+            "next step · run capy nextframe compile --composition <path>",
         ));
     }
-
-    let node_state = "preview-ready".to_string();
-    let attached = AttachedCanvasNode {
-        kind: "nextframe-composition".to_string(),
-        state: node_state.clone(),
-        composition_ref: NextFrameCompositionRef {
-            path: path.display().to_string(),
-            schema_version: document.schema_version,
-            track_count: document.tracks.len(),
-            asset_count: document.assets.len(),
-        },
-    };
+    transition_node(
+        &mut attached,
+        NextFrameNodeAction::CompileOk,
+        "render_source.v1 generated",
+    )?;
+    transition_node(
+        &mut attached,
+        NextFrameNodeAction::PreviewReady,
+        "v0.13.5 attach marks preview ready",
+    )?;
     state.attach_nextframe_node(request.canvas_node_id, attached.clone())?;
 
     let report = AttachReport {
@@ -94,7 +154,7 @@ pub fn attach_node(state: &ShellState, params: Value) -> Result<Value, String> {
         stage: "attach".to_string(),
         canvas_node_id: request.canvas_node_id,
         composition_path: path.display().to_string(),
-        node_state,
+        node_state: attached.state.label().to_string(),
         ipc_socket: None,
         errors: Vec::new(),
     };
@@ -105,12 +165,116 @@ pub fn attach_node(state: &ShellState, params: Value) -> Result<Value, String> {
     }))
 }
 
+pub fn state_nodes(state: &ShellState, params: Value) -> Result<Value, String> {
+    let request = StateRequest::from_params(params)?;
+    let attachments = match request.canvas_node_id {
+        Some(id) => {
+            let node = state
+                .nextframe_nodes()?
+                .into_iter()
+                .find(|(node_id, _)| *node_id == id)
+                .map(|(_, node)| node)
+                .ok_or_else(|| {
+                    attach_error(
+                        "CANVAS_NODE_NOT_FOUND",
+                        format!("canvas node {id} has no attached NextFrame composition"),
+                        "next step · run capy nextframe attach",
+                    )
+                })?;
+            vec![attachment_json(id, &node)]
+        }
+        None => state
+            .nextframe_nodes()?
+            .into_iter()
+            .map(|(id, node)| attachment_json(id, &node))
+            .collect(),
+    };
+    Ok(json!({
+        "ok": true,
+        "trace_id": state_trace_id(),
+        "stage": "state",
+        "attachments": attachments
+    }))
+}
+
+pub(crate) fn state_response(req_id: String, state: &ShellState, params: Value) -> IpcResponse {
+    match state_nodes(state, params) {
+        Ok(data) => IpcResponse {
+            req_id,
+            ok: true,
+            data: Some(data),
+            error: None,
+        },
+        Err(error) => IpcResponse {
+            req_id,
+            ok: false,
+            data: None,
+            error: serde_json::from_str(&error)
+                .ok()
+                .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
+        },
+    }
+}
+
 pub(crate) fn event_detail(canvas_node_id: u64, node: &AttachedCanvasNode) -> Value {
     json!({
         "canvas_node_id": canvas_node_id,
         "kind": node.kind,
         "state": node.state,
         "composition_ref": node.composition_ref
+    })
+}
+
+fn transition_node(
+    node: &mut AttachedCanvasNode,
+    action: NextFrameNodeAction,
+    reason: &str,
+) -> Result<(), String> {
+    let from = node.state.clone();
+    let to = from.transition(action).map_err(|err| {
+        attach_error(
+            "ILLEGAL_TRANSITION",
+            format!("illegal transition from {} via {}", err.from, err.action),
+            "next step · inspect nextframe state history",
+        )
+    })?;
+    node.history.push(NextFrameTransition {
+        from,
+        to: to.clone(),
+        at: iso_now(),
+        reason: reason.to_string(),
+    });
+    node.state = to;
+    Ok(())
+}
+
+fn land_error(
+    node: &mut AttachedCanvasNode,
+    code: &str,
+    message: &str,
+    hint: Option<String>,
+    reason: &str,
+) -> Result<(), String> {
+    transition_node(
+        node,
+        NextFrameNodeAction::Error {
+            code: code.to_string(),
+            message: message.to_string(),
+            hint,
+        },
+        reason,
+    )
+}
+
+fn attachment_json(canvas_node_id: u64, node: &AttachedCanvasNode) -> Value {
+    json!({
+        "canvas_node_id": canvas_node_id,
+        "composition_path": node.composition_ref.path,
+        "state": node.state,
+        "schema_version": node.composition_ref.schema_version,
+        "track_count": node.composition_ref.track_count,
+        "asset_count": node.composition_ref.asset_count,
+        "history": node.history
     })
 }
 
@@ -148,6 +312,27 @@ impl AttachRequest {
             canvas_node_id,
             composition_path,
         })
+    }
+}
+
+#[derive(Debug)]
+struct StateRequest {
+    canvas_node_id: Option<u64>,
+}
+
+impl StateRequest {
+    fn from_params(params: Value) -> Result<Self, String> {
+        let canvas_node_id = match params.get("canvas_node_id") {
+            Some(Value::Null) | None => None,
+            Some(value) => Some(value.as_u64().ok_or_else(|| {
+                attach_error(
+                    "IPC_ERROR",
+                    "canvas_node_id must be an unsigned integer",
+                    "next step · run capy nextframe state --help",
+                )
+            })?),
+        };
+        Ok(Self { canvas_node_id })
     }
 }
 
@@ -192,112 +377,10 @@ fn trace_id() -> String {
     format!("attach-{millis}-{}", std::process::id())
 }
 
-#[cfg(test)]
-mod tests {
-    use std::fs;
-    use std::path::PathBuf;
-
-    use serde_json::{Value, json};
-
-    use super::attach_node;
-    use crate::app::ShellState;
-
-    #[test]
-    fn attach_happy_path_marks_node_preview_ready() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = unique_dir("happy")?;
-        let path = write_composition(&dir, valid_composition())?;
-        let state = ShellState::default();
-
-        let value = attach_node(
-            &state,
-            json!({"canvas_node_id": 0, "composition_path": path}),
-        )?;
-
-        assert_eq!(value["report"]["ok"], true);
-        assert_eq!(value["report"]["node_state"], "preview-ready");
-        assert_eq!(value["node"]["kind"], "nextframe-composition");
-        assert_eq!(value["node"]["composition_ref"]["track_count"], 1);
-        fs::remove_dir_all(dir)?;
-        Ok(())
-    }
-
-    #[test]
-    fn attach_reports_canvas_node_not_found() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = unique_dir("missing-node")?;
-        let path = write_composition(&dir, valid_composition())?;
-        let state = ShellState::default();
-
-        let error = attach_node(
-            &state,
-            json!({"canvas_node_id": 42, "composition_path": path}),
-        )
-        .expect_err("missing node should fail");
-        let value: Value = serde_json::from_str(&error)?;
-
-        assert_eq!(value["code"], "CANVAS_NODE_NOT_FOUND");
-        fs::remove_dir_all(dir)?;
-        Ok(())
-    }
-
-    #[test]
-    fn attach_reports_invalid_composition() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = unique_dir("invalid")?;
-        let path = write_composition(&dir, json!({"tracks": []}))?;
-        let state = ShellState::default();
-
-        let error = attach_node(
-            &state,
-            json!({"canvas_node_id": 0, "composition_path": path}),
-        )
-        .expect_err("invalid composition should fail");
-        let value: Value = serde_json::from_str(&error)?;
-
-        assert_eq!(value["code"], "INVALID_COMPOSITION");
-        fs::remove_dir_all(dir)?;
-        Ok(())
-    }
-
-    fn write_composition(
-        dir: &PathBuf,
-        value: Value,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        fs::create_dir_all(dir)?;
-        let path = dir.join("composition.json");
-        fs::write(&path, serde_json::to_string_pretty(&value)?)?;
-        Ok(path)
-    }
-
-    fn valid_composition() -> Value {
-        json!({
-            "schema": "nextframe.composition.v2",
-            "schema_version": "capy.composition.v1",
-            "id": "poster-snapshot",
-            "title": "Poster Snapshot",
-            "name": "Poster Snapshot",
-            "duration_ms": 1000,
-            "duration": "1000ms",
-            "viewport": {"w": 1920, "h": 1080, "ratio": "16:9"},
-            "theme": "default",
-            "tracks": [{
-                "id": "track-poster",
-                "kind": "component",
-                "component": "html.capy-poster",
-                "z": 10,
-                "time": {"start": "0ms", "end": "1000ms"},
-                "duration_ms": 1000,
-                "params": {"poster": {"type": "poster"}}
-            }],
-            "assets": []
-        })
-    }
-
-    fn unique_dir(label: &str) -> Result<PathBuf, std::time::SystemTimeError> {
-        Ok(std::env::temp_dir().join(format!(
-            "capy-shell-nextframe-{label}-{}-{}",
-            std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()
-        )))
-    }
-
-    use std::time::{SystemTime, UNIX_EPOCH};
+fn state_trace_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("state-{millis}-{}", std::process::id())
 }

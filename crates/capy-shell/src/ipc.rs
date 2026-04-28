@@ -151,6 +151,7 @@ async fn dispatch(
 ) -> IpcResponse {
     match req.op.as_str() {
         "state-query" if state.can_answer_directly(&req) => state.state_query(req),
+        "nextframe-state" => state.nextframe_state_query(req),
         "state-query" => {
             send_event(req, proxy, |request, ack| ShellEvent::StateQuery {
                 request,

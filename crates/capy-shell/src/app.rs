@@ -17,6 +17,7 @@ use crate::store::Store;
 mod canvas_tool;
 mod conversation;
 pub mod nextframe;
+mod nextframe_state;
 mod window;
 
 use window::{WindowManager, WindowStatus};
@@ -123,6 +124,11 @@ impl ShellState {
         ok_response(&request, json!({ "key": key, "value": value }))
     }
 
+    pub fn nextframe_state_query(&self, request: IpcRequest) -> IpcResponse {
+        let req_id = request.req_id.clone();
+        nextframe::state_response(req_id, self, request.params)
+    }
+
     pub(crate) fn has_canvas_node(&self, id: u64) -> bool {
         self.canvas_nodes
             .lock()
@@ -141,6 +147,16 @@ impl ShellState {
             .map_err(|_| "nextframe state lock failed".to_string())?;
         nodes.insert(id, node);
         Ok(())
+    }
+
+    pub(crate) fn nextframe_nodes(
+        &self,
+    ) -> Result<Vec<(u64, nextframe::AttachedCanvasNode)>, String> {
+        let nodes = self
+            .nextframe_nodes
+            .lock()
+            .map_err(|_| "nextframe state lock failed".to_string())?;
+        Ok(nodes.iter().map(|(id, node)| (*id, node.clone())).collect())
     }
 
     fn sync_from_manager(&self, manager: &WindowManager) {
@@ -545,6 +561,8 @@ fn handle_js_ipc(
         )
     } else if op == "nextframe-attach" {
         nextframe_attach(manager, &state, request)
+    } else if op == "nextframe-state" {
+        state.nextframe_state_query(request)
     } else {
         conversation::response(store, proxy, request)
     };
