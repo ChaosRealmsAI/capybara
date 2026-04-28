@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Capybara</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app-shell" aria-label="Capybara">
+    <header class="topbar" data-native-drag="true">
+      <nav class="tabs" aria-label="Projects">
+        <button class="tab active" type="button">Agent</button>
+        <button class="tab add" type="button" aria-label="New tab">+</button>
+      </nav>
+    </header>
+    <section class="agent-stage" aria-label="Agent conversations">
+      <aside class="conversation-rail" aria-label="Conversations">
+        <button class="new-chat" id="new-chat" type="button">New chat</button>
+        <div class="conversation-list" id="conversation-list"></div>
+      </aside>
+      <section class="chat-pane" aria-label="Chat">
+        <div class="chat-header">
+          <div>
+            <div class="chat-title" id="chat-title">Capybara Agent</div>
+            <div class="chat-subtitle" id="chat-subtitle">Claude Code / Codex CLI</div>
+          </div>
+          <button class="stop-run" id="stop-run" type="button">Stop</button>
+        </div>
+        <div class="message-list" id="message-list"></div>
+        <form class="composer" id="composer">
+          <textarea id="prompt" rows="3" placeholder="Ask Claude or Codex to work in this directory"></textarea>
+          <div class="composer-actions">
+            <div class="runtime-config">
+              <select id="provider" aria-label="Provider">
+                <option value="claude">Claude</option>
+                <option value="codex">Codex</option>
+              </select>
+              <input id="cwd" aria-label="Working directory" placeholder="/Users/Zhuanz/workspace/capybara">
+              <input id="model" aria-label="Model" placeholder="model">
+              <select id="effort" aria-label="Effort">
+                <option value="">effort</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="xhigh">xhigh</option>
+              </select>
+              <select id="policy" aria-label="Permission policy">
+                <option value="">policy</option>
+                <option value="default">default</option>
+                <option value="acceptEdits">accept edits</option>
+                <option value="plan">plan</option>
+                <option value="on-request">on request</option>
+                <option value="never">never</option>
+              </select>
+            </div>
+            <button class="send" type="submit">Send</button>
+          </div>
+        </form>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="./script.js"></script>
+</body>
+</html>

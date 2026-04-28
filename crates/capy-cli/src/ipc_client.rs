@@ -1,0 +1,103 @@
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
+use interprocess::local_socket::tokio::prelude::*;
+use interprocess::local_socket::{GenericFilePath, ToFsName};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+const IPC_TIMEOUT: Duration = Duration::from_secs(10);
+static REQ_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IpcRequest {
+    pub req_id: String,
+    pub op: String,
+    #[serde(default)]
+    pub params: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IpcResponse {
+    pub req_id: String,
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<Value>,
+}
+
+pub fn request(op: impl Into<String>, params: Value) -> IpcRequest {
+    let seq = REQ_COUNTER.fetch_add(1, Ordering::Relaxed);
+    IpcRequest {
+        req_id: format!("{}-{seq}", std::process::id()),
+        op: op.into(),
+        params,
+    }
+}
+
+pub fn send(req: IpcRequest) -> Result<IpcResponse, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| format!("socket runtime failed: {err}"))?;
+
+    runtime
+        .block_on(async { tokio::time::timeout(IPC_TIMEOUT, send_async(req)).await })
+        .map_err(|_| "IPC request timed out after 10s".to_string())?
+}
+
+async fn send_async(req: IpcRequest) -> Result<IpcResponse, String> {
+    let path = socket_path();
+    let name = path
+        .to_str()
+        .ok_or_else(|| format!("socket path is not UTF-8: {path:?}"))?
+        .to_fs_name::<GenericFilePath>()
+        .map_err(|err| err.to_string())?;
+
+    let conn = interprocess::local_socket::tokio::Stream::connect(name)
+        .await
+        .map_err(|err| format!("socket failed: {err} · next step · run `capy shell`"))?;
+    let (read_half, mut write_half) = conn.split();
+    let mut payload = serde_json::to_string(&req).map_err(|err| err.to_string())?;
+    payload.push('\n');
+
+    write_half
+        .write_all(payload.as_bytes())
+        .await
+        .map_err(|err| err.to_string())?;
+    write_half.flush().await.map_err(|err| err.to_string())?;
+
+    let mut reader = BufReader::new(read_half);
+    let mut line = String::new();
+    let bytes = reader
+        .read_line(&mut line)
+        .await
+        .map_err(|err| err.to_string())?;
+    if bytes == 0 {
+        return Err("IPC server closed before sending a response".to_string());
+    }
+
+    let resp: IpcResponse = serde_json::from_str(line.trim_end()).map_err(|err| err.to_string())?;
+    if resp.req_id != req.req_id {
+        return Err(format!(
+            "IPC req_id mismatch: sent {}, received {}",
+            req.req_id, resp.req_id
+        ));
+    }
+    Ok(resp)
+}
+
+pub fn socket_path() -> PathBuf {
+    let uid = get_uid();
+    PathBuf::from(format!("/tmp/capybara-{uid}.sock"))
+}
+
+fn get_uid() -> u32 {
+    unsafe extern "C" {
+        fn getuid() -> u32;
+    }
+    unsafe { getuid() }
+}

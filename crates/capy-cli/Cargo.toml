@@ -1,0 +1,24 @@
+[package]
+name = "capy-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "capy"
+path = "src/main.rs"
+
+[dependencies]
+capy-shell = { path = "../capy-shell" }
+clap.workspace = true
+interprocess.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

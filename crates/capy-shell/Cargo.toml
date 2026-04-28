@@ -1,0 +1,29 @@
+[package]
+name = "capy-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "capy-shell"
+path = "src/main.rs"
+
+[dependencies]
+ctrlc.workspace = true
+interprocess.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+tao.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+wry.workspace = true
+objc2 = "0.6"
+objc2-app-kit = "0.3"
+objc2-foundation = "0.3"
+
+[lints]
+workspace = true

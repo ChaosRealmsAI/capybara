@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/capy-cli",
+    "crates/capy-shell",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.86"
+license = "MIT"
+authors = ["Capybara Contributors"]
+
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+ctrlc = { version = "3", features = ["termination"] }
+interprocess = { version = "2.4", features = ["tokio"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+tao = "0.35"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "io-util"] }
+uuid = { version = "1", features = ["v4"] }
+wry = "0.55"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+wildcard_imports = "deny"
