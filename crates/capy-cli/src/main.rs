@@ -8,6 +8,7 @@ mod canvas;
 mod cutout;
 mod ipc_client;
 mod media;
+mod nextframe;
 mod poster;
 
 #[derive(Debug, Parser)]
@@ -49,6 +50,8 @@ enum Command {
     Image(ImageArgs),
     #[command(about = "Package video clips for scroll-driven HTML pages")]
     Media(media::MediaArgs),
+    #[command(about = "Operate NextFrame composition and recorder integration")]
+    Nextframe(nextframe::NextFrameArgs),
     #[command(about = "Validate, compile, and snapshot poster JSON documents")]
     Poster(poster::PosterArgs),
     #[command(about = "Inspect local agent runtimes")]
@@ -518,6 +521,7 @@ fn run() -> Result<(), String> {
         Command::Canvas(args) => canvas::handle(args),
         Command::Image(args) => handle_image_command(args),
         Command::Media(args) => media::handle(args),
+        Command::Nextframe(args) => nextframe::handle(args),
         Command::Poster(args) => poster::handle(args),
         Command::Agent(args) => match args.command {
             AgentCommand::Doctor => {
