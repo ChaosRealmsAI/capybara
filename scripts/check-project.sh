@@ -6,26 +6,32 @@ cd "$ROOT"
 
 scripts/check-architecture.sh
 scripts/build-canvas-for-app.sh >/dev/null
+while IFS= read -r js_file; do
+  node --input-type=module --check < "$js_file" >/dev/null
+done < <(find frontend/capy-app -path 'frontend/capy-app/canvas-pkg' -prune -o -name '*.js' -print | sort)
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo test --manifest-path crates/capy-recorder/Cargo.toml --lib
 cargo run -p capy-cli -- --help >/dev/null
 cargo run -p capy-cli -- agent doctor >/dev/null
 cargo run -p capy-cli -- cutout --help >/dev/null
 cargo run -p capy-cli -- cutout doctor >/dev/null
-cargo run -p capy-cli -- nextframe doctor \
-  --nf tmp/nonexistent-nf \
-  --recorder tmp/nonexistent-nf-recorder >/dev/null
+cargo run -p capy-cli -- timeline doctor \
+  --recorder tmp/nonexistent-capy-recorder >/dev/null
 cargo run -p capy-cli -- image providers >/dev/null
 cargo run -p capy-cli -- image doctor >/dev/null
-cargo run -p capy-cli -- poster validate \
-  --input fixtures/poster/v0.1/sample-poster.json >/dev/null
-cargo run -p capy-cli -- poster compile \
+rm -rf target/capy-timeline/sample-poster
+cargo run -p capy-cli -- timeline compose-poster \
   --input fixtures/poster/v0.1/sample-poster.json \
-  --out target/capy-poster/sample-poster.render_source.json >/dev/null
-if ! jq -e '.schema_version == "nf.render_source.v1" and (.tracks | length) == 1' \
-  target/capy-poster/sample-poster.render_source.json >/dev/null; then
-  echo "project check failed: poster compile must emit render_source.v1 with one component track" >&2
+  --out target/capy-timeline/sample-poster >/dev/null
+cargo run -p capy-cli -- timeline validate \
+  --composition target/capy-timeline/sample-poster/composition.json >/dev/null
+cargo run -p capy-cli -- timeline compile \
+  --composition target/capy-timeline/sample-poster/composition.json >/dev/null
+if ! jq -e '.schema_version == "capy.timeline.render_source.v1" and (.tracks | length) == 1' \
+  target/capy-timeline/sample-poster/render_source.json >/dev/null; then
+  echo "project check failed: timeline compile must emit render_source.v1 with one component track" >&2
   exit 1
 fi
 cargo run -p capy-cli -- media --help >/dev/null

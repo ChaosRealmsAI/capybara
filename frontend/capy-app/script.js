@@ -23,6 +23,26 @@ import {
   renderPosterStage,
   validatePosterDocument
 } from "./poster-renderer.js";
+import {
+  clampRectToBounds,
+  compactGeometry,
+  nodeBounds,
+  normalizeRect,
+  regionPercent,
+  roundGeometry,
+  worldBoxToScreen
+} from "./workbench/geometry.js";
+import {
+  compileRows,
+  compositionRows,
+  evidenceRows,
+  exportRows,
+  exportStatus,
+  inspectorMessage,
+  sourceRows,
+  stageCard,
+  stageLabel,
+} from "./timeline/inspector-render.js";
 
 /* ─── DOM refs ─── */
 const $ = (sel) => document.querySelector(sel);
@@ -73,10 +93,10 @@ const plannerContextEl = $("#planner-context");
 const contextTitleEl = $("#context-title");
 const contextMetaEl = $("#context-meta");
 const contextAttachmentsEl = $("#context-attachments");
-const nextFrameInspectorEl = $('[data-section="nextframe-inspector"]');
-const nextFrameInspectorTitleEl = $("#nextframe-inspector-title");
-const nextFrameInspectorStatusEl = $("#nextframe-inspector-status");
-const nextFrameInspectorStagesEl = $("#nextframe-inspector-stages");
+const nextFrameInspectorEl = $('[data-section="timeline-inspector"]');
+const nextFrameInspectorTitleEl = $("#timeline-inspector-title");
+const nextFrameInspectorStatusEl = $("#timeline-inspector-status");
+const nextFrameInspectorStagesEl = $("#timeline-inspector-stages");
 const cmdPaletteEl = $("#cmd-palette");
 const cmdSearchEl = $("#cmd-search");
 const cmdCloseEl = $("#cmd-close");
@@ -93,6 +113,7 @@ let labelRefreshFrame = 0;
 let liveLabelRefreshFrame = 0;
 let liveLabelRefreshActive = false;
 let canvasLabelSyncInstalled = false;
+let registeredCanvasNodeKey = "";
 
 const pending = new Map();
 const state = {
@@ -136,7 +157,7 @@ const state = {
     lastNodeId: null,
     lastError: null
   },
-  nextframe: {
+  timeline: {
     attachments: new Map(),
     inspector: {
       nodeId: null,
@@ -183,9 +204,9 @@ window.capyWorkbench = {
   scheduleCanvasLabelRefresh,
   startLiveCanvasLabelRefresh,
   stateSnapshot,
-  attachNextFrameComposition,
-  openNextFrameComposition,
-  openNextFrameInspector,
+  attachTimelineComposition,
+  openTimelineComposition,
+  openTimelineInspector,
   startCanvasImageTool,
   verifyCanvasImageTool,
   verifyLabelMoveSync,
@@ -238,10 +259,9 @@ window.addEventListener("capy:canvas-node-attached", (event) => {
   handleCanvasNodeAttached(event.detail);
 });
 
-window.addEventListener("capy:nextframe-opened", (event) => {
-  handleNextFrameOpened(event.detail);
+window.addEventListener("capy:timeline-opened", (event) => {
+  handleTimelineOpened(event.detail);
 });
-
 /* ─── form / button listeners ─── */
 newChatEl?.addEventListener("click", async () => {
   try { await createConversation(); } catch (error) { renderError(error); }
@@ -964,67 +984,6 @@ function clampPointToSelectedNode(point) {
   };
 }
 
-function nodeBounds(node) {
-  return node?.bounds || node?.geometry || null;
-}
-
-function worldBoxToScreen(bounds, viewport) {
-  const zoom = Number(viewport?.zoom) || 1;
-  const offset = viewport?.camera_offset || { x: 0, y: 0 };
-  return {
-    x: Math.round(bounds.x * zoom + (Number(offset.x) || 0)),
-    y: Math.round(bounds.y * zoom + (Number(offset.y) || 0)),
-    w: Math.round(bounds.w * zoom),
-    h: Math.round(bounds.h * zoom)
-  };
-}
-
-function clampRectToBounds(rect, bounds) {
-  if (!rect || !bounds) return null;
-  const x1 = Math.max(bounds.x, rect.x);
-  const y1 = Math.max(bounds.y, rect.y);
-  const x2 = Math.min(bounds.x + bounds.w, rect.x + rect.w);
-  const y2 = Math.min(bounds.y + bounds.h, rect.y + rect.h);
-  if (x2 <= x1 || y2 <= y1) return null;
-  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
-}
-
-function normalizeRect(x, y, w, h) {
-  const nextX = Number(x) || 0;
-  const nextY = Number(y) || 0;
-  const nextW = Number(w) || 0;
-  const nextH = Number(h) || 0;
-  return {
-    x: nextW < 0 ? nextX + nextW : nextX,
-    y: nextH < 0 ? nextY + nextH : nextY,
-    w: Math.abs(nextW),
-    h: Math.abs(nextH)
-  };
-}
-
-function roundGeometry(geometry) {
-  return {
-    x: round2(geometry.x),
-    y: round2(geometry.y),
-    w: round2(geometry.w),
-    h: round2(geometry.h)
-  };
-}
-
-function regionPercent(region, bounds) {
-  if (!region || !bounds || !bounds.w || !bounds.h) return null;
-  return {
-    x: round4((region.x - bounds.x) / bounds.w),
-    y: round4((region.y - bounds.y) / bounds.h),
-    w: round4(region.w / bounds.w),
-    h: round4(region.h / bounds.h)
-  };
-}
-
-function compactGeometry(geometry) {
-  return [geometry.x, geometry.y, geometry.w, geometry.h].map((value) => Math.round(Number(value) || 0)).join("-");
-}
-
 function contextSummary(node, region) {
   const title = node?.title || `Node ${node?.id || "unknown"}`;
   if (!region) {
@@ -1032,14 +991,6 @@ function contextSummary(node, region) {
     return `${label} ${title} id=${node?.id}`;
   }
   return `region on ${title} id=${node?.id} bounds=${compactGeometry(region)}`;
-}
-
-function round2(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
-
-function round4(value) {
-  return Math.round((Number(value) || 0) * 10000) / 10000;
 }
 
 function verifyLabelMoveSync() {
@@ -1123,7 +1074,8 @@ function refreshPlannerContext() {
   const context = normalizeValue(selected_context()) || { selected_count: 0, items: [] };
   const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
   const selectedItem = Array.isArray(context.items) ? context.items[0] || null : null;
-  applyNextFrameAttachments(nodes);
+  registerCanvasNodes(nodes);
+  applyTimelineAttachments(nodes);
   state.blocks = nodes;
   state.selectedId = selectedItem?.id || null;
   state.canvas.ready = true;
@@ -1140,28 +1092,41 @@ function refreshPlannerContext() {
   renderNodeLabels(nodes, state.selectedId, snapshot.viewport || null);
   renderRegionOverlay();
   renderPlannerContext(selectedItem);
-  syncNextFrameInspector(selectedItem);
+  syncTimelineInspector(selectedItem);
   updateCanvasStatus(`${state.canvas.nodeCount} nodes · ${state.canvas.currentTool}`);
   return stateSnapshot();
 }
 
+function registerCanvasNodes(nodes) {
+  const ids = nodes
+    .map((node) => Number(node?.id))
+    .filter((id) => Number.isFinite(id) && id >= 0)
+    .sort((a, b) => a - b);
+  const key = ids.join(",");
+  if (!ids.length || key === registeredCanvasNodeKey) return;
+  registeredCanvasNodeKey = key;
+  rpc("canvas-nodes-register", { ids }).catch(() => {
+    registeredCanvasNodeKey = "";
+  });
+}
+
 const TYPE_DOTS = {
   brand: "#fbbf24", image: "#f9a8d4", video: "#a78bfa", web: "#84cc16",
-  "nextframe-composition": "#34d399",
+  "timeline-composition": "#34d399",
   text: "#9ca3af", default: "#a78bfa"
 };
 const TYPE_ICONS = {
   brand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8.5" stroke-dasharray="2 3"/></svg>',
   image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l4.5-4 4 3 3.5-2.5 3 2.5"/></svg>',
   video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor"/></svg>',
-  "nextframe-composition": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5M7 17h10"/></svg>',
+  "timeline-composition": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5M7 17h10"/></svg>',
   web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 3 2.6 14 0 17M12 3.5c-2.6 3-2.6 14 0 17"/></svg>',
   default: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>'
 };
 
 function inferType(node) {
   const componentKind = String(node?.capyComponentKind || node?.component_kind || "").toLowerCase();
-  if (componentKind === "nextframe-composition") return "nextframe-composition";
+  if (componentKind === "timeline-composition") return "timeline-composition";
   const k = String(node?.content_kind || "").toLowerCase();
   if (k === "brand") return "brand";
   if (k === "image") return "image";
@@ -1263,17 +1228,17 @@ function renderNodeLabels(nodes, selectedId, viewport) {
     existing.delete(nodeId);
     skin.dataset.nodeId = nodeId;
     const type = inferType(node);
-    skin.dataset.capyComponentKind = type === "nextframe-composition" ? type : "";
-    skin.dataset.capyNextframeState = node.nextframe?.state || "";
+    skin.dataset.capyComponentKind = type === "timeline-composition" ? type : "";
+    skin.dataset.capyTimelineState = node.timeline?.state || "";
     skin.classList.toggle("is-selected", String(node.id) === String(selectedId));
     skin.querySelector(".node-dot").style.background = TYPE_DOTS[type] || TYPE_DOTS.default;
     skin.querySelector(".node-icon").innerHTML = TYPE_ICONS[type] || TYPE_ICONS.default;
-    skin.querySelector(".node-type").textContent = type === "nextframe-composition"
-      ? "nextframe"
+    skin.querySelector(".node-type").textContent = type === "timeline-composition"
+      ? "timeline"
       : String(node.content_kind || "node").toLowerCase();
     skin.querySelector(".node-title").textContent = node.title || `Node ${node.id}`;
-    skin.querySelector(".node-meta").textContent = type === "nextframe-composition"
-      ? (node.nextframe?.state || "preview-ready")
+    skin.querySelector(".node-meta").textContent = type === "timeline-composition"
+      ? (node.timeline?.state || "preview-ready")
       : (node.next_action || "ready");
     const box = nodeLabelBox(node, viewport);
     const zoom = Number(viewport?.zoom) || 1;
@@ -1288,84 +1253,87 @@ function renderNodeLabels(nodes, selectedId, viewport) {
   for (const orphan of existing.values()) orphan.remove();
 }
 
-async function attachNextFrameComposition(canvasNodeId, compositionPath) {
-  return rpc("nextframe-attach", {
+async function attachTimelineComposition(canvasNodeId, compositionPath) {
+  return rpc("timeline-attach", {
     canvas_node_id: Number(canvasNodeId),
     composition_path: compositionPath
   });
 }
 
-async function openNextFrameComposition(canvasNodeId) {
-  const report = await rpc("nextframe-open", {
+async function openTimelineComposition(canvasNodeId) {
+  const report = await rpc("timeline-open", {
     canvas_node_id: Number(canvasNodeId)
   });
-  mountNextFramePreview(String(canvasNodeId), report.preview_url);
+  mountTimelinePreview(String(canvasNodeId), report.preview_url);
   return report;
 }
 
-async function openNextFrameInspector(canvasNodeId) {
+async function openTimelineInspector(canvasNodeId) {
   const nodeId = String(canvasNodeId);
-  showNextFrameInspector(nodeId);
-  if (state.nextframe.inspector.loading && state.nextframe.inspector.nodeId === nodeId) {
-    return state.nextframe.inspector.detail;
+  showTimelineInspector(nodeId);
+  if (state.timeline.inspector.loading && state.timeline.inspector.nodeId === nodeId) {
+    return state.timeline.inspector.detail;
   }
-  state.nextframe.inspector.loading = true;
-  state.nextframe.inspector.nodeId = nodeId;
-  state.nextframe.inspector.error = null;
-  renderNextFrameInspector();
+  state.timeline.inspector.loading = true;
+  state.timeline.inspector.nodeId = nodeId;
+  state.timeline.inspector.error = null;
+  renderTimelineInspector();
   try {
-    const detail = await rpc("nextframe-state-detail", {
+    const detail = await rpc("timeline-state-detail", {
       canvas_node_id: Number(canvasNodeId)
     });
-    if (state.nextframe.inspector.nodeId !== nodeId) return detail;
-    state.nextframe.inspector.detail = detail.attachment || null;
-    state.nextframe.inspector.error = null;
-    renderNextFrameInspector();
+    if (state.timeline.inspector.nodeId !== nodeId) return detail;
+    state.timeline.inspector.detail = detail.attachment || null;
+    state.timeline.inspector.error = null;
+    renderTimelineInspector();
     return detail;
   } catch (error) {
-    if (state.nextframe.inspector.nodeId !== nodeId) throw error;
-    state.nextframe.inspector.error = stringifyError(error);
-    renderNextFrameInspector();
+    if (state.timeline.inspector.nodeId !== nodeId) throw error;
+    state.timeline.inspector.error = stringifyError(error);
+    renderTimelineInspector();
     throw error;
   } finally {
-    if (state.nextframe.inspector.nodeId === nodeId) {
-      state.nextframe.inspector.loading = false;
-      renderNextFrameInspector();
+    if (state.timeline.inspector.nodeId === nodeId) {
+      state.timeline.inspector.loading = false;
+      renderTimelineInspector();
     }
   }
 }
 
-function syncNextFrameInspector(selectedItem) {
+function syncTimelineInspector(selectedItem) {
   const selectedBlock = state.blocks.find((node) => String(node.id) === String(selectedItem?.id));
-  if (!selectedBlock || inferType(selectedBlock) !== "nextframe-composition") {
-    hideNextFrameInspector();
+  if (!selectedBlock || inferType(selectedBlock) !== "timeline-composition") {
+    hideTimelineInspector();
     return;
   }
   const nodeId = String(selectedBlock.id);
-  if (state.nextframe.inspector.nodeId === nodeId && state.nextframe.inspector.detail) {
-    showNextFrameInspector(nodeId);
+  if (state.timeline.inspector.nodeId === nodeId && state.timeline.inspector.detail) {
+    showTimelineInspector(nodeId);
     return;
   }
-  openNextFrameInspector(nodeId).catch(() => {});
+  openTimelineInspector(nodeId).catch(() => {});
 }
 
-function showNextFrameInspector(nodeId) {
+function showTimelineInspector(nodeId) {
   if (!nextFrameInspectorEl) return;
   nextFrameInspectorEl.hidden = false;
-  state.nextframe.inspector.nodeId = String(nodeId);
+  state.timeline.inspector.nodeId = String(nodeId);
 }
 
-function hideNextFrameInspector() {
+function hideTimelineInspector() {
   if (nextFrameInspectorEl) nextFrameInspectorEl.hidden = true;
-  state.nextframe.inspector.nodeId = null;
-  state.nextframe.inspector.detail = null;
-  state.nextframe.inspector.error = null;
+  state.timeline.inspector.nodeId = null;
+  state.timeline.inspector.detail = null;
+  state.timeline.inspector.error = null;
 }
 
-function renderNextFrameInspector() {
+function renderTimelineInspector() {
   if (!nextFrameInspectorEl || !nextFrameInspectorStagesEl) return;
-  const inspector = state.nextframe.inspector;
+  const inspector = state.timeline.inspector;
   const detail = inspector.detail;
+  if (inspector.nodeId || detail || inspector.loading || inspector.error) {
+    nextFrameInspectorEl.hidden = false;
+  }
   nextFrameInspectorTitleEl.textContent = detail
     ? `Node ${detail.canvas_node_id}`
     : `Node ${inspector.nodeId || ""}`;
@@ -1380,7 +1348,7 @@ function renderNextFrameInspector() {
     return;
   }
   if (!detail) {
-    nextFrameInspectorStagesEl.replaceChildren(inspectorMessage("Waiting for selection", "Select an attached NextFrame composition."));
+    nextFrameInspectorStagesEl.replaceChildren(inspectorMessage("Waiting for selection", "Select an attached Timeline composition."));
     return;
   }
   nextFrameInspectorStagesEl.replaceChildren(
@@ -1388,180 +1356,51 @@ function renderNextFrameInspector() {
     stageCard("Composition", "json", compositionRows(detail.composition)),
     stageCard("Compile", detail.compile?.status || "missing", compileRows(detail.compile)),
     stageCard("Export", exportStatus(detail.export_jobs), exportRows(detail.export_jobs)),
-    stageCard("Evidence", detail.evidence?.exists ? "linked" : "missing", evidenceRows(detail.evidence))
+    stageCard("Evidence", detail.evidence?.exists ? "ready" : "missing", evidenceRows(detail.evidence))
   );
-}
-
-function stageCard(title, status, rows) {
-  const card = document.createElement("section");
-  card.className = "inspector-stage";
-  card.dataset.status = String(status || "idle");
-  const head = document.createElement("header");
-  head.innerHTML = `<span class="stage-icon"></span><h3></h3>`;
-  head.querySelector("h3").textContent = title;
-  const body = document.createElement("div");
-  body.className = "stage-body";
-  for (const row of rows) body.append(row);
-  card.append(head, body);
-  return card;
-}
-
-function sourceRows(source) {
-  const posterRefs = Array.isArray(source?.poster_refs) ? source.poster_refs : [];
-  const scrollRefs = Array.isArray(source?.scroll_media_refs) ? source.scroll_media_refs : [];
-  return [
-    kvRow("poster", refsText(posterRefs)),
-    kvRow("scroll-media", refsText(scrollRefs)),
-    kvRow("brand_tokens", source?.brand_tokens?.source_path || source?.brand_tokens?.tokens_ref || "none")
-  ];
-}
-
-function compositionRows(composition) {
-  return [
-    linkRow("composition.json", composition?.path),
-    codeRow(Array.isArray(composition?.preview_lines) ? composition.preview_lines.join("\n") : "")
-  ];
-}
-
-function compileRows(compile) {
-  return [
-    kvRow("render_source.json", compile?.status || "missing"),
-    linkRow("path", compile?.render_source_path),
-    kvRow("compile_mode", compile?.compile_mode || "unknown"),
-    kvRow("timestamp", compile?.timestamp || "not recorded")
-  ];
-}
-
-function exportRows(jobs) {
-  if (!Array.isArray(jobs) || jobs.length === 0) return [kvRow("jobs", "none")];
-  return jobs.map((job) => {
-    const row = document.createElement("div");
-    row.className = "export-job-row";
-    row.append(statusBadge(job.status), textSpan(job.output_path || job.job_id), textSpan(formatBytes(job.byte_size)));
-    return row;
-  });
-}
-
-function evidenceRows(evidence) {
-  if (!evidence?.exists) return [kvRow("evidence/index.html", "not found")];
-  return [linkRow("evidence/index.html", evidence.index_html)];
-}
-
-function kvRow(label, value) {
-  const row = document.createElement("div");
-  row.className = "stage-row";
-  row.append(textSpan(label, "stage-key"), textSpan(value || "none", "stage-value"));
-  return row;
-}
-
-function linkRow(label, path) {
-  const row = kvRow(label, path || "missing");
-  if (path) {
-    const value = row.querySelector(".stage-value");
-    const link = document.createElement("a");
-    link.href = path;
-    link.textContent = path;
-    value.replaceChildren(link);
-  }
-  return row;
-}
-
-function codeRow(text) {
-  const pre = document.createElement("pre");
-  pre.className = "composition-preview";
-  pre.textContent = text || "preview unavailable";
-  return pre;
-}
-
-function statusBadge(status) {
-  const badge = textSpan(stageLabel(status), "status-badge");
-  badge.dataset.status = stageLabel(status);
-  return badge;
-}
-
-function inspectorMessage(title, message) {
-  const box = document.createElement("div");
-  box.className = "inspector-message";
-  box.append(textSpan(title, "message-title"), textSpan(message, "message-copy"));
-  return box;
-}
-
-function textSpan(value, className = "") {
-  const span = document.createElement("span");
-  if (className) span.className = className;
-  span.textContent = String(value || "");
-  return span;
-}
-
-function refsText(refs) {
-  if (!refs.length) return "none";
-  return refs.map((item) => item.source_path || item.original_path || item.src || item.id).filter(Boolean).join(", ");
-}
-
-function exportStatus(jobs) {
-  if (!Array.isArray(jobs) || jobs.length === 0) return "idle";
-  if (jobs.some((job) => stageLabel(job.status) === "failed")) return "failed";
-  if (jobs.some((job) => stageLabel(job.status) === "running")) return "running";
-  if (jobs.some((job) => stageLabel(job.status) === "done")) return "done";
-  return stageLabel(jobs[0].status);
-}
-
-function stageLabel(value) {
-  if (!value) return "idle";
-  if (typeof value === "string") return value;
-  if (value.error) return "error";
-  return String(value);
-}
-
-function formatBytes(value) {
-  const bytes = Number(value);
-  if (!Number.isFinite(bytes) || bytes <= 0) return "bytes unknown";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function handleCanvasNodeAttached(detail) {
   if (!detail) return;
   const nodeId = String(detail.canvas_node_id);
-  state.nextframe.attachments.set(nodeId, {
+  state.timeline.attachments.set(nodeId, {
     state: detail.state || "preview-ready",
     composition_ref: detail.composition_ref || null
   });
   const node = state.blocks.find((item) => String(item.id) === nodeId);
   if (node) {
-    applyNextFrameAttachment(node, state.nextframe.attachments.get(nodeId));
+    applyTimelineAttachment(node, state.timeline.attachments.get(nodeId));
   }
   const escapedNodeId = window.CSS?.escape ? CSS.escape(nodeId) : nodeId.replace(/"/g, '\\"');
   const label = labelLayerEl?.querySelector(`[data-node-id="${escapedNodeId}"]`);
   if (label) {
-    label.dataset.capyComponentKind = "nextframe-composition";
-    label.dataset.capyNextframeState = detail.state || "preview-ready";
+    label.dataset.capyComponentKind = "timeline-composition";
+    label.dataset.capyTimelineState = detail.state || "preview-ready";
     const type = label.querySelector(".node-type");
     const meta = label.querySelector(".node-meta");
-    if (type) type.textContent = "nextframe";
+    if (type) type.textContent = "timeline";
     if (meta) meta.textContent = detail.state || "preview-ready";
   }
   scheduleCanvasLabelRefresh();
 }
 
-function handleNextFrameOpened(detail) {
+function handleTimelineOpened(detail) {
   if (!detail) return;
-  mountNextFramePreview(String(detail.canvas_node_id), detail.preview_url);
+  mountTimelinePreview(String(detail.canvas_node_id), detail.preview_url);
 }
 
-function mountNextFramePreview(nodeId, previewUrl) {
+function mountTimelinePreview(nodeId, previewUrl) {
   if (!labelLayerEl || !previewUrl) return null;
   const escapedNodeId = window.CSS?.escape ? CSS.escape(nodeId) : nodeId.replace(/"/g, '\\"');
   const label = labelLayerEl.querySelector(`[data-node-id="${escapedNodeId}"]`);
   if (!label) return null;
-  label.dataset.capyComponentKind = "nextframe-composition";
-  if (!label.dataset.capyNextframeState) label.dataset.capyNextframeState = "preview-ready";
-  let iframe = label.querySelector("iframe[data-capy-nextframe-preview]");
+  label.dataset.capyComponentKind = "timeline-composition";
+  if (!label.dataset.capyTimelineState) label.dataset.capyTimelineState = "preview-ready";
+  let iframe = label.querySelector("iframe[data-capy-timeline-preview]");
   if (!iframe) {
     iframe = document.createElement("iframe");
-    iframe.dataset.capyNextframePreview = "";
-    iframe.title = `NextFrame preview ${nodeId}`;
+    iframe.dataset.capyTimelinePreview = "";
+    iframe.title = `Timeline preview ${nodeId}`;
     iframe.loading = "lazy";
     iframe.sandbox = "allow-scripts allow-same-origin";
     label.append(iframe);
@@ -1570,18 +1409,18 @@ function mountNextFramePreview(nodeId, previewUrl) {
   return iframe;
 }
 
-function applyNextFrameAttachments(nodes) {
+function applyTimelineAttachments(nodes) {
   for (const node of nodes) {
-    const attachment = state.nextframe.attachments.get(String(node?.id));
-    if (attachment) applyNextFrameAttachment(node, attachment);
+    const attachment = state.timeline.attachments.get(String(node?.id));
+    if (attachment) applyTimelineAttachment(node, attachment);
   }
 }
 
-function applyNextFrameAttachment(node, attachment) {
+function applyTimelineAttachment(node, attachment) {
   if (!node || !attachment) return;
-  node.capyComponentKind = "nextframe-composition";
-  node.component_kind = "nextframe-composition";
-  node.nextframe = attachment;
+  node.capyComponentKind = "timeline-composition";
+  node.component_kind = "timeline-composition";
+  node.timeline = attachment;
   if (!node.content_kind || node.content_kind === "video") node.content_kind = "video";
 }
 

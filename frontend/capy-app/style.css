@@ -167,7 +167,7 @@ body {
   grid-template-columns: minmax(640px, 1fr) 420px;
   gap: 0;
 }
-.workbench:has(.nextframe-inspector:not([hidden])) {
+.workbench:has(.timeline-inspector:not([hidden])) {
   grid-template-columns: minmax(560px, 1fr) 390px 360px;
 }
 
@@ -497,14 +497,14 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-.node-label[data-capy-component-kind="nextframe-composition"] {
+.node-label[data-capy-component-kind="timeline-composition"] {
   border-color: rgba(52, 211, 153, 0.44);
   background:
     linear-gradient(135deg, rgba(236, 253, 245, 0.96), rgba(255, 255, 255, 0.94));
 }
 
-.node-label[data-capy-component-kind="nextframe-composition"]::after {
-  content: "NextFrame";
+.node-label[data-capy-component-kind="timeline-composition"]::after {
+  content: "Timeline";
   position: absolute;
   right: 12px;
   bottom: 10px;
@@ -517,7 +517,7 @@ body {
   font-weight: 780;
 }
 
-.node-label[data-capy-component-kind="nextframe-composition"] iframe[data-capy-nextframe-preview] {
+.node-label[data-capy-component-kind="timeline-composition"] iframe[data-capy-timeline-preview] {
   position: absolute;
   inset: 32px 8px 8px;
   width: calc(100% - 16px);
@@ -616,7 +616,7 @@ body {
   min-width: 0; min-height: 0;
 }
 
-.nextframe-inspector {
+.timeline-inspector {
   margin: 14px 14px 14px 7px;
   border-radius: 24px;
   background: linear-gradient(180deg, rgba(46, 28, 79, 0.9), rgba(34, 24, 56, 0.86));
@@ -631,7 +631,7 @@ body {
   min-width: 0;
   min-height: 0;
 }
-.nextframe-inspector[hidden] { display: none; }
+.timeline-inspector[hidden] { display: none; }
 .inspector-head {
   display: flex;
   align-items: flex-start;
@@ -1372,8 +1372,8 @@ body {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(360px, 60vh) 1fr auto;
   }
-  .workbench:has(.nextframe-inspector:not([hidden])) { grid-template-columns: 1fr; }
+  .workbench:has(.timeline-inspector:not([hidden])) { grid-template-columns: 1fr; }
   .canvas-panel { margin: 8px 8px 0; }
   .planner-shell,
-  .nextframe-inspector { margin: 6px 8px 8px; }
+  .timeline-inspector { margin: 6px 8px 8px; }
 }

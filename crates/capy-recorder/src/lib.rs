@@ -1,0 +1,20 @@
+#![deny(unsafe_op_in_unsafe_fn)]
+
+pub mod backend;
+pub mod cef_osr;
+pub mod cli; // T-10 填
+pub mod events; // T-10 填
+pub mod export_api;
+pub mod frame_pool; // T-09 填
+pub mod orchestrator; // Historical: v1.15 · 并行录制父进程 · spawn N 子 + ffmpeg concat
+pub mod pipeline;
+pub mod record_loop; // T-09 填
+pub mod snapshot; // T-18 · product-internal single-frame PNG
+pub mod verify_mp4; // T-17 · product-internal MP4 atom verifier // Historical: v1.44 · high-level lib API · 从 source.json 直接导出 MP4
+
+pub use backend::RecorderBackend;
+pub use export_api::{
+    run_export_from_source, snapshot_from_source, validate_render_source,
+    validate_render_source_file, ExportOpts, ExportResolution, RenderSourceSummary,
+};
+pub use pipeline::{ColorSpec, OutputStats, PipelineError, RecordOpts, RecordPipeline, VideoCodec};

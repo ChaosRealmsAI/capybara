@@ -383,10 +383,11 @@ name = "capy-cli"
 version = "0.2.0"
 dependencies = [
  "base64",
+ "capy-contracts",
  "capy-image-gen",
- "capy-nextframe",
  "capy-scroll-media",
  "capy-shell",
+ "capy-timeline",
  "clap",
  "image",
  "interprocess",
@@ -395,6 +396,22 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "capy-contracts"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "capy-creative-core"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -407,27 +424,38 @@ dependencies = [
 ]
 
 [[package]]
-name = "capy-nextframe"
-version = "0.2.0"
-dependencies = [
- "capy-poster",
- "image",
- "nf-project",
- "nf-recorder",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "which",
-]
-
-[[package]]
 name = "capy-poster"
 version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "capy-recorder"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "block2 0.6.2",
+ "capy-shell-mac",
+ "clap",
+ "crossbeam",
+ "objc2 0.6.4",
+ "objc2-av-foundation",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-core-media",
+ "objc2-core-video",
+ "objc2-foundation 0.3.2",
+ "objc2-io-surface",
+ "objc2-video-toolbox",
+ "png 0.17.16",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "wef",
 ]
 
 [[package]]
@@ -444,8 +472,9 @@ name = "capy-shell"
 version = "0.2.0"
 dependencies = [
  "base64",
+ "capy-contracts",
  "capy-image-gen",
- "capy-nextframe",
+ "capy-timeline",
  "ctrlc",
  "image",
  "interprocess",
@@ -461,6 +490,55 @@ dependencies = [
  "tokio",
  "uuid",
  "wef",
+]
+
+[[package]]
+name = "capy-shell-mac"
+version = "0.1.0"
+dependencies = [
+ "block2 0.6.2",
+ "libc",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-core-image 0.3.2",
+ "objc2-core-video",
+ "objc2-foundation 0.3.2",
+ "objc2-io-surface",
+ "objc2-metal 0.3.2",
+ "objc2-quartz-core 0.3.2",
+ "objc2-web-kit",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "capy-timeline"
+version = "0.2.0"
+dependencies = [
+ "capy-poster",
+ "capy-recorder",
+ "capy-timeline-project",
+ "image",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "which",
+]
+
+[[package]]
+name = "capy-timeline-project"
+version = "0.2.0"
+dependencies = [
+ "directories",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2095,67 +2173,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys 0.3.1",
-]
-
-[[package]]
-name = "nf-project"
-version = "0.2.0"
-dependencies = [
- "directories",
- "once_cell",
- "regex",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "nf-recorder"
-version = "0.1.0"
-dependencies = [
- "base64",
- "block2 0.6.2",
- "clap",
- "crossbeam",
- "nf-shell-mac",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-av-foundation",
- "objc2-core-foundation",
- "objc2-core-graphics",
- "objc2-core-media",
- "objc2-core-video",
- "objc2-foundation 0.3.2",
- "objc2-io-surface",
- "objc2-video-toolbox",
- "png 0.17.16",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "wef",
-]
-
-[[package]]
-name = "nf-shell-mac"
-version = "0.1.0"
-dependencies = [
- "block2 0.6.2",
- "libc",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-core-foundation",
- "objc2-core-graphics",
- "objc2-core-image 0.3.2",
- "objc2-core-video",
- "objc2-foundation 0.3.2",
- "objc2-io-surface",
- "objc2-metal 0.3.2",
- "objc2-quartz-core 0.3.2",
- "objc2-web-kit",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
 ]
 
 [[package]]

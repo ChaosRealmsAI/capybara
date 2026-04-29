@@ -1,6 +1,5 @@
-use std::env;
-use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
@@ -14,15 +13,14 @@ use crate::agent_tools::{
 use crate::app::ShellEvent;
 use crate::store::{Conversation, CreateRunEvent, Provider, Store};
 
-const GUI_TOOL_PATH_DIRS: &[&str] = &[
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    "/opt/local/bin",
-    "/usr/bin",
-    "/bin",
-    "/usr/sbin",
-    "/sbin",
-];
+mod jsonrpc;
+mod tool_path;
+
+use jsonrpc::{read_json_line, read_until_response, send_json};
+use tool_path::{tool_launch, tool_version};
+
+#[cfg(test)]
+use tool_path::{desktop_tool_path_env, resolve_tool_path};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -180,14 +178,14 @@ fn run_claude(
     prompt: &str,
 ) -> Result<RunOutput, String> {
     let launch = tool_launch("claude");
-    let mut command = Command::new(&launch.program);
+    let mut command = Command::new(launch.program());
     let use_resume = store
         .messages_for(&conversation.id)?
         .iter()
         .any(|message| message.role == "assistant");
     command.args(claude_args(conversation, prompt, use_resume));
     command.current_dir(&conversation.cwd);
-    command.env("PATH", &launch.path_env);
+    command.env("PATH", launch.path_env());
     apply_agent_tool_env(&mut command, &conversation.config);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
@@ -259,12 +257,12 @@ fn run_codex(
     prompt: &str,
 ) -> Result<RunOutput, String> {
     let launch = tool_launch("codex");
-    let mut command = Command::new(&launch.program);
+    let mut command = Command::new(launch.program());
     command.arg("app-server");
     command.args(codex_app_server_args(&conversation.config));
     command.arg("--listen").arg("stdio://");
     command
-        .env("PATH", &launch.path_env)
+        .env("PATH", launch.path_env())
         .envs(agent_tool_env(&conversation.config))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -487,51 +485,6 @@ fn json_or_file(value: &str) -> Result<Value, String> {
     serde_json::from_str(&source).map_err(|err| format!("invalid JSON schema: {err}"))
 }
 
-fn send_json(stdin: &mut std::process::ChildStdin, value: Value) -> Result<(), String> {
-    let payload = serde_json::to_string(&value).map_err(|err| err.to_string())?;
-    stdin
-        .write_all(payload.as_bytes())
-        .map_err(|err| format!("write JSON-RPC failed: {err}"))?;
-    stdin
-        .write_all(b"\n")
-        .map_err(|err| format!("write JSON-RPC newline failed: {err}"))?;
-    stdin
-        .flush()
-        .map_err(|err| format!("flush JSON-RPC failed: {err}"))
-}
-
-fn read_until_response(
-    reader: &mut BufReader<std::process::ChildStdout>,
-    id: i64,
-) -> Result<Value, String> {
-    loop {
-        let Some(value) = read_json_line(reader)? else {
-            return Err(format!("codex app-server closed before response id {id}"));
-        };
-        if value.get("id").and_then(Value::as_i64) == Some(id) {
-            if let Some(error) = value.get("error") {
-                return Err(format!("codex response error: {error}"));
-            }
-            return Ok(value);
-        }
-    }
-}
-
-fn read_json_line(
-    reader: &mut BufReader<std::process::ChildStdout>,
-) -> Result<Option<Value>, String> {
-    let mut line = String::new();
-    let bytes = reader
-        .read_line(&mut line)
-        .map_err(|err| format!("read JSON-RPC failed: {err}"))?;
-    if bytes == 0 {
-        return Ok(None);
-    }
-    serde_json::from_str::<Value>(line.trim_end())
-        .map(Some)
-        .map_err(|err| format!("invalid JSON-RPC line: {err}"))
-}
-
 fn claude_delta(value: &Value) -> Option<String> {
     if value.get("type").and_then(Value::as_str) == Some("content_block_delta") {
         return value
@@ -750,74 +703,6 @@ fn codex_sandbox_policy(value: &str) -> Value {
         "read-only" | "readOnly" => json!({ "type": "readOnly" }),
         "danger-full-access" | "dangerFullAccess" => json!({ "type": "dangerFullAccess" }),
         _ => json!({ "type": "workspaceWrite" }),
-    }
-}
-
-fn tool_version(bin: &str, args: &[&str]) -> Value {
-    let launch = tool_launch(bin);
-    match Command::new(&launch.program)
-        .env("PATH", &launch.path_env)
-        .args(args)
-        .output()
-    {
-        Ok(output) => json!({
-            "available": output.status.success(),
-            "version": String::from_utf8_lossy(&output.stdout).trim(),
-            "error": String::from_utf8_lossy(&output.stderr).trim()
-        }),
-        Err(err) => json!({ "available": false, "error": err.to_string() }),
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ToolLaunch {
-    program: PathBuf,
-    path_env: String,
-}
-
-impl ToolLaunch {
-    fn display(&self) -> String {
-        self.program.display().to_string()
-    }
-}
-
-fn tool_launch(bin: &str) -> ToolLaunch {
-    let path_env = desktop_tool_path_env();
-    let program = resolve_tool_path(bin, &path_env).unwrap_or_else(|| PathBuf::from(bin));
-    ToolLaunch { program, path_env }
-}
-
-fn resolve_tool_path(bin: &str, path_env: &str) -> Option<PathBuf> {
-    let path = Path::new(bin);
-    if path.is_absolute() || bin.contains('/') {
-        return path.is_file().then(|| path.to_path_buf());
-    }
-    env::split_paths(path_env)
-        .map(|dir| dir.join(bin))
-        .find(|candidate| candidate.is_file())
-}
-
-fn desktop_tool_path_env() -> String {
-    let mut dirs: Vec<PathBuf> = env::var_os("PATH")
-        .map(|value| env::split_paths(&value).collect())
-        .unwrap_or_default();
-    for fallback in GUI_TOOL_PATH_DIRS {
-        push_unique_path(&mut dirs, PathBuf::from(fallback));
-    }
-    if let Some(home) = env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        push_unique_path(&mut dirs, home.join(".local/bin"));
-        push_unique_path(&mut dirs, home.join(".cargo/bin"));
-    }
-    env::join_paths(dirs)
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned()
-}
-
-fn push_unique_path(dirs: &mut Vec<PathBuf>, dir: PathBuf) {
-    if !dirs.iter().any(|existing| existing == &dir) {
-        dirs.push(dir);
     }
 }
 

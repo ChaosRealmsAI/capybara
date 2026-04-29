@@ -1,0 +1,210 @@
+//! Stdout JSON-Line event emitter for recorder progress and verification.
+//!
+//! Historical: v1.14 T-09 minimal implementation.
+//! Historical: contract source `spec/versions/v1.14/spec/interfaces-delta.json`
+//! → `additions.modules[capy-recorder].subprocess_protocol.stdout_events`.
+//!
+//! Emits one JSON object per line to stdout, flushed on every call so
+//! downstream (nf-cli · verify script · test harness) can read events
+//! incrementally without waiting for buffer flushes.
+//!
+//! **Why sync stdout (not tokio::io)**: recorder pipeline is single-threaded
+//! (single recorder worker) · sync stdout is simpler · avoids tokio
+//! runtime contention with the NSRunLoop pump inside `call_async`.
+//! Historical: v1.14 used `worker_count = 1`.
+
+use serde::Serialize;
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
+
+static QUIET: AtomicBool = AtomicBool::new(false);
+static CAPTURE: OnceLock<Mutex<Option<Vec<serde_json::Value>>>> = OnceLock::new();
+
+/// Recorder stdout events · tagged by `event` field.
+/// Historical: v1.14 recorder stdout event schema.
+#[derive(Debug, Serialize)]
+#[serde(tag = "event")]
+pub enum Event {
+    /// Emitted once before the first frame · announces job parameters.
+    #[serde(rename = "record.start")]
+    RecordStart {
+        bundle: String,
+        out: String,
+        fps: u32,
+        bitrate_bps: u32,
+        viewport: [u32; 2],
+    },
+    /// Emitted per frame after successful encode.
+    ///
+    /// `t_ms` is the legacy integer-ms value (向后兼容 · 下游脚本仍用).
+    /// `t_exact_ms` is the precise f64 time the recorder sent to `window.__nf.seek`
+    /// (精确 `seq * 1000 / fps` · VP-3 用它做
+    /// "帧间 t 序列严格等距" 断言 · spread < 1e-6).
+    /// Historical: v1.14.0/1 integer-ms field; v1.14.2 added FM-T-QUANTIZATION.
+    #[serde(rename = "record.frame")]
+    RecordFrame {
+        t_ms: u64,
+        t_exact_ms: f64,
+        seq: u64,
+        encode_ms: f64,
+    },
+    /// Emitted every N frames (recorder chooses cadence).
+    /// Historical: v1.14 cadence = 30.
+    #[serde(rename = "record.encode_progress")]
+    RecordEncodeProgress {
+        frames_encoded: u64,
+        total_frames: u64,
+        percent: f64,
+    },
+    /// Emitted once after MP4 writer closes · final stats.
+    #[serde(rename = "record.done")]
+    RecordDone {
+        out: PathBuf,
+        duration_ms: u64,
+        size_bytes: u64,
+        moov_front: bool,
+    },
+    /// Emitted before ffmpeg starts muxing recorder audio tracks into the MP4.
+    #[serde(rename = "record.audio_mux.start")]
+    RecordAudioMuxStart { inputs: usize },
+    /// Emitted after ffmpeg has written and replaced the audio muxed MP4.
+    #[serde(rename = "record.audio_mux.done")]
+    RecordAudioMuxDone { inputs: usize },
+    /// Emitted once after `capy-recorder snapshot` writes the PNG · T-18.
+    ///
+    /// Paths are rendered strings (not `PathBuf`) so stdout stays ASCII on
+    /// non-UTF-8 platforms; `t_ms` matches the `--t-ms` input.
+    #[serde(rename = "snapshot.done")]
+    SnapshotDone {
+        bundle: String,
+        t_ms: u64,
+        out: String,
+    },
+    /// T-17 · MP4 self-verification result · emitted once after `verify` subcommand.
+    ///
+    /// `asserts` is a list of `{name, expected, actual, pass}` objects. `status`
+    /// mirrors all-pass for quick filtering by downstream (no need to re-eval).
+    #[serde(rename = "verify.result")]
+    VerifyResult {
+        file: String,
+        status: String,
+        moov_front: bool,
+        codec: String,
+        frame_rate: f64,
+        bit_rate: u64,
+        color_primaries: String,
+        transfer: String,
+        has_b_frames: bool,
+        duration_ms: u64,
+        asserts: Vec<serde_json::Value>,
+    },
+    /// 并行录制开始 · orchestrator 父进程 probe duration 后 emit。
+    /// Historical: v1.15 parallel recording event.
+    #[serde(rename = "record.parallel.start")]
+    RecordParallelStart {
+        parallel: usize,
+        total_frames: u64,
+        duration_ms: u64,
+    },
+    /// v1.15 · segment 子进程启动 · 父进程 spawn 后 emit。
+    #[serde(rename = "record.segment.start")]
+    RecordSegmentStart {
+        idx: usize,
+        start: u64,
+        end: u64,
+        output: String,
+    },
+    /// v1.15 · segment 子进程完成 · 父进程 wait 成功后 emit。
+    #[serde(rename = "record.segment.done")]
+    RecordSegmentDone {
+        idx: usize,
+        start: u64,
+        end: u64,
+        output: String,
+    },
+    /// v1.15 · ffmpeg concat 开始。
+    #[serde(rename = "record.concat.start")]
+    RecordConcatStart { segments: Vec<String> },
+    /// v1.15 · 并行录制全部完成 · wall time 统计。
+    #[serde(rename = "record.parallel.done")]
+    RecordParallelDone { parallel: usize, wall_time_ms: f64 },
+    /// Fatal error · recorder exits non-zero after emitting.
+    #[serde(rename = "error")]
+    Error { code: String, message: String },
+}
+
+/// Serialize `e` as a single JSON line to stdout and flush.
+///
+/// Never panics · serialization or io errors degrade to a stderr notice.
+pub fn emit(e: Event) {
+    match serde_json::to_string(&e) {
+        Ok(line) => {
+            capture_event(&line);
+            if QUIET.load(Ordering::Relaxed) {
+                return;
+            }
+            let stdout = std::io::stdout();
+            let mut lock = stdout.lock();
+            let _ = writeln!(lock, "{line}");
+            let _ = lock.flush();
+        }
+        Err(err) => {
+            eprintln!("capy-recorder: event serialize error: {err}");
+        }
+    }
+}
+
+pub fn set_quiet(quiet: bool) {
+    QUIET.store(quiet, Ordering::Relaxed);
+}
+
+pub struct EventCaptureGuard;
+
+impl EventCaptureGuard {
+    pub fn finish(self) -> Vec<serde_json::Value> {
+        let captured = finish_capture();
+        std::mem::forget(self);
+        captured
+    }
+}
+
+impl Drop for EventCaptureGuard {
+    fn drop(&mut self) {
+        let _ = finish_capture();
+    }
+}
+
+pub fn start_capture() -> EventCaptureGuard {
+    let lock = CAPTURE.get_or_init(|| Mutex::new(None));
+    if let Ok(mut capture) = lock.lock() {
+        *capture = Some(Vec::new());
+    }
+    EventCaptureGuard
+}
+
+fn capture_event(line: &str) {
+    let Some(lock) = CAPTURE.get() else {
+        return;
+    };
+    let Ok(mut capture) = lock.lock() else {
+        return;
+    };
+    let Some(events) = capture.as_mut() else {
+        return;
+    };
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+        events.push(value);
+    }
+}
+
+fn finish_capture() -> Vec<serde_json::Value> {
+    let Some(lock) = CAPTURE.get() else {
+        return Vec::new();
+    };
+    match lock.lock() {
+        Ok(mut capture) => capture.take().unwrap_or_default(),
+        Err(_) => Vec::new(),
+    }
+}

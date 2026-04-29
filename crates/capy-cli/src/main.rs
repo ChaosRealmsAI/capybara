@@ -4,14 +4,16 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
 
+mod agent;
 mod canvas;
 mod canvas_context;
 mod chat_context;
 mod cutout;
 mod desktop_verify;
+mod image;
 mod ipc_client;
 mod media;
-mod nextframe;
+mod timeline;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -49,13 +51,13 @@ enum Command {
     #[command(about = "Operate the live canvas through AI-safe commands")]
     Canvas(canvas::CanvasArgs),
     #[command(about = "Run AI-usable creative generation tools")]
-    Image(ImageArgs),
+    Image(image::ImageArgs),
     #[command(about = "Package video clips for scroll-driven HTML pages")]
     Media(media::MediaArgs),
-    #[command(about = "Operate NextFrame composition and recorder integration")]
-    Nextframe(nextframe::NextFrameArgs),
+    #[command(about = "Operate Timeline composition and recorder integration")]
+    Timeline(timeline::TimelineArgs),
     #[command(about = "Inspect local agent runtimes")]
-    Agent(AgentArgs),
+    Agent(agent::AgentArgs),
     #[command(about = "Quit the Capybara shell")]
     Quit,
 }
@@ -317,84 +319,6 @@ struct ChatSendArgs {
     prompt: Vec<String>,
 }
 
-#[derive(Debug, Args)]
-struct AgentArgs {
-    #[command(subcommand)]
-    command: AgentCommand,
-}
-
-#[derive(Debug, Args)]
-struct ImageArgs {
-    #[command(subcommand)]
-    command: ImageCommand,
-}
-
-#[derive(Debug, Subcommand)]
-enum ImageCommand {
-    #[command(about = "List image generation provider options")]
-    Providers,
-    #[command(about = "Check image generation provider readiness without spending credits")]
-    Doctor(ImageProviderArgs),
-    #[command(about = "Generate, submit, resume, or dry-run an image request")]
-    Generate(ImageGenerateArgs),
-    #[command(about = "Check image provider balance")]
-    Balance(ImageProviderArgs),
-}
-
-#[derive(Debug, Args)]
-struct ImageProviderArgs {
-    #[arg(long, value_enum, default_value = "apimart-gpt-image-2")]
-    provider: ImageProviderArg,
-}
-
-#[derive(Debug, Args)]
-struct ImageGenerateArgs {
-    #[arg(long, value_enum, default_value = "apimart-gpt-image-2")]
-    provider: ImageProviderArg,
-    #[arg(long, default_value = "1:1")]
-    size: String,
-    #[arg(long, alias = "aspect-ratio")]
-    aspect_ratio: Option<String>,
-    #[arg(long, default_value = "1k")]
-    resolution: String,
-    #[arg(long = "ref")]
-    refs: Vec<String>,
-    #[arg(long)]
-    out: Option<PathBuf>,
-    #[arg(long)]
-    name: Option<String>,
-    #[arg(long)]
-    dry_run: bool,
-    #[arg(long)]
-    submit_only: bool,
-    #[arg(long)]
-    resume: Option<String>,
-    #[arg(long)]
-    no_download: bool,
-    #[arg()]
-    prompt: Vec<String>,
-}
-
-#[derive(Debug, Clone, ValueEnum)]
-enum ImageProviderArg {
-    #[value(name = "apimart-gpt-image-2")]
-    ApimartGptImage2,
-}
-
-impl ImageProviderArg {
-    fn id(&self) -> capy_image_gen::ImageProviderId {
-        match self {
-            ImageProviderArg::ApimartGptImage2 => capy_image_gen::ImageProviderId::ApimartGptImage2,
-        }
-    }
-}
-
-#[derive(Debug, Subcommand)]
-enum AgentCommand {
-    #[command(about = "Check Claude and Codex runtime availability")]
-    Doctor,
-}
-
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -474,15 +398,10 @@ fn run() -> Result<(), String> {
             ChatCommand::Stop(args) => send("conversation-stop", json!({ "id": args.id })),
         },
         Command::Canvas(args) => canvas::handle(args),
-        Command::Image(args) => handle_image_command(args),
+        Command::Image(args) => image::handle(args),
         Command::Media(args) => media::handle(args),
-        Command::Nextframe(args) => nextframe::handle(args),
-        Command::Agent(args) => match args.command {
-            AgentCommand::Doctor => {
-                println!("{}", capy_shell::agent::doctor());
-                Ok(())
-            }
-        },
+        Command::Timeline(args) => timeline::handle(args),
+        Command::Agent(args) => agent::handle(args),
         Command::Quit => send("quit", json!({})),
     }
 }
@@ -650,66 +569,6 @@ fn print_json(data: &Value) -> Result<(), String> {
         serde_json::to_string_pretty(data).map_err(|err| err.to_string())?
     );
     Ok(())
-}
-
-fn handle_image_command(args: ImageArgs) -> Result<(), String> {
-    let data = match args.command {
-        ImageCommand::Providers => json!({
-            "ok": true,
-            "providers": capy_image_gen::providers()
-        }),
-        ImageCommand::Doctor(args) => {
-            serde_json::to_value(capy_image_gen::doctor(args.provider.id()))
-                .map_err(|err| err.to_string())?
-        }
-        ImageCommand::Balance(args) => {
-            capy_image_gen::balance(args.provider.id()).map_err(|err| err.to_string())?
-        }
-        ImageCommand::Generate(args) => {
-            let request = image_generate_request(args)?;
-            capy_image_gen::generate_image(request).map_err(|err| err.to_string())?
-        }
-    };
-    print_json(&data)
-}
-
-fn image_generate_request(
-    args: ImageGenerateArgs,
-) -> Result<capy_image_gen::GenerateImageRequest, String> {
-    if args.dry_run && args.submit_only {
-        return Err("--dry-run and --submit-only cannot be used together".to_string());
-    }
-    if args.resume.is_some() && (args.dry_run || args.submit_only || !args.prompt.is_empty()) {
-        return Err(
-            "--resume cannot be combined with prompt, --dry-run, or --submit-only".to_string(),
-        );
-    }
-    let mode = if args.resume.is_some() {
-        capy_image_gen::ImageGenerateMode::Resume
-    } else if args.dry_run {
-        capy_image_gen::ImageGenerateMode::DryRun
-    } else if args.submit_only {
-        capy_image_gen::ImageGenerateMode::SubmitOnly
-    } else {
-        capy_image_gen::ImageGenerateMode::Generate
-    };
-    let prompt = if args.prompt.is_empty() {
-        None
-    } else {
-        Some(args.prompt.join(" "))
-    };
-    Ok(capy_image_gen::GenerateImageRequest {
-        provider: args.provider.id(),
-        mode,
-        prompt,
-        size: args.aspect_ratio.unwrap_or(args.size),
-        resolution: args.resolution,
-        refs: args.refs,
-        output_dir: args.out,
-        name: args.name,
-        download: !args.no_download,
-        task_id: args.resume,
-    })
 }
 
 fn request_data(op: &str, params: Value) -> Result<Value, String> {

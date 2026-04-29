@@ -4,12 +4,18 @@ members = [
     "crates/capy-cli",
     "crates/capy-canvas-core",
     "crates/capy-canvas-web",
+    "crates/capy-contracts",
+    "crates/capy-creative-core",
     "crates/capy-image-gen",
-    "crates/capy-nextframe",
+    "crates/capy-timeline-project",
+    "crates/capy-timeline",
     "crates/capy-poster",
     "crates/capy-scroll-media",
     "crates/capy-shell",
-    "external/NextFrame/crates/nf-project",
+]
+exclude = [
+    "crates/capy-recorder",
+    "crates/capy-shell-mac",
 ]
 
 [workspace.package]
@@ -41,8 +47,11 @@ skrifa = "0.22"
 winit = "0.30"
 wasm-bindgen = "0.2"
 capy-canvas-core = { path = "crates/capy-canvas-core" }
+capy-contracts = { path = "crates/capy-contracts" }
+capy-creative-core = { path = "crates/capy-creative-core" }
 capy-image-gen = { path = "crates/capy-image-gen" }
-capy-nextframe = { path = "crates/capy-nextframe" }
+capy-timeline-project = { path = "crates/capy-timeline-project" }
+capy-timeline = { path = "crates/capy-timeline" }
 capy-poster = { path = "crates/capy-poster" }
 capy-scroll-media = { path = "crates/capy-scroll-media" }
 which = "7"

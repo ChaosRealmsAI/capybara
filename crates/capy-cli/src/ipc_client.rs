@@ -5,40 +5,19 @@ use std::time::Duration;
 
 use interprocess::local_socket::tokio::prelude::*;
 use interprocess::local_socket::{GenericFilePath, ToFsName};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+pub use capy_contracts::ipc::{IpcRequest, IpcResponse};
 
 const DEFAULT_IPC_TIMEOUT: Duration = Duration::from_secs(60);
 const IPC_TIMEOUT_ENV: &str = "CAPY_IPC_TIMEOUT_SECS";
 const SOCKET_ENV: &str = "CAPYBARA_SOCKET";
 static REQ_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IpcRequest {
-    pub req_id: String,
-    pub op: String,
-    #[serde(default)]
-    pub params: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IpcResponse {
-    pub req_id: String,
-    pub ok: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<Value>,
-}
-
 pub fn request(op: impl Into<String>, params: Value) -> IpcRequest {
     let seq = REQ_COUNTER.fetch_add(1, Ordering::Relaxed);
-    IpcRequest {
-        req_id: format!("{}-{seq}", std::process::id()),
-        op: op.into(),
-        params,
-    }
+    IpcRequest::new(format!("{}-{seq}", std::process::id()), op, params)
 }
 
 pub fn send(req: IpcRequest) -> Result<IpcResponse, String> {

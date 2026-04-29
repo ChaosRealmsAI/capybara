@@ -6,10 +6,12 @@ Private product specs, roadmap, research, concept assets, and evidence live at `
 
 ## Current State
 
-`v0.4` is the desktop foundation: bundled CEF/Chromium + tao is merged on `main`. `v0.2` remains only as the legacy wry/tao baseline and rollback reference.
+`v0.15` is the current architecture migration on `main`: bundled CEF/Chromium + tao, Capybara-owned Timeline/project/recorder crates, and stricter architecture gates. `v0.2` remains only as the legacy wry/tao baseline and rollback reference.
 
 - `crates/capy-cli` - `capy` CLI and AI verification entrypoint.
 - `crates/capy-shell` - CEF/Chromium + tao shell, browser adapter boundary, Unix socket IPC, native capture, traffic light alignment, SQLite store, and agent runtime adapters.
+- `crates/capy-timeline` - Capybara Timeline product boundary for composition, preview, snapshot/export, and live canvas attach/open.
+- `crates/capy-timeline-project`, `crates/capy-recorder`, `crates/capy-shell-mac` - internal engine crates migrated into Capybara; do not reintroduce external timeline submodules.
 - `frontend/capy-app` - native HTML/CSS/JS desktop UI.
 
 ## Commands
@@ -36,49 +38,49 @@ Use the same `CAPYBARA_SOCKET` value for both shell and CLI when multiple worktr
 ## AI 验证接口
 
 ```bash
-target/debug/capy nextframe doctor
-target/debug/capy nextframe compose-poster --input <poster.json> --out <dir> [--brand-tokens <css>]
-target/debug/capy nextframe validate --composition <path>
-target/debug/capy nextframe compile --composition <path>
-target/debug/capy nextframe attach --canvas-node <id> --composition <path>
-target/debug/capy nextframe state [--canvas-node <id>]
-target/debug/capy nextframe open --canvas-node <id>
-target/debug/capy nextframe snapshot --composition <path> [--frame <ms>]
-target/debug/capy nextframe export --composition <path> --kind mp4 [--fps <int>]
-target/debug/capy nextframe status --job <id>
-target/debug/capy nextframe cancel --job <id>
-target/debug/capy nextframe verify-export --composition <path>
-target/debug/capy nextframe rebuild --composition <path>
+target/debug/capy timeline doctor
+target/debug/capy timeline compose-poster --input <poster.json> --out <dir> [--brand-tokens <css>]
+target/debug/capy timeline validate --composition <path>
+target/debug/capy timeline compile --composition <path>
+target/debug/capy timeline attach --canvas-node <id> --composition <path>
+target/debug/capy timeline state [--canvas-node <id>]
+target/debug/capy timeline open --canvas-node <id>
+target/debug/capy timeline snapshot --composition <path> [--frame <ms>]
+target/debug/capy timeline export --composition <path> --kind mp4 [--fps <int>]
+target/debug/capy timeline status --job <id>
+target/debug/capy timeline cancel --job <id>
+target/debug/capy timeline verify-export --composition <path>
+target/debug/capy timeline rebuild --composition <path>
 ```
 
-## NextFrame Fusion (v0.13)
+## Capybara Timeline (v0.15)
 
-`capy-nextframe` is the single boundary between Capybara and the NextFrame engine. NextFrame ships as a git submodule at `external/NextFrame` and is consumed via direct crate dependencies (nf-project, nf-recorder).
+`capy-timeline` is the Capybara product boundary for composition, tracks, preview, snapshot, export, and recorder integration. Timeline engine code now lives inside Capybara crates; do not add external timeline submodule dependencies or compatibility commands for old product names.
 
 ### CLI commands(已在"AI 验证接口"段下增补)
 
-- `capy nextframe doctor` · adapter health check (mode=crate-only)
-- `capy nextframe compose-poster --input <poster.json> --out <dir> [--brand-tokens <css>]`
-- `capy nextframe validate --composition <path>`
-- `capy nextframe compile --composition <path>`
-- `capy nextframe attach --canvas-node <id> --composition <path>`
-- `capy nextframe state [--canvas-node <id>]`
-- `capy nextframe open --canvas-node <id>`
-- `capy nextframe snapshot --composition <path> [--frame <ms>]`
-- `capy nextframe export --composition <path> --kind mp4 [--fps <int>]`
-- `capy nextframe status --job <id>` / `cancel --job <id>`
-- `capy nextframe verify-export --composition <path>` · 端到端 + evidence/index.html
-- `capy nextframe rebuild --composition <path>` · token 变后重编
+- `capy timeline doctor` · adapter health check (mode=crate-only)
+- `capy timeline compose-poster --input <poster.json> --out <dir> [--brand-tokens <css>]`
+- `capy timeline validate --composition <path>`
+- `capy timeline compile --composition <path>`
+- `capy timeline attach --canvas-node <id> --composition <path>`
+- `capy timeline state [--canvas-node <id>]`
+- `capy timeline open --canvas-node <id>`
+- `capy timeline snapshot --composition <path> [--frame <ms>]`
+- `capy timeline export --composition <path> --kind mp4 [--fps <int>]`
+- `capy timeline status --job <id>` / `cancel --job <id>`
+- `capy timeline verify-export --composition <path>` · 端到端 + evidence/index.html
+- `capy timeline rebuild --composition <path>` · token 变后重编
 
 ### Pipeline
 
-`Poster JSON | Scroll-Media → capy nextframe compose-poster → composition.json → validate → compile → snapshot/export → evidence`
+`Poster JSON | Scroll-Media → capy timeline compose-poster → composition.json → validate → compile → snapshot/export → evidence`
 
 ### Frontend integration
 
-- Canvas node kind=`nextframe-composition` · attach 命令绑定
+- Canvas node kind=`timeline-composition` · attach 命令绑定
 - iframe preview 由 capy-shell 内置 127.0.0.1 micro-server 服务
-- PM inspector aside (`window.capyWorkbench.openNextFrameInspector`) 全链状态可视
+- PM inspector aside (`window.capyWorkbench.openTimelineInspector`) 全链状态可视
 
 ## Public Repo Rules
 

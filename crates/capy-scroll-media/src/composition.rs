@@ -11,7 +11,7 @@ use crate::types::{
     StorySourceChapter, StorySourceManifest,
 };
 
-const COMPOSITION_SCHEMA: &str = "nextframe.composition.v2";
+const COMPOSITION_SCHEMA: &str = "capy.timeline.composition.v1";
 const CAPY_COMPOSITION_SCHEMA_VERSION: &str = "capy.composition.v1";
 const SCROLL_CHAPTER_COMPONENT_ID: &str = "html.capy-scroll-chapter";
 const COMPONENT_FILE: &str = "components/html.capy-scroll-chapter.js";
@@ -359,27 +359,41 @@ mod tests {
     }
 
     #[test]
-    fn rejects_empty_scroll_composition_name() {
-        let err = emit_scroll_composition(ScrollCompositionRequest {
+    fn rejects_empty_scroll_composition_name() -> Result<()> {
+        let err = match emit_scroll_composition(ScrollCompositionRequest {
             input: PathBuf::from("missing.json"),
             out_dir: PathBuf::from("target/capy-scroll-media-test/empty"),
             name: " ".to_string(),
             overwrite: true,
-        })
-        .unwrap_err();
+        }) {
+            Ok(report) => {
+                return Err(ScrollMediaError::Message(format!(
+                    "expected empty name rejection, got report: {report:?}"
+                )));
+            }
+            Err(err) => err,
+        };
         assert!(err.to_string().contains("--name must not be empty"));
+        Ok(())
     }
 
     #[test]
-    fn rejects_missing_scroll_composition_input() {
-        let err = emit_scroll_composition(ScrollCompositionRequest {
+    fn rejects_missing_scroll_composition_input() -> Result<()> {
+        let err = match emit_scroll_composition(ScrollCompositionRequest {
             input: PathBuf::from("missing.json"),
             out_dir: PathBuf::from("target/capy-scroll-media-test/missing"),
             name: "Demo".to_string(),
             overwrite: true,
-        })
-        .unwrap_err();
+        }) {
+            Ok(report) => {
+                return Err(ScrollMediaError::Message(format!(
+                    "expected missing input rejection, got report: {report:?}"
+                )));
+            }
+            Err(err) => err,
+        };
         assert!(err.to_string().contains("input video not found"));
+        Ok(())
     }
 
     #[test]
@@ -388,13 +402,19 @@ mod tests {
         let input = root.join("poster.json");
         fs::create_dir_all(&root).map_err(io_error)?;
         fs::write(&input, "{}").map_err(io_error)?;
-        let err = emit_scroll_composition(ScrollCompositionRequest {
+        let err = match emit_scroll_composition(ScrollCompositionRequest {
             input,
             out_dir: root.join("out"),
             name: "Demo".to_string(),
             overwrite: false,
-        })
-        .unwrap_err();
+        }) {
+            Ok(report) => {
+                return Err(ScrollMediaError::Message(format!(
+                    "expected poster fallback rejection, got report: {report:?}"
+                )));
+            }
+            Err(err) => err,
+        };
         assert!(err.to_string().contains("poster JSON fallback failed"));
         Ok(())
     }

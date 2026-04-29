@@ -9,18 +9,26 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy, EventLoopWi
 use tao::window::{Window, WindowBuilder};
 use tokio::sync::oneshot;
 
+use capy_contracts::canvas::OP_CANVAS_NODES_REGISTER;
+use capy_contracts::timeline::{
+    OP_TIMELINE_ATTACH, OP_TIMELINE_EXPORT_CANCEL, OP_TIMELINE_EXPORT_STATUS, OP_TIMELINE_OPEN,
+    OP_TIMELINE_STATE, OP_TIMELINE_STATE_DETAIL,
+};
+
 use crate::agent::AgentRuntimeEvent;
 use crate::capture;
 use crate::ipc::{self, IpcRequest, IpcResponse, error_response, ok_response};
 use crate::store::Store;
 
+mod canvas_nodes;
 mod canvas_tool;
 mod conversation;
-pub mod nextframe;
-mod nextframe_detail;
-mod nextframe_host;
-mod nextframe_preview;
-mod nextframe_state;
+mod probes;
+pub mod timeline;
+mod timeline_detail;
+mod timeline_host;
+mod timeline_preview;
+mod timeline_state;
 mod window;
 
 use window::{WindowManager, WindowStatus};
@@ -54,11 +62,11 @@ pub enum ShellEvent {
         request: IpcRequest,
         ack: oneshot::Sender<IpcResponse>,
     },
-    NextFrameAttach {
+    TimelineAttach {
         request: IpcRequest,
         ack: oneshot::Sender<IpcResponse>,
     },
-    NextFrameOpen {
+    TimelineOpen {
         request: IpcRequest,
         ack: oneshot::Sender<IpcResponse>,
     },
@@ -82,8 +90,8 @@ pub enum ShellEvent {
 pub struct ShellState {
     windows: Mutex<Vec<WindowStatus>>,
     canvas_nodes: Mutex<BTreeSet<u64>>,
-    nextframe_nodes: Mutex<BTreeMap<u64, nextframe::AttachedCanvasNode>>,
-    nextframe_preview: nextframe_preview::NextFramePreviewServer,
+    timeline_nodes: Mutex<BTreeMap<u64, timeline::AttachedCanvasNode>>,
+    timeline_preview: timeline_preview::TimelinePreviewServer,
 }
 
 impl Default for ShellState {
@@ -91,8 +99,8 @@ impl Default for ShellState {
         Self {
             windows: Mutex::new(Vec::new()),
             canvas_nodes: Mutex::new(BTreeSet::from([0])),
-            nextframe_nodes: Mutex::new(BTreeMap::new()),
-            nextframe_preview: nextframe_preview::NextFramePreviewServer::start(),
+            timeline_nodes: Mutex::new(BTreeMap::new()),
+            timeline_preview: timeline_preview::TimelinePreviewServer::start(),
         }
     }
 }
@@ -101,7 +109,7 @@ impl ShellState {
     pub fn can_answer_directly(&self, request: &IpcRequest) -> bool {
         request.params.get("query").and_then(Value::as_str) == Some("windows")
             || request.params.get("key").and_then(Value::as_str) == Some("app.ready")
-            || request.params.get("key").and_then(Value::as_str) == Some("nextframe.attachments")
+            || request.params.get("key").and_then(Value::as_str) == Some("timeline.attachments")
     }
 
     pub fn state_query(&self, request: IpcRequest) -> IpcResponse {
@@ -122,9 +130,9 @@ impl ShellState {
             .unwrap_or("app.ready");
         let value = match key {
             "app.ready" => json!(true),
-            "nextframe.attachments" => {
-                let Ok(nodes) = self.nextframe_nodes.lock() else {
-                    return error_response(&request.req_id, "nextframe state lock failed");
+            "timeline.attachments" => {
+                let Ok(nodes) = self.timeline_nodes.lock() else {
+                    return error_response(&request.req_id, "timeline state lock failed");
                 };
                 json!(nodes.clone())
             }
@@ -133,16 +141,16 @@ impl ShellState {
         ok_response(&request, json!({ "key": key, "value": value }))
     }
 
-    pub fn nextframe_state_query(&self, request: IpcRequest) -> IpcResponse {
-        nextframe::state_response(request.req_id.clone(), self, request.params)
+    pub fn timeline_state_query(&self, request: IpcRequest) -> IpcResponse {
+        timeline::state_response(request.req_id.clone(), self, request.params)
     }
 
-    pub fn nextframe_export_status_query(&self, request: IpcRequest) -> IpcResponse {
-        nextframe::export_status_response(request.req_id.clone(), self, request.params)
+    pub fn timeline_export_status_query(&self, request: IpcRequest) -> IpcResponse {
+        timeline::export_status_response(request.req_id.clone(), self, request.params)
     }
 
-    pub fn nextframe_export_cancel_query(&self, request: IpcRequest) -> IpcResponse {
-        nextframe::export_cancel_response(request.req_id.clone(), self, request.params)
+    pub fn timeline_export_cancel_query(&self, request: IpcRequest) -> IpcResponse {
+        timeline::export_cancel_response(request.req_id.clone(), self, request.params)
     }
 
     pub(crate) fn has_canvas_node(&self, id: u64) -> bool {
@@ -152,46 +160,57 @@ impl ShellState {
             .unwrap_or(false)
     }
 
-    pub(crate) fn attach_nextframe_node(
+    pub(crate) fn register_canvas_nodes(&self, ids: &[u64]) -> Result<usize, String> {
+        let mut nodes = self
+            .canvas_nodes
+            .lock()
+            .map_err(|_| "canvas node state lock failed".to_string())?;
+        for id in ids {
+            nodes.insert(*id);
+        }
+        Ok(nodes.len())
+    }
+
+    pub(crate) fn attach_timeline_node(
         &self,
         id: u64,
-        node: nextframe::AttachedCanvasNode,
+        node: timeline::AttachedCanvasNode,
     ) -> Result<(), String> {
         let mut nodes = self
-            .nextframe_nodes
+            .timeline_nodes
             .lock()
-            .map_err(|_| "nextframe state lock failed".to_string())?;
+            .map_err(|_| "timeline state lock failed".to_string())?;
         nodes.insert(id, node);
         Ok(())
     }
 
-    pub(crate) fn nextframe_nodes(
+    pub(crate) fn timeline_nodes(
         &self,
-    ) -> Result<Vec<(u64, nextframe::AttachedCanvasNode)>, String> {
+    ) -> Result<Vec<(u64, timeline::AttachedCanvasNode)>, String> {
         let nodes = self
-            .nextframe_nodes
+            .timeline_nodes
             .lock()
-            .map_err(|_| "nextframe state lock failed".to_string())?;
+            .map_err(|_| "timeline state lock failed".to_string())?;
         Ok(nodes.iter().map(|(id, node)| (*id, node.clone())).collect())
     }
 
-    pub(crate) fn nextframe_node(
+    pub(crate) fn timeline_node(
         &self,
         id: u64,
-    ) -> Result<Option<nextframe::AttachedCanvasNode>, String> {
+    ) -> Result<Option<timeline::AttachedCanvasNode>, String> {
         let nodes = self
-            .nextframe_nodes
+            .timeline_nodes
             .lock()
-            .map_err(|_| "nextframe state lock failed".to_string())?;
+            .map_err(|_| "timeline state lock failed".to_string())?;
         Ok(nodes.get(&id).cloned())
     }
 
-    pub(crate) fn register_nextframe_preview(
+    pub(crate) fn register_timeline_preview(
         &self,
         canvas_node_id: u64,
         composition_path: &Path,
     ) -> Result<String, String> {
-        self.nextframe_preview
+        self.timeline_preview
             .register(canvas_node_id, composition_path)
     }
 
@@ -305,12 +324,12 @@ pub fn run() {
                     let response = conversation::response(Arc::clone(&store), &proxy, request);
                     let _send_result = ack.send(response);
                 }
-                ShellEvent::NextFrameAttach { request, ack } => {
-                    let response = nextframe_host::attach(&manager, &state, request);
+                ShellEvent::TimelineAttach { request, ack } => {
+                    let response = timeline_host::attach(&manager, &state, request);
                     let _send_result = ack.send(response);
                 }
-                ShellEvent::NextFrameOpen { request, ack } => {
-                    let response = nextframe_host::open(&manager, &state, request);
+                ShellEvent::TimelineOpen { request, ack } => {
+                    let response = timeline_host::open(&manager, &state, request);
                     let _send_result = ack.send(response);
                 }
                 ShellEvent::AgentRuntimeEvent { event } => {
@@ -384,7 +403,7 @@ fn devtools_query(manager: &WindowManager, request: IpcRequest, ack: oneshot::Se
             .unwrap_or("outerHTML");
         let window = optional_string(&request.params, "window");
         let (_, webview) = manager.webview_for_target(window.as_deref())?;
-        let script = devtools_script(&query, get);
+        let script = probes::devtools_script(&query, get);
         let callback_ack = Arc::clone(&shared_ack);
         let callback_req_id = req_id.clone();
         webview
@@ -427,7 +446,7 @@ fn state_query(manager: &WindowManager, request: IpcRequest, ack: oneshot::Sende
         let key = required_string(&request.params, "key")?;
         let window = optional_string(&request.params, "window");
         let (_, webview) = manager.webview_for_target(window.as_deref())?;
-        let script = state_script(&key);
+        let script = probes::state_script(&key);
         let callback_ack = Arc::clone(&shared_ack);
         let callback_req_id = req_id.clone();
         webview
@@ -455,14 +474,14 @@ fn screenshot(manager: &WindowManager, request: IpcRequest, ack: oneshot::Sender
         let out = required_string(&request.params, "out")?;
         let window = optional_string(&request.params, "window");
         let (window_id, webview) = manager.webview_for_target(window.as_deref())?;
-        let script = screenshot_probe_script(&region);
+        let script = probes::screenshot_probe_script(&region);
         let callback_req_id = req_id.clone();
         let window_id = window_id.to_string();
         let callback_ack = Arc::clone(&shared_ack);
         webview
             .evaluate_script_with_callback(&script, move |raw| {
                 let response =
-                    screenshot_response(&callback_req_id, &window_id, &region, &out, &raw);
+                    probes::screenshot_response(&callback_req_id, &window_id, &region, &out, &raw);
                 send_shared_response(&callback_ack, response);
             })
             .map_err(|err| format!("screenshot evaluate failed: {err}"))
@@ -570,18 +589,20 @@ fn handle_js_ipc(
                 request.params,
             ),
         )
-    } else if op == "nextframe-attach" {
-        nextframe_host::attach(manager, &state, request)
-    } else if op == "nextframe-state" {
-        state.nextframe_state_query(request)
-    } else if op == "nextframe-state-detail" {
-        nextframe_detail::state_detail_response(request.req_id.clone(), &state, request.params)
-    } else if op == "nextframe-export-status" {
-        state.nextframe_export_status_query(request)
-    } else if op == "nextframe-export-cancel" {
-        state.nextframe_export_cancel_query(request)
-    } else if op == "nextframe-open" {
-        nextframe_host::open(manager, &state, request)
+    } else if op == OP_CANVAS_NODES_REGISTER {
+        canvas_nodes::register_response(request.req_id.clone(), &state, request.params)
+    } else if op == OP_TIMELINE_ATTACH {
+        timeline_host::attach(manager, &state, request)
+    } else if op == OP_TIMELINE_STATE {
+        state.timeline_state_query(request)
+    } else if op == OP_TIMELINE_STATE_DETAIL {
+        timeline_detail::state_detail_response(request.req_id.clone(), &state, request.params)
+    } else if op == OP_TIMELINE_EXPORT_STATUS {
+        state.timeline_export_status_query(request)
+    } else if op == OP_TIMELINE_EXPORT_CANCEL {
+        state.timeline_export_cancel_query(request)
+    } else if op == OP_TIMELINE_OPEN {
+        timeline_host::open(manager, &state, request)
     } else {
         conversation::response(store, proxy, request)
     };
@@ -676,224 +697,5 @@ fn js_callback_response(req_id: &str, raw: &str) -> IpcResponse {
             error: None,
         },
         Err(err) => error_response(req_id, format!("invalid JavaScript callback JSON: {err}")),
-    }
-}
-
-fn devtools_script(query: &str, get: &str) -> String {
-    let query_json = json_string(query);
-    let get_json = json_string(get);
-    format!(
-        r#"(function() {{
-  function reply(value) {{ return JSON.stringify(value); }}
-  const selector = {query_json};
-  const get = {get_json};
-  const el = document.querySelector(selector);
-  if (!el) return reply({{ ok: false, error: "selector not found: " + selector }});
-  let value;
-  if (get === "bounding-rect") {{
-    const rect = el.getBoundingClientRect();
-    value = {{ x: rect.x, y: rect.y, width: rect.width, height: rect.height }};
-  }} else if (get === "outerHTML") {{
-    value = el.outerHTML;
-  }} else {{
-    value = el[get];
-  }}
-  return reply({{ ok: true, selector, get, value }});
-}})()"#
-    )
-}
-
-fn state_script(key: &str) -> String {
-    let key_json = json_string(key);
-    format!(
-        r#"(function() {{
-  function reply(value) {{ return JSON.stringify(value); }}
-  const key = {key_json};
-  const state = window.CAPYBARA_STATE || {{}};
-  const canvas = state.canvas || {{}};
-  const planner = state.planner || {{}};
-  let value = null;
-  if (key === "canvas.ready") value = !!canvas.ready;
-  else if (key === "canvas.nodeCount") value = Number(canvas.nodeCount || (Array.isArray(state.blocks) ? state.blocks.length : 0));
-  else if (key === "canvas.selectedNode") value = canvas.selectedNode || null;
-  else if (key === "canvas.selected-id") value = state.selectedId || null;
-  else if (key === "canvas.block-count") value = Array.isArray(state.blocks) ? state.blocks.length : 0;
-  else if (key === "canvas.currentTool") value = canvas.currentTool || null;
-  else if (key === "canvas.snapshotText") value = canvas.snapshotText || "";
-  else if (key === "canvas.context") value = state.canvasContext || planner.canvasContext || null;
-  else if (key === "planner.context") value = planner.context || null;
-  else if (key === "planner.canvasContext") value = planner.canvasContext || null;
-  else if (key === "planner.status") value = planner.contextText ? "context-ready" : "idle";
-  else return reply({{ ok: false, error: "unknown state key: " + key }});
-  return reply({{ ok: true, key, value }});
-}})()"#
-    )
-}
-
-fn screenshot_probe_script(region: &str) -> String {
-    let selector = match region {
-        "canvas" => "[data-section=\"canvas-host\"]",
-        "planner" => "[data-section=\"planner-chat\"]",
-        "topbar" => ".topbar",
-        _ => "",
-    };
-    let selector_json = json_string(selector);
-    format!(
-        r#"(function() {{
-  const selector = {selector_json};
-  const el = selector ? document.querySelector(selector) : document.documentElement;
-  const target = el || document.documentElement;
-  const rect = target.getBoundingClientRect();
-  const width = Math.max(1, Math.round((selector && el ? rect.width : window.innerWidth) || 1));
-  const height = Math.max(1, Math.round((selector && el ? rect.height : window.innerHeight) || 1));
-  return {{ ok: true, width, height, dpr: 1, selector, found: !!el }};
-}})()"#
-    )
-}
-
-fn screenshot_response(
-    req_id: &str,
-    window_id: &str,
-    region: &str,
-    out: &str,
-    raw: &str,
-) -> IpcResponse {
-    let value = match serde_json::from_str::<Value>(raw) {
-        Ok(value) => value,
-        Err(err) => return error_response(req_id, format!("invalid screenshot probe JSON: {err}")),
-    };
-    let width = value
-        .get("width")
-        .and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok())
-        .unwrap_or(1)
-        .clamp(1, 4096);
-    let height = value
-        .get("height")
-        .and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok())
-        .unwrap_or(1)
-        .clamp(1, 4096);
-    let png = encode_stub_png(width, height);
-    if let Err(err) = write_png(Path::new(out), &png) {
-        return error_response(req_id, format!("write screenshot failed: {err}"));
-    }
-    IpcResponse {
-        req_id: req_id.to_string(),
-        ok: true,
-        data: Some(json!({
-            "window_id": window_id,
-            "region": region,
-            "out": out,
-            "width": width,
-            "height": height,
-            "bytes": png.len(),
-            "format": "png",
-            "probe": value
-        })),
-        error: None,
-    }
-}
-
-fn write_png(path: &Path, png: &[u8]) -> Result<(), std::io::Error> {
-    if let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(path, png)
-}
-
-pub fn encode_stub_png(width: u32, height: u32) -> Vec<u8> {
-    let row_len = 1usize + width as usize * 4;
-    let mut raw = Vec::with_capacity(row_len * height as usize);
-    for y in 0..height {
-        raw.push(0);
-        for x in 0..width {
-            let shade = 28u8.saturating_add(((x + y) % 24) as u8);
-            raw.extend_from_slice(&[shade, shade, 38, 255]);
-        }
-    }
-
-    let mut png = Vec::new();
-    png.extend_from_slice(b"\x89PNG\r\n\x1a\n");
-    let mut ihdr = Vec::with_capacity(13);
-    ihdr.extend_from_slice(&width.to_be_bytes());
-    ihdr.extend_from_slice(&height.to_be_bytes());
-    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
-    push_chunk(&mut png, b"IHDR", &ihdr);
-    push_chunk(&mut png, b"IDAT", &zlib_store(&raw));
-    push_chunk(&mut png, b"IEND", &[]);
-    png
-}
-
-fn zlib_store(data: &[u8]) -> Vec<u8> {
-    let mut out = vec![0x78, 0x01];
-    let mut offset = 0usize;
-    while offset < data.len() {
-        let remaining = data.len() - offset;
-        let block_len = remaining.min(65_535);
-        let final_block = offset + block_len == data.len();
-        out.push(if final_block { 0x01 } else { 0x00 });
-        let len = block_len as u16;
-        out.extend_from_slice(&len.to_le_bytes());
-        out.extend_from_slice(&(!len).to_le_bytes());
-        out.extend_from_slice(&data[offset..offset + block_len]);
-        offset += block_len;
-    }
-    out.extend_from_slice(&adler32(data).to_be_bytes());
-    out
-}
-
-fn push_chunk(png: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    png.extend_from_slice(&(data.len() as u32).to_be_bytes());
-    png.extend_from_slice(kind);
-    png.extend_from_slice(data);
-    let mut crc_input = Vec::with_capacity(kind.len() + data.len());
-    crc_input.extend_from_slice(kind);
-    crc_input.extend_from_slice(data);
-    png.extend_from_slice(&crc32(&crc_input).to_be_bytes());
-}
-
-fn adler32(data: &[u8]) -> u32 {
-    const MOD: u32 = 65_521;
-    let mut a = 1u32;
-    let mut b = 0u32;
-    for byte in data {
-        a = (a + u32::from(*byte)) % MOD;
-        b = (b + a) % MOD;
-    }
-    (b << 16) | a
-}
-
-fn crc32(data: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for byte in data {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            let mask = 0u32.wrapping_sub(crc & 1);
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
-}
-
-fn json_string(value: &str) -> String {
-    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::encode_stub_png;
-
-    #[test]
-    fn screenshot_png_has_valid_signature() {
-        let png = encode_stub_png(2, 2);
-
-        assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
-        assert!(png.windows(4).any(|chunk| chunk == b"IHDR"));
-        assert!(png.windows(4).any(|chunk| chunk == b"IDAT"));
-        assert!(png.windows(4).any(|chunk| chunk == b"IEND"));
     }
 }

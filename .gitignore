@@ -27,6 +27,9 @@ build/
 # Generated
 *.log
 
+# One-off local experiments
+gemini-test/
+
 # Private spec repository is maintained separately.
 spec/
 /tmp/

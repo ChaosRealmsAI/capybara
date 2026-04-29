@@ -21,54 +21,53 @@ require_file() {
   [[ -f "$1" ]] || fail "missing required file: $1"
 }
 
-check_no_nextframe_local_path() {
+check_no_external_timeline_engine() {
   local matches
-  matches="$(rg -n '/Users/Zhuanz/workspace/NextFrame|NextFrame/target/debug' crates frontend scripts | rg -v 'scripts/check-architecture.sh' || true)"
+  matches="$(rg -n 'external/Timeline|/Users/Zhuanz/workspace/Timeline|Timeline/target/debug' Cargo.toml crates frontend scripts CLAUDE.md | rg -v 'scripts/check-architecture.sh' || true)"
   if [[ -n "$matches" ]]; then
     echo "$matches" >&2
     fail_guardrail \
-      "NextFrame local path must not be hardcoded in product code" \
-      "move the path to --nf/--recorder, CAPY_NF/CAPY_NF_RECORDER, or private spec evidence"
+      "Timeline engine code must live inside Capybara, not external/Timeline" \
+      "move required code into crates/capy-* and use Capybara path dependencies"
   fi
 }
 
-check_nextframe_adapter_boundary() {
+check_timeline_engine_dependency_boundary() {
   local matches
   matches="$(
-    rg -n 'Command::new\("nf"\)|Command::new\("nf-recorder"\)|nf_project::|nf_recorder::' crates frontend \
-      | rg -v 'capy-nextframe|nextframe.rs' || true
+    rg -n 'Command::new\("nf"\)|Command::new\("nf-recorder"\)|\bnf_project::|\bnf_recorder::|nf-shell-mac|nf-recorder|nf-project|CAPY_NF' crates frontend scripts \
+      | rg -v 'scripts/check-architecture.sh' || true
   )"
   if [[ -n "$matches" ]]; then
     echo "$matches" >&2
     fail_guardrail \
-      "NextFrame process/crate calls must go through capy-nextframe" \
-      "move the call behind crates/capy-nextframe or crates/capy-cli/src/nextframe.rs"
+      "Timeline engine dependencies must use Capybara-owned crate names" \
+      "rename to capy-timeline-project, capy-recorder, CAPY_RECORDER, or typed in-process adapters"
   fi
 }
 
 check_no_new_render_source_builders() {
   local matches
   matches="$(
-    rg -n '"nf\.render_source\.v1"' crates \
-      | rg -v 'capy-nextframe|tests|fixtures' || true
+    rg -n '"capy\.timeline\.render_source\.v1"' crates \
+      | rg -v 'capy-timeline|capy-recorder|capy-timeline-project|tests|fixtures' || true
   )"
   if [[ -n "$matches" ]]; then
     echo "$matches" >&2
     fail_guardrail \
-      "render_source.v1 must be produced by NextFrame compile, not new Capybara builders" \
-      "route generation through capy-nextframe only"
+      "render_source.v1 must be produced by Timeline compile, not new Capybara builders" \
+      "route generation through capy-timeline only"
   fi
 }
 
-check_no_nextframe_mode_env() {
+check_no_old_timeline_compat_surface() {
   local matches
-  local pattern="CAPY_NEXTFRAME_""MODE"
-  matches="$(rg -n "$pattern" crates frontend scripts | rg -v 'scripts/check-architecture.sh' || true)"
+  matches="$(rg -n 'NextFrame|nextframe|legacy_nextframe|CAPY_NEXTFRAME|OP_NEXTFRAME|KIND_NEXTFRAME|attachNextFrame|openNextFrame|name = "nextframe"|capy nextframe' crates frontend scripts CLAUDE.md | rg -v 'scripts/check-architecture.sh' || true)"
   if [[ -n "$matches" ]]; then
     echo "$matches" >&2
     fail_guardrail \
-      "NextFrame mode env must not remain in product code" \
-      "remove mode env references; NextFrame now runs crate-only with embedded fallback"
+      "old Timeline product/compat surface must not remain" \
+      "use Timeline/Capybara names only; no legacy CLI command, old IPC aliases, or old frontend aliases"
   fi
 }
 
@@ -79,7 +78,7 @@ check_no_legacy_poster_render_source() {
     echo "$matches" >&2
     fail_guardrail \
       "capy-poster legacy render_source builders must be removed" \
-      "delete legacy render_source APIs and route poster composition through capy nextframe compose-poster"
+      "delete legacy render_source APIs and route poster composition through capy timeline compose-poster"
   fi
 }
 
@@ -89,26 +88,94 @@ check_no_binary_adapter() {
   if [[ -n "$matches" ]]; then
     echo "$matches" >&2
     fail_guardrail \
-      "NextFrame binary adapter path must be removed" \
-      "delete BinaryAdapter references and keep CrateAdapter as the only adapter implementation"
+      "Timeline binary adapter path must be removed" \
+      "delete BinaryAdapter references and keep in-process Capybara engine adapters only"
   fi
 }
 
-check_no_nextframe_local_path
-check_nextframe_adapter_boundary
+check_v15_contract_boundary() {
+  rg -q '"crates/capy-contracts"' Cargo.toml || fail "capy-contracts must be a workspace member"
+  rg -q '"crates/capy-creative-core"' Cargo.toml || fail "capy-creative-core must be a workspace member"
+  rg -q '"crates/capy-timeline-project"' Cargo.toml || fail "capy-timeline-project must be a workspace member"
+  rg -F -q 'capy-recorder = { path = "../capy-recorder"' crates/capy-timeline/Cargo.toml || fail "capy-timeline must depend on migrated capy-recorder"
+  rg -q 'capy-timeline-project.workspace = true' crates/capy-timeline/Cargo.toml || fail "capy-timeline must use migrated capy-timeline-project"
+  rg -q '^capy-contracts\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-contracts"
+  rg -q '^capy-contracts\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must depend on capy-contracts"
+  rg -q 'pub struct IpcRequest' crates/capy-contracts/src/ipc.rs || fail "IpcRequest contract must live in capy-contracts"
+  rg -q 'pub struct IpcResponse' crates/capy-contracts/src/ipc.rs || fail "IpcResponse contract must live in capy-contracts"
+  rg -q 'OP_TIMELINE_ATTACH' crates/capy-contracts/src/timeline.rs || fail "Timeline live IPC contracts must live in capy-contracts"
+  rg -q 'TrackKind::Tts' crates/capy-creative-core/src/lib.rs || fail "Creative core must reserve TTS track contract"
+
+  local duplicate_ipc
+  duplicate_ipc="$(rg -n 'pub struct Ipc(Request|Response)' crates/capy-cli/src crates/capy-shell/src || true)"
+  if [[ -n "$duplicate_ipc" ]]; then
+    echo "$duplicate_ipc" >&2
+    fail_guardrail \
+      "CLI and shell must not redefine IPC wire structs" \
+      "use capy_contracts::ipc::{IpcRequest, IpcResponse}"
+  fi
+}
+
+check_file_size_caps() {
+  local failures=""
+  failures+="$(check_line_cap crates/capy-shell/src/app.rs 710)"
+  failures+="$(check_line_cap crates/capy-shell/src/agent.rs 770)"
+  failures+="$(check_line_cap crates/capy-shell/src/store.rs 660)"
+  failures+="$(check_line_cap crates/capy-cli/src/main.rs 590)"
+  failures+="$(check_line_cap crates/capy-canvas-web/src/lib.rs 1250)"
+  failures+="$(check_line_cap frontend/capy-app/script.js 1920)"
+  failures+="$(check_line_cap crates/capy-canvas-core/tests/canvas_tests.rs 3300)"
+  failures+="$(check_line_cap crates/capy-canvas-core/src/state_shapes.rs 770)"
+  failures+="$(check_line_cap crates/capy-canvas-core/src/shape.rs 760)"
+
+  if [[ -n "$failures" ]]; then
+    echo "$failures" >&2
+    fail_guardrail \
+      "large migration debt files must not grow past their v0.15 baseline caps" \
+      "split the file before adding behavior, then lower the cap"
+  fi
+}
+
+check_line_cap() {
+  local path="$1"
+  local cap="$2"
+  [[ -f "$path" ]] || fail "missing size-guarded file: $path"
+  local lines
+  lines="$(wc -l < "$path" | tr -d ' ')"
+  if (( lines > cap )); then
+    printf '%s has %s lines; cap is %s\n' "$path" "$lines" "$cap"
+  fi
+}
+
+check_no_external_timeline_engine
+check_timeline_engine_dependency_boundary
 check_no_new_render_source_builders
-check_no_nextframe_mode_env
+check_no_old_timeline_compat_surface
 check_no_legacy_poster_render_source
 check_no_binary_adapter
+check_v15_contract_boundary
+check_file_size_caps
 
 for path in \
   Cargo.toml \
+  crates/capy-contracts/Cargo.toml \
+  crates/capy-contracts/src/lib.rs \
+  crates/capy-contracts/src/ipc.rs \
+  crates/capy-contracts/src/timeline.rs \
+  crates/capy-creative-core/Cargo.toml \
+  crates/capy-creative-core/src/lib.rs \
+  crates/capy-timeline-project/Cargo.toml \
+  crates/capy-timeline-project/src/lib.rs \
+  crates/capy-recorder/Cargo.toml \
+  crates/capy-recorder/src/lib.rs \
+  crates/capy-shell-mac/Cargo.toml \
+  crates/capy-shell-mac/src/lib.rs \
   crates/capy-canvas-core/Cargo.toml \
   crates/capy-canvas-web/Cargo.toml \
   crates/capy-image-gen/Cargo.toml \
   crates/capy-image-gen/src/lib.rs \
-  crates/capy-nextframe/Cargo.toml \
-  crates/capy-nextframe/src/lib.rs \
+  crates/capy-timeline/Cargo.toml \
+  crates/capy-timeline/src/lib.rs \
   crates/capy-poster/Cargo.toml \
   crates/capy-poster/src/lib.rs \
   crates/capy-poster/src/component.rs \
@@ -127,6 +194,7 @@ for path in \
   crates/capy-shell/src/browser/assets.rs \
   crates/capy-shell/src/browser/runtime.rs \
   scripts/verify-cef-shell.sh \
+  frontend/capy-app/workbench/geometry.js \
   spec/README.md \
   spec/architecture.md \
   spec/development-flow.md \
@@ -155,11 +223,12 @@ rg -q 'data-capy-browser", "cef"' crates/capy-shell/src/browser/assets.rs || fai
 rg -q '"crates/capy-canvas-core"' Cargo.toml || fail "canvas core crate must be a workspace member"
 rg -q '"crates/capy-canvas-web"' Cargo.toml || fail "canvas web crate must be a workspace member"
 rg -q '"crates/capy-image-gen"' Cargo.toml || fail "image generation crate must be a workspace member"
-rg -q '"crates/capy-nextframe"' Cargo.toml || fail "NextFrame adapter crate must be a workspace member"
+rg -q '"crates/capy-timeline-project"' Cargo.toml || fail "timeline project engine crate must be a workspace member"
+rg -q '"crates/capy-timeline"' Cargo.toml || fail "Timeline crate must be a workspace member"
 rg -q '"crates/capy-poster"' Cargo.toml || fail "poster adapter crate must be a workspace member"
 rg -q '"crates/capy-scroll-media"' Cargo.toml || fail "scroll media crate must be a workspace member"
 rg -q '^capy-image-gen\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-image-gen through the workspace boundary"
-rg -q '^capy-nextframe\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-nextframe through the workspace boundary"
+rg -q '^capy-timeline\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-timeline through the workspace boundary"
 rg -q '^capy-image-gen\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must use capy-image-gen for desktop canvas tool calls"
 rg -q '^capy-scroll-media\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-scroll-media through the workspace boundary"
 rg -q 'CanvasCommand::GenerateImage' crates/capy-cli/src/canvas.rs || fail "capy canvas generate-image command must exist"
@@ -181,10 +250,13 @@ rg -q 'http_range' crates/capy-scroll-media/src/types.rs || fail "scroll media m
 rg -q '206' crates/capy-scroll-media/src/range_server.rs || fail "scroll media server must support HTTP 206 Partial Content"
 rg -q 'capy-multi-video-scroll-story' crates/capy-scroll-media/src/types.rs || fail "multi-video story manifest kind must be explicit"
 rg -q 'StoryPack' crates/capy-cli/src/media.rs || fail "capy media story-pack CLI must remain wired"
-rg -q 'Nextframe\(nextframe::NextFrameArgs\)' crates/capy-cli/src/main.rs || fail "capy nextframe CLI must remain wired"
+rg -q 'Timeline\(timeline::TimelineArgs\)' crates/capy-cli/src/main.rs || fail "capy timeline CLI must remain wired"
+if rg -n 'Nextframe\(timeline::TimelineArgs\)|name = "nextframe"|capy nextframe' crates/capy-cli/src scripts CLAUDE.md | rg -v 'scripts/check-architecture.sh'; then
+  fail "capy nextframe legacy alias must not remain wired"
+fi
 rg -q 'capy.poster-document' crates/capy-poster/src/component.rs || fail "poster component id must remain explicit"
-if rg -n '/Users/Zhuanz/workspace/NextFrame|NextFrame/target/debug/nf-recorder' crates fixtures; then
-  fail "poster adapter must not hardcode a local NextFrame checkout or recorder path"
+if rg -n '/Users/Zhuanz/workspace/NextFrame|NextFrame/target/debug|external/NextFrame' crates fixtures Cargo.toml; then
+  fail "Timeline adapter must not depend on external Timeline paths"
 fi
 rg -q 'withoutbg/focus' crates/capy-cli/src/main.rs crates/capy-cli/src/cutout.rs scripts/capy-focus-cutout.py || fail "cutout CLI must use withoutbg/focus"
 rg -q 'CutoutCommand::Run' crates/capy-cli/src/cutout.rs || fail "capy cutout run command must remain wired"

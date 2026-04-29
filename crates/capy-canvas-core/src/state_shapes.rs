@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::content_card;
 use crate::state::{AppState, CanvasContentKind, Shape, ShapeKind, Toast};
 
 pub struct ImageAssetImport {
@@ -148,21 +149,21 @@ impl AppState {
         self.push_undo();
         let title = title.into();
         let title = if title.trim().is_empty() {
-            default_content_title(kind).to_string()
+            content_card::default_title(kind).to_string()
         } else {
             title.trim().to_string()
         };
-        let mut shape = Shape::new(ShapeKind::StickyNote, x, y, content_card_color(kind));
+        let mut shape = Shape::new(ShapeKind::StickyNote, x, y, content_card::fill_color(kind));
         shape.w = 320.0;
         shape.h = 170.0;
-        shape.stroke_color = content_card_stroke_color(kind);
+        shape.stroke_color = content_card::stroke_color(kind);
         shape.stroke_width = 1.6;
         shape.font_size = 18.0;
-        shape.text = format!("{}\n{}", title, content_card_subtitle(kind));
+        shape.text = format!("{}\n{}", title, content_card::subtitle(kind));
         shape.metadata.content_kind = Some(kind);
         shape.metadata.title = Some(title);
         shape.metadata.status = Some("briefing".to_string());
-        shape.metadata.next_action = Some(default_content_next_action(kind).to_string());
+        shape.metadata.next_action = Some(content_card::default_next_action(kind).to_string());
         let idx = self.add_shape(shape);
         let id = self.shapes[idx].id;
         self.shapes[idx].metadata.editor_route =
@@ -186,7 +187,7 @@ impl AppState {
         shape.text = format!(
             "{}\n{}",
             shape.display_title(),
-            content_card_subtitle(CanvasContentKind::Poster)
+            content_card::subtitle(CanvasContentKind::Poster)
         );
         shape.metadata.status = Some("ready".to_string());
         if !source_path.trim().is_empty() {
@@ -197,7 +198,7 @@ impl AppState {
             "html-renderer-output".to_string(),
         ];
         shape.metadata.next_action =
-            Some(default_content_next_action(CanvasContentKind::Poster).to_string());
+            Some(content_card::default_next_action(CanvasContentKind::Poster).to_string());
         idx
     }
 
@@ -741,80 +742,5 @@ impl AppState {
             data_url: None,
         });
         self.add_shape(shape)
-    }
-}
-
-fn default_content_title(kind: CanvasContentKind) -> &'static str {
-    match kind {
-        CanvasContentKind::Project => "Project hub",
-        CanvasContentKind::Brand => "Brand system",
-        CanvasContentKind::Image => "Image direction",
-        CanvasContentKind::Poster => "Poster document",
-        CanvasContentKind::Video => "Storyboard",
-        CanvasContentKind::Web => "Web page",
-        CanvasContentKind::Text => "Copy block",
-        CanvasContentKind::Audio => "Audio cue",
-        CanvasContentKind::ThreeD => "3D object",
-        CanvasContentKind::Shape => "Canvas object",
-    }
-}
-
-fn content_card_subtitle(kind: CanvasContentKind) -> &'static str {
-    match kind {
-        CanvasContentKind::Project => "brief · scope · assets",
-        CanvasContentKind::Brand => "logo · palette · mascot",
-        CanvasContentKind::Image => "prompt · references · variants",
-        CanvasContentKind::Poster => "JSON · layers · HTML preview",
-        CanvasContentKind::Video => "shots · motion · export",
-        CanvasContentKind::Web => "sections · states · responsive",
-        CanvasContentKind::Text => "headline · tone · variants",
-        CanvasContentKind::Audio => "voice · music · timing",
-        CanvasContentKind::ThreeD => "model · material · view",
-        CanvasContentKind::Shape => "layout · relation · note",
-    }
-}
-
-fn default_content_next_action(kind: CanvasContentKind) -> &'static str {
-    match kind {
-        CanvasContentKind::Project => "open project detail and plan next assets",
-        CanvasContentKind::Brand => "generate brand directions and lock tokens",
-        CanvasContentKind::Image => "generate image variants from references",
-        CanvasContentKind::Poster => "edit poster JSON and render HTML preview",
-        CanvasContentKind::Video => "expand into storyboard shots",
-        CanvasContentKind::Web => "open page editor and draft sections",
-        CanvasContentKind::Text => "write copy variants in selected tone",
-        CanvasContentKind::Audio => "draft voice or music direction",
-        CanvasContentKind::ThreeD => "open 3D detail and define model views",
-        CanvasContentKind::Shape => "describe object role in the layout",
-    }
-}
-
-fn content_card_color(kind: CanvasContentKind) -> u32 {
-    match kind {
-        CanvasContentKind::Project => 0xfff3bf,
-        CanvasContentKind::Brand => 0xffedd5,
-        CanvasContentKind::Image => 0xfce7f3,
-        CanvasContentKind::Poster => 0xfef3c7,
-        CanvasContentKind::Video => 0xdbeafe,
-        CanvasContentKind::Web => 0xd1fae5,
-        CanvasContentKind::Text => 0xede9fe,
-        CanvasContentKind::Audio => 0xfbcfe8,
-        CanvasContentKind::ThreeD => 0xc7d2fe,
-        CanvasContentKind::Shape => 0xe5e7eb,
-    }
-}
-
-fn content_card_stroke_color(kind: CanvasContentKind) -> u32 {
-    match kind {
-        CanvasContentKind::Project => 0xd97706,
-        CanvasContentKind::Brand => 0xf97316,
-        CanvasContentKind::Image => 0xdb2777,
-        CanvasContentKind::Poster => 0xa16207,
-        CanvasContentKind::Video => 0x2563eb,
-        CanvasContentKind::Web => 0x059669,
-        CanvasContentKind::Text => 0x7c3aed,
-        CanvasContentKind::Audio => 0xbe185d,
-        CanvasContentKind::ThreeD => 0x4f46e5,
-        CanvasContentKind::Shape => 0x64748b,
     }
 }

@@ -7,35 +7,23 @@ use std::time::Duration;
 
 use interprocess::local_socket::tokio::prelude::*;
 use interprocess::local_socket::{GenericFilePath, ListenerOptions, ToFsName};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tao::event_loop::EventLoopProxy;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::oneshot;
 
+use capy_contracts::timeline::{
+    OP_TIMELINE_ATTACH, OP_TIMELINE_EXPORT_CANCEL, OP_TIMELINE_EXPORT_STATUS, OP_TIMELINE_OPEN,
+    OP_TIMELINE_STATE,
+};
+
 use crate::app::{ShellEvent, ShellState};
+
+pub use capy_contracts::ipc::{IpcRequest, IpcResponse};
 
 const DEFAULT_EVENT_ACK_TIMEOUT: Duration = Duration::from_secs(60);
 const EVENT_ACK_TIMEOUT_ENV: &str = "CAPY_EVENT_ACK_TIMEOUT_SECS";
 const SOCKET_ENV: &str = "CAPYBARA_SOCKET";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IpcRequest {
-    pub req_id: String,
-    pub op: String,
-    #[serde(default)]
-    pub params: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IpcResponse {
-    pub req_id: String,
-    pub ok: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<Value>,
-}
 
 pub fn socket_path() -> PathBuf {
     if let Some(path) = std::env::var_os(SOCKET_ENV).filter(|value| !value.is_empty()) {
@@ -122,17 +110,10 @@ async fn handle_connection(
 
         let response = match serde_json::from_str::<IpcRequest>(trimmed) {
             Ok(req) => dispatch(req, &proxy, &state).await,
-            Err(err) => IpcResponse {
-                req_id: "parse-error".to_string(),
-                ok: false,
-                data: None,
-                error: Some(json!({
-                    "error": "validation failed",
-                    "detail": format!("invalid NDJSON request: {err}"),
-                    "hint": "send one JSON request per line",
-                    "exit_code": 2
-                })),
-            },
+            Err(err) => IpcResponse::validation_error(
+                "parse-error",
+                format!("invalid NDJSON request: {err}"),
+            ),
         };
 
         let mut payload = serde_json::to_string(&response).map_err(|err| err.to_string())?;
@@ -151,9 +132,9 @@ async fn dispatch(
 ) -> IpcResponse {
     match req.op.as_str() {
         "state-query" if state.can_answer_directly(&req) => state.state_query(req),
-        "nextframe-state" => state.nextframe_state_query(req),
-        "nextframe-export-status" => state.nextframe_export_status_query(req),
-        "nextframe-export-cancel" => state.nextframe_export_cancel_query(req),
+        OP_TIMELINE_STATE => state.timeline_state_query(req),
+        OP_TIMELINE_EXPORT_STATUS => state.timeline_export_status_query(req),
+        OP_TIMELINE_EXPORT_CANCEL => state.timeline_export_cancel_query(req),
         "state-query" => {
             send_event(req, proxy, |request, ack| ShellEvent::StateQuery {
                 request,
@@ -210,15 +191,15 @@ async fn dispatch(
             })
             .await
         }
-        "nextframe-attach" => {
-            send_event(req, proxy, |request, ack| ShellEvent::NextFrameAttach {
+        OP_TIMELINE_ATTACH => {
+            send_event(req, proxy, |request, ack| ShellEvent::TimelineAttach {
                 request,
                 ack,
             })
             .await
         }
-        "nextframe-open" => {
-            send_event(req, proxy, |request, ack| ShellEvent::NextFrameOpen {
+        OP_TIMELINE_OPEN => {
+            send_event(req, proxy, |request, ack| ShellEvent::TimelineOpen {
                 request,
                 ack,
             })
@@ -237,44 +218,26 @@ async fn send_event(
     let req_id = req.req_id.clone();
     let (tx, rx) = oneshot::channel();
     if let Err(err) = proxy.send_event(build(req, tx)) {
-        return IpcResponse {
+        return IpcResponse::socket_error(
             req_id,
-            ok: false,
-            data: None,
-            error: Some(json!({
-                "error": "socket failed",
-                "detail": format!("event loop proxy failed: {err}"),
-                "hint": "restart capy shell",
-                "exit_code": 1
-            })),
-        };
+            format!("event loop proxy failed: {err}"),
+            "restart capy shell",
+        );
     }
 
     let timeout = event_ack_timeout();
     match tokio::time::timeout(timeout, rx).await {
         Ok(Ok(resp)) => resp,
-        Ok(Err(err)) => IpcResponse {
+        Ok(Err(err)) => IpcResponse::socket_error(
             req_id,
-            ok: false,
-            data: None,
-            error: Some(json!({
-                "error": "socket failed",
-                "detail": format!("event ack dropped: {err}"),
-                "hint": "restart capy shell",
-                "exit_code": 1
-            })),
-        },
-        Err(_) => IpcResponse {
+            format!("event ack dropped: {err}"),
+            "restart capy shell",
+        ),
+        Err(_) => IpcResponse::socket_error(
             req_id,
-            ok: false,
-            data: None,
-            error: Some(json!({
-                "error": "socket failed",
-                "detail": format!("event ack timed out after {}s", timeout.as_secs()),
-                "hint": "restart capy shell",
-                "exit_code": 1
-            })),
-        },
+            format!("event ack timed out after {}s", timeout.as_secs()),
+            "restart capy shell",
+        ),
     }
 }
 
@@ -288,26 +251,11 @@ fn event_ack_timeout() -> Duration {
 }
 
 pub fn ok_response(req: &IpcRequest, data: Value) -> IpcResponse {
-    IpcResponse {
-        req_id: req.req_id.clone(),
-        ok: true,
-        data: Some(data),
-        error: None,
-    }
+    IpcResponse::ok(req.req_id.clone(), data)
 }
 
 pub fn error_response(req_id: &str, detail: impl Into<String>) -> IpcResponse {
-    IpcResponse {
-        req_id: req_id.to_string(),
-        ok: false,
-        data: None,
-        error: Some(json!({
-            "error": "validation failed",
-            "detail": detail.into(),
-            "hint": "run `capy <cmd> --help` for expected format",
-            "exit_code": 2
-        })),
-    }
+    IpcResponse::validation_error(req_id, detail)
 }
 
 pub fn write_ready_event() {

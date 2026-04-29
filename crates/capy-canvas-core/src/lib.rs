@@ -3,6 +3,7 @@
 pub mod ai_snapshot;
 pub mod command;
 pub mod connector;
+mod content_card;
 pub mod input;
 pub mod input_keys;
 pub mod input_tools;
