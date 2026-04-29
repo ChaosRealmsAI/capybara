@@ -1,9 +1,37 @@
+pub(super) const DOCTOR_HELP: &str = r#"
+Topic: capy doctor
+
+Use when: AI needs to decide whether Capybara is ready before running desktop, asset, agent, TTS, clips, media, or Timeline workflows.
+Required parameters: none.
+Recommended commands:
+1. `target/debug/capy doctor`
+2. Read `domain_doctors[]` in the JSON.
+3. Run the domain doctor for the workflow you will perform next, for example `target/debug/capy clips doctor` or `target/debug/capy tts doctor`.
+Do not: treat `capy doctor` as proof that the desktop UI is visible; use `capy verify --profile desktop --capture-out <png>` for real UI evidence.
+Next step: save the JSON into version evidence, then run the workflow-specific doctor.
+"#;
+
+pub(super) const INTERACTION_HELP: &str = r#"
+Topic: capy interaction
+
+Use when: AI needs to click or type in the live Capybara desktop UI.
+Required parameters: `click` needs `--query <css>`; `type` needs `--query <css> --text <text>`; both need the shell running on the same `CAPYBARA_SOCKET`.
+Recommended commands:
+1. `target/debug/capy devtools --query <css> --get=bounding-rect`
+2. `target/debug/capy click --query <css>`
+3. `target/debug/capy type --query <css> --text "hello" --clear`
+4. `target/debug/capy devtools --query <css> --get=value`
+Do not: skip the selector probe; use browser-coordinate guesses; mutate product state with ad hoc `devtools --eval` when click/type can express the action.
+Next step: capture state with `capy state`, `capy devtools`, or `capy capture` and save it into evidence.
+"#;
+
 pub(super) const DESKTOP_HELP: &str = r#"
 Topic: capy desktop
 
 Use when: AI must open, inspect, capture, or verify the desktop shell.
 Required parameters: `capture`/`screenshot` need `--out`; `verify --profile desktop` needs `--capture-out`; keep one `CAPYBARA_SOCKET` across shell and CLI.
 Recommended commands:
+0. `target/debug/capy doctor`
 1. `target/debug/capy open --project=demo`
 2. `target/debug/capy ps`
 3. `target/debug/capy state --key=app.ready`

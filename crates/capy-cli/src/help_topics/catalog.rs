@@ -4,6 +4,18 @@ use super::media_docs::*;
 
 pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
     HelpTopic {
+        name: "doctor",
+        aliases: &["health", "diagnose"],
+        summary: "Run no-spend project health checks and choose the next domain doctor.",
+        body: DOCTOR_HELP,
+    },
+    HelpTopic {
+        name: "interaction",
+        aliases: &["click", "type", "input"],
+        summary: "Click and type in the live desktop UI without ad hoc JavaScript.",
+        body: INTERACTION_HELP,
+    },
+    HelpTopic {
         name: "desktop",
         aliases: &["verify", "window"],
         summary: "Open, inspect, capture, and verify the desktop shell.",

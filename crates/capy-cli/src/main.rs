@@ -12,8 +12,10 @@ mod chat_context;
 mod clips;
 mod cutout;
 mod desktop_verify;
+mod doctor;
 mod help_topics;
 mod image;
+mod interaction;
 mod ipc_client;
 mod media;
 mod timeline;
@@ -27,11 +29,12 @@ mod tts;
     disable_help_subcommand = true,
     after_help = "AI quick start:
   capy --help is the index. Use `capy help <topic>` for self-contained workflows.
-  Common checks: `capy verify`, `capy image doctor`, `capy cutout doctor`, `capy clips doctor`, `capy tts doctor`.
+  Common checks: `capy doctor`, `capy verify`, `capy image doctor`, `capy cutout doctor`, `capy clips doctor`, `capy tts doctor`.
   Common asset flow: `capy image generate --cutout-ready ...` then `capy cutout run ...`.
-  Required params: image prompts use five labeled sections; cutout run needs --input and --output.
-  Pitfalls: live image/TTS provider calls may spend credits; cutout/TTS alignment may need init.
-  Help topics: desktop, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, timeline."
+  Common UI flow: `capy devtools --query <css>`, then `capy click --query <css>` or `capy type --query <css> --text <text>`.
+  Required params: image prompts use five labeled sections; cutout run needs --input/--output; click/type need --query.
+  Pitfalls: live image/TTS provider calls may spend credits; click/type need a running shell and the right CAPYBARA_SOCKET.
+  Help topics: doctor, interaction, desktop, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, timeline."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -54,6 +57,12 @@ enum Command {
     Screenshot(ScreenshotArgs),
     #[command(about = "Capture the native macOS window PNG")]
     Capture(CaptureArgs),
+    #[command(about = "Run a no-spend project health check")]
+    Doctor(doctor::DoctorArgs),
+    #[command(about = "Click a DOM element in the active Capybara window")]
+    Click(interaction::ClickArgs),
+    #[command(about = "Type text into an input in the active Capybara window")]
+    Type(interaction::TypeArgs),
     #[command(about = "Cut generated assets into transparent PNGs with withoutbg/focus")]
     Cutout(cutout::CutoutCliArgs),
     #[command(about = "Run a lightweight Capybara runtime verification")]
@@ -202,6 +211,9 @@ fn run() -> Result<(), String> {
             "capture",
             json!({ "out": args.out.display().to_string(), "window": args.window }),
         ),
+        Command::Doctor(args) => doctor::handle(args),
+        Command::Click(args) => interaction::click(args),
+        Command::Type(args) => interaction::type_text(args),
         Command::Cutout(args) => cutout::handle(args),
         Command::Verify(args) => match args.profile {
             VerifyProfile::Readiness => send(
