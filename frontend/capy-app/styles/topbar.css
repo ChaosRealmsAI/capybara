@@ -1,0 +1,77 @@
+/* ─── 顶 chrome · 玻璃条 ─── */
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(220px, auto) 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px 0 88px;
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 0 rgba(28, 25, 23, 0.04);
+  user-select: none;
+}
+
+.brand-lockup {
+  display: flex; align-items: center; gap: 10px;
+  min-width: 0;
+}
+.brand-stamp {
+  width: 32px; height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(140deg, #fff 0%, #f4ecff 100%);
+  border: 0.5px solid rgba(167, 139, 250, 0.45);
+  box-shadow: 0 2px 6px rgba(167, 139, 250, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  display: grid; place-items: center;
+  font-weight: 700; color: var(--c-acc-purple-deep);
+  font-size: 13px;
+}
+.brand-text { min-width: 0; }
+.brand-title { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.brand-subtitle {
+  font-size: 11px; color: var(--c-text-mute);
+  font-family: var(--f-mono); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.project-tabs {
+  justify-self: center;
+  display: flex; gap: 2px; padding: 4px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 0.5px solid rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(28, 25, 23, 0.04);
+  -webkit-app-region: no-drag;
+}
+.view-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 9px;
+  color: var(--c-text-mute);
+  transition: color .15s, background .15s;
+}
+.view-tab:hover { color: var(--c-text-dark); }
+.view-tab.active {
+  background: linear-gradient(180deg, #fff 0%, #f4ecff 100%);
+  color: var(--c-acc-purple-deep);
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), inset 0 0 0 0.5px rgba(167, 139, 250, 0.4);
+}
+
+.top-actions {
+  display: flex; gap: 6px;
+  -webkit-app-region: no-drag;
+}
+.icon-action {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  border-radius: 9px;
+  font-size: 12px; color: var(--c-text-mute);
+  font-family: var(--f-mono);
+  transition: background .12s, color .12s;
+}
+.icon-action:hover {
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--c-text-dark);
+}
+

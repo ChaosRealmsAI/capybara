@@ -1,0 +1,179 @@
+/* ─── 右侧 chat ─── */
+.planner-shell {
+  margin: 14px 14px 14px 7px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  border: 0.5px solid rgba(255, 255, 255, 0.78);
+  box-shadow: -2px 0 18px rgba(28, 25, 23, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  min-width: 0; min-height: 0;
+}
+
+.timeline-inspector {
+  margin: 14px 14px 14px 7px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(46, 28, 79, 0.9), rgba(34, 24, 56, 0.86));
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  border: 0.5px solid rgba(196, 181, 253, 0.34);
+  box-shadow: -2px 0 18px rgba(28, 25, 23, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.88);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+.timeline-inspector[hidden] { display: none; }
+.inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.1);
+}
+.inspector-head h2 {
+  margin-top: 7px;
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 700;
+  color: #fff;
+}
+.inspector-status,
+.status-badge {
+  display: inline-grid;
+  min-height: 22px;
+  place-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.18);
+  color: #ddd6fe;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.inspector-status[data-status="error"],
+.status-badge[data-status="failed"],
+.status-badge[data-status="error"] {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fecaca;
+}
+.status-badge[data-status="done"],
+.status-badge[data-status="ready"],
+.status-badge[data-status="linked"] {
+  background: rgba(52, 211, 153, 0.18);
+  color: #bbf7d0;
+}
+.status-badge[data-status="running"] {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fde68a;
+}
+.inspector-stages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(170px, 1fr));
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+}
+.inspector-stage {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 0.5px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.inspector-stage header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 11px 8px;
+}
+.stage-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a78bfa;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.16);
+  flex: 0 0 auto;
+}
+.inspector-stage[data-status="ready"] .stage-icon,
+.inspector-stage[data-status="done"] .stage-icon,
+.inspector-stage[data-status="linked"] .stage-icon { background: #34d399; }
+.inspector-stage[data-status="missing"] .stage-icon,
+.inspector-stage[data-status="idle"] .stage-icon { background: #a8a29e; }
+.inspector-stage[data-status="failed"] .stage-icon,
+.inspector-stage[data-status="error"] .stage-icon { background: #f87171; }
+.inspector-stage h3 {
+  font-size: 12px;
+  color: #fff;
+  line-height: 1.2;
+}
+.stage-body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 0 11px 11px;
+}
+.stage-row,
+.export-job-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-size: 11px;
+}
+.export-job-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.stage-key {
+  color: rgba(255, 255, 255, 0.52);
+  font-family: var(--f-mono);
+}
+.stage-value,
+.export-job-row span {
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.84);
+  overflow-wrap: anywhere;
+}
+.stage-value a {
+  color: #ddd6fe;
+  text-decoration: none;
+}
+.stage-value a:hover { color: #fff; }
+.composition-preview {
+  max-height: 96px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(20, 14, 32, 0.72);
+  color: rgba(255, 255, 255, 0.78);
+  font: 10px/1.45 var(--f-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.inspector-message {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.message-title {
+  color: #fff;
+  font-weight: 700;
+}
+.message-copy {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+

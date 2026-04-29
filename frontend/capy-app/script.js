@@ -43,135 +43,92 @@ import {
   stageCard,
   stageLabel,
 } from "./timeline/inspector-render.js";
+import { dom } from "./app/dom.js";
+import { installIpcReceiver, installNativeWindowDrag, installShellEventListeners, createRpc } from "./app/ipc.js";
+import { createRuntimeControls } from "./app/runtime-controls.js";
+import { labelSync, nodeRegistry, pending, posterDocuments, state } from "./app/state.js";
+import { base64ToBytes, contentKindLabel, nextFrame, normalizeValue, stringifyError } from "./app/utils.js";
+import { installWindowFacade } from "./app/window-facade.js";
 
 /* ─── DOM refs ─── */
-const $ = (sel) => document.querySelector(sel);
+const {
+  topbar,
+  cmdkTriggerEl,
+  listEl,
+  messagesEl,
+  newChatEl,
+  stopEl,
+  runStatusEl,
+  formEl,
+  promptEl,
+  configSummaryEl,
+  configDialogEl,
+  configDialogCloseEl,
+  configDialogDoneEl,
+  providerEl,
+  cwdEl,
+  modelEl,
+  effortEl,
+  policyEl,
+  sandboxEl,
+  serviceTierEl,
+  systemPromptEl,
+  appendSystemPromptEl,
+  developerInstructionsEl,
+  addDirsEl,
+  allowedToolsEl,
+  disallowedToolsEl,
+  mcpConfigEl,
+  modelProviderEl,
+  approvalsReviewerEl,
+  reasoningSummaryEl,
+  outputSchemaEl,
+  bareEl,
+  searchEl,
+  writeCodeEl,
+  runtimeFootEl,
+  canvasEl,
+  canvasPanelEl,
+  canvasStatusEl,
+  posterLayerEl,
+  labelLayerEl,
+  regionLayerEl,
+  regionModeEl,
+  plannerContextEl,
+  contextTitleEl,
+  contextMetaEl,
+  contextAttachmentsEl,
+  timelineInspectorEl: nextFrameInspectorEl,
+  timelineInspectorTitleEl: nextFrameInspectorTitleEl,
+  timelineInspectorStatusEl: nextFrameInspectorStatusEl,
+  timelineInspectorStagesEl: nextFrameInspectorStagesEl,
+  cmdPaletteEl,
+  cmdSearchEl,
+  cmdCloseEl,
+  cmdListEl,
+  cmdToolEl,
+  cmdToolBackEl,
+  imageToolPromptEl,
+  imageToolDryRunEl,
+  imageToolLiveEl,
+  imageToolStatusEl,
+  imageToolMetaEl,
+} = dom;
 
-const topbar = $(".topbar");
-const cmdkTriggerEl = $("#cmdk-trigger");
-const listEl = $("#conversation-list");
-const messagesEl = $("#message-list");
-const newChatEl = $("#new-chat");
-const stopEl = $("#stop-run");
-const runStatusEl = $("#run-status");
-const formEl = $("#composer");
-const promptEl = $("#prompt");
-const configSummaryEl = $("#config-summary");
-const configDialogEl = $("#config-dialog");
-const configDialogCloseEl = $("#config-dialog-close");
-const configDialogDoneEl = $("#config-dialog-done");
-const providerEl = $("#provider");
-const cwdEl = $("#cwd");
-const modelEl = $("#model");
-const effortEl = $("#effort");
-const policyEl = $("#policy");
-const sandboxEl = $("#sandbox");
-const serviceTierEl = $("#service-tier");
-const systemPromptEl = $("#system-prompt");
-const appendSystemPromptEl = $("#append-system-prompt");
-const developerInstructionsEl = $("#developer-instructions");
-const addDirsEl = $("#add-dirs");
-const allowedToolsEl = $("#allowed-tools");
-const disallowedToolsEl = $("#disallowed-tools");
-const mcpConfigEl = $("#mcp-config");
-const modelProviderEl = $("#model-provider");
-const approvalsReviewerEl = $("#approvals-reviewer");
-const reasoningSummaryEl = $("#reasoning-summary");
-const outputSchemaEl = $("#output-schema");
-const bareEl = $("#bare");
-const searchEl = $("#search");
-const writeCodeEl = $("#write-code");
-const runtimeFootEl = $("#runtime-foot");
-const canvasEl = $("#capy-canvas");
-const canvasPanelEl = $('[data-section="canvas-host"]');
-const canvasStatusEl = $("#canvas-status");
-const posterLayerEl = $("#poster-overlay-layer");
-const labelLayerEl = $("#node-label-layer");
-const regionLayerEl = $("#context-region-layer");
-const regionModeEl = $("#region-mode");
-const plannerContextEl = $("#planner-context");
-const contextTitleEl = $("#context-title");
-const contextMetaEl = $("#context-meta");
-const contextAttachmentsEl = $("#context-attachments");
-const nextFrameInspectorEl = $('[data-section="timeline-inspector"]');
-const nextFrameInspectorTitleEl = $("#timeline-inspector-title");
-const nextFrameInspectorStatusEl = $("#timeline-inspector-status");
-const nextFrameInspectorStagesEl = $("#timeline-inspector-stages");
-const cmdPaletteEl = $("#cmd-palette");
-const cmdSearchEl = $("#cmd-search");
-const cmdCloseEl = $("#cmd-close");
-const cmdListEl = $("#cmd-list");
-const cmdToolEl = $("#canvas-image-tool");
-const cmdToolBackEl = $("#cmd-tool-back");
-const imageToolPromptEl = $("#image-tool-prompt");
-const imageToolDryRunEl = $("#image-tool-dry-run");
-const imageToolLiveEl = $("#image-tool-live");
-const imageToolStatusEl = $("#image-tool-status");
-const imageToolMetaEl = $("#image-tool-meta");
+const rpc = createRpc(pending);
+const {
+  currentConfig,
+  syncPolicyOptions,
+  applyWriteCodeDefaults,
+  updateConfigSummary,
+  setRunStatus,
+  renderRuntimeFoot,
+  updateCanvasStatus,
+} = createRuntimeControls({ state, dom });
 
-let labelRefreshFrame = 0;
-let liveLabelRefreshFrame = 0;
-let liveLabelRefreshActive = false;
-let canvasLabelSyncInstalled = false;
-let registeredCanvasNodeKey = "";
-
-const pending = new Map();
-const state = {
-  conversations: [],
-  activeId: null,
-  messages: [],
-  streaming: new Map(),
-  dbPath: null,
-  selectedId: null,
-  blocks: [],
-  canvas: {
-    ready: false,
-    nodeCount: 0,
-    selectedNode: null,
-    currentTool: "select",
-    snapshotText: "",
-    darkMode: false,
-    error: null
-  },
-  planner: {
-    context: null,
-    contextText: "",
-    lastOutboundPrompt: "",
-    canvasContext: null
-  },
-  canvasContext: {
-    regionMode: false,
-    region: null,
-    drag: null,
-    context: null
-  },
-  canvasTool: {
-    status: "idle",
-    runId: null,
-    lastResult: null,
-    error: null
-  },
-  poster: {
-    renderState: "idle",
-    selectedLayerId: "headline",
-    lastNodeId: null,
-    lastError: null
-  },
-  timeline: {
-    attachments: new Map(),
-    inspector: {
-      nodeId: null,
-      loading: false,
-      detail: null,
-      error: null
-    }
-  }
-};
-
-const posterDocuments = new Map();
-
-window.CAPYBARA_STATE = state;
-window.capy = {
+installWindowFacade({
+  state,
+  capyApi: {
   add_image_asset_at,
   ai_snapshot,
   ai_snapshot_text,
@@ -186,81 +143,49 @@ window.capy = {
   selected_context,
   selected_context_text,
   shape_count
-};
-window.capyWorkbench = {
-  composePromptWithContext,
-  activeCanvasContext,
-  setCanvasContextRegion,
-  clearCanvasContextRegion,
-  refreshPlannerContext,
-  seedDemoCanvas,
-  createContentCard,
-  insertImageFromBase64,
-  loadPosterDocument,
-  updatePosterDocument,
-  moveNodeById,
-  focusNode,
-  selectNode,
-  scheduleCanvasLabelRefresh,
-  startLiveCanvasLabelRefresh,
-  stateSnapshot,
-  attachTimelineComposition,
-  openTimelineComposition,
-  openTimelineInspector,
-  startCanvasImageTool,
-  verifyCanvasImageTool,
-  verifyLabelMoveSync,
-  verifyPosterRenderer,
-  openCmdPalette,
-  closeCmdPalette
-};
-
-/* ─── window drag (CEF native) ─── */
-topbar?.addEventListener("mousedown", (event) => {
-  if (event.button !== 0) return;
-  const target = event.target;
-  if (target instanceof HTMLElement && target.closest("button, input, a, select, [role=button]")) return;
-  if (!window.ipc) return;
-  window.ipc.postMessage(event.detail === 2 ? "maximize_toggle" : "drag_window");
-});
-
-/* ─── IPC bridge ─── */
-window.__capyReceive = (response) => {
-  const entry = pending.get(response.req_id);
-  if (!entry) return;
-  pending.delete(response.req_id);
-  if (response.ok) entry.resolve(response.data);
-  else entry.reject(response.error || { error: "request failed" });
-};
-
-window.addEventListener("capy:agent-event", (event) => {
-  const detail = event.detail;
-  if (!detail || detail.conversation_id !== state.activeId) return;
-  if (detail.status) setRunStatus(detail.status);
-  if (detail.kind === "assistant_delta") {
-    const current = state.streaming.get(detail.run_id) || "";
-    state.streaming.set(detail.run_id, current + (detail.delta || ""));
-    renderMessages();
-  } else if (detail.kind === "assistant_done" || detail.kind === "error") {
-    state.streaming.delete(detail.run_id);
-    openConversation(state.activeId).catch((error) => renderError(error));
+  },
+  workbenchApi: {
+    composePromptWithContext,
+    activeCanvasContext,
+    setCanvasContextRegion,
+    clearCanvasContextRegion,
+    refreshPlannerContext,
+    seedDemoCanvas,
+    createContentCard,
+    insertImageFromBase64,
+    loadPosterDocument,
+    updatePosterDocument,
+    moveNodeById,
+    focusNode,
+    selectNode,
+    scheduleCanvasLabelRefresh,
+    startLiveCanvasLabelRefresh,
+    stateSnapshot,
+    attachTimelineComposition,
+    openTimelineComposition,
+    openTimelineInspector,
+    startCanvasImageTool,
+    verifyCanvasImageTool,
+    verifyLabelMoveSync,
+    verifyPosterRenderer,
+    openCmdPalette,
+    closeCmdPalette
   }
 });
 
-window.addEventListener("capy:canvas-tool-event", (event) => {
-  handleCanvasToolEvent(event.detail).catch((error) => {
-    state.canvasTool.status = "error";
-    state.canvasTool.error = stringifyError(error);
-    renderCanvasToolStatus();
-  });
-});
-
-window.addEventListener("capy:canvas-node-attached", (event) => {
-  handleCanvasNodeAttached(event.detail);
-});
-
-window.addEventListener("capy:timeline-opened", (event) => {
-  handleTimelineOpened(event.detail);
+installNativeWindowDrag(topbar);
+installIpcReceiver(pending);
+installShellEventListeners({
+  state,
+  setRunStatus,
+  renderMessages,
+  openConversation,
+  renderError,
+  handleCanvasToolEvent,
+  renderCanvasToolStatus,
+  stringifyError,
+  handleCanvasNodeAttached,
+  handleTimelineOpened,
 });
 /* ─── form / button listeners ─── */
 newChatEl?.addEventListener("click", async () => {
@@ -759,13 +684,6 @@ function defaultImagePrompt() {
   ].join(" ");
 }
 
-function base64ToBytes(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
 /* ─── verify hooks ─── */
 function verifyCanvasImageTool() {
   return new Promise((resolve) => {
@@ -1103,10 +1021,10 @@ function registerCanvasNodes(nodes) {
     .filter((id) => Number.isFinite(id) && id >= 0)
     .sort((a, b) => a - b);
   const key = ids.join(",");
-  if (!ids.length || key === registeredCanvasNodeKey) return;
-  registeredCanvasNodeKey = key;
+  if (!ids.length || key === nodeRegistry.key) return;
+  nodeRegistry.key = key;
   rpc("canvas-nodes-register", { ids }).catch(() => {
-    registeredCanvasNodeKey = "";
+    nodeRegistry.key = "";
   });
 }
 
@@ -1444,8 +1362,8 @@ function nodeOverlayBox(node, viewport) {
 }
 
 function installCanvasLabelSync() {
-  if (canvasLabelSyncInstalled || !canvasEl) return;
-  canvasLabelSyncInstalled = true;
+  if (labelSync.installed || !canvasEl) return;
+  labelSync.installed = true;
   canvasEl.addEventListener("pointerdown", startLiveCanvasLabelRefresh);
   canvasEl.addEventListener("pointermove", scheduleCanvasLabelRefresh, { passive: true });
   canvasEl.addEventListener("wheel", scheduleCanvasLabelRefresh, { passive: true });
@@ -1455,24 +1373,27 @@ function installCanvasLabelSync() {
   window.addEventListener("blur", stopLiveCanvasLabelRefresh);
 }
 function scheduleCanvasLabelRefresh() {
-  if (labelRefreshFrame) return;
-  labelRefreshFrame = requestAnimationFrame(() => {
-    labelRefreshFrame = 0;
+  if (labelSync.refreshFrame) return;
+  labelSync.refreshFrame = requestAnimationFrame(() => {
+    labelSync.refreshFrame = 0;
     refreshPlannerContext();
   });
 }
 function startLiveCanvasLabelRefresh() {
-  liveLabelRefreshActive = true;
-  if (liveLabelRefreshFrame) return;
+  labelSync.liveRefreshActive = true;
+  if (labelSync.liveRefreshFrame) return;
   const tick = () => {
-    if (!liveLabelRefreshActive) { liveLabelRefreshFrame = 0; return; }
+    if (!labelSync.liveRefreshActive) {
+      labelSync.liveRefreshFrame = 0;
+      return;
+    }
     refreshPlannerContext();
-    liveLabelRefreshFrame = requestAnimationFrame(tick);
+    labelSync.liveRefreshFrame = requestAnimationFrame(tick);
   };
-  liveLabelRefreshFrame = requestAnimationFrame(tick);
+  labelSync.liveRefreshFrame = requestAnimationFrame(tick);
 }
 function stopLiveCanvasLabelRefresh() {
-  liveLabelRefreshActive = false;
+  labelSync.liveRefreshActive = false;
   scheduleCanvasLabelRefresh();
 }
 
@@ -1785,102 +1706,6 @@ function renderError(error) {
   renderMessages();
 }
 
-/* ─── config helpers ─── */
-function currentConfig() {
-  const config = { capyCanvasTools: true };
-  if (effortEl.value) config.effort = effortEl.value;
-  if (providerEl.value === "claude" && policyEl.value) config.permissionMode = policyEl.value;
-  if (providerEl.value === "codex" && policyEl.value) config.approvalPolicy = policyEl.value;
-  if (sandboxEl.value) config.sandbox = sandboxEl.value;
-  if (serviceTierEl.value.trim()) config.serviceTier = serviceTierEl.value.trim();
-  if (systemPromptEl.value.trim()) config.systemPrompt = systemPromptEl.value.trim();
-  if (appendSystemPromptEl.value.trim()) config.appendSystemPrompt = appendSystemPromptEl.value.trim();
-  if (developerInstructionsEl.value.trim()) config.developerInstructions = developerInstructionsEl.value.trim();
-  const addDirs = addDirsEl.value.split(",").map((value) => value.trim()).filter(Boolean);
-  if (addDirs.length) config.addDirs = addDirs;
-  if (allowedToolsEl.value.trim()) config.allowedTools = allowedToolsEl.value.trim();
-  if (disallowedToolsEl.value.trim()) config.disallowedTools = disallowedToolsEl.value.trim();
-  if (mcpConfigEl.value.trim()) config.mcpConfig = mcpConfigEl.value.trim();
-  if (modelProviderEl.value.trim()) config.modelProvider = modelProviderEl.value.trim();
-  if (approvalsReviewerEl.value) config.approvalsReviewer = approvalsReviewerEl.value;
-  if (reasoningSummaryEl.value) config.reasoningSummary = reasoningSummaryEl.value;
-  if (outputSchemaEl.value.trim()) config.outputSchema = outputSchemaEl.value.trim();
-  if (bareEl.checked) config.bare = true;
-  if (searchEl.checked) config.search = true;
-  if (writeCodeEl.checked) {
-    config.writeCode = true;
-    if (providerEl.value === "codex" && !config.approvalPolicy) config.approvalPolicy = "never";
-    if (providerEl.value === "claude" && !config.permissionMode) config.permissionMode = "bypassPermissions";
-    if (!config.sandbox) config.sandbox = "danger-full-access";
-    config.allowDangerouslySkipPermissions = true;
-    config.dangerouslySkipPermissions = true;
-  }
-  return config;
-}
-
-function syncPolicyOptions() {
-  const provider = providerEl.value;
-  const options = provider === "claude"
-    ? [["", "policy"], ["default", "default"], ["acceptEdits", "accept edits"], ["plan", "plan"], ["dontAsk", "dont ask"], ["bypassPermissions", "bypass"]]
-    : [["", "policy"], ["on-request", "on request"], ["never", "never"], ["untrusted", "untrusted"]];
-  const current = policyEl.value;
-  policyEl.innerHTML = "";
-  for (const [value, label] of options) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    policyEl.append(option);
-  }
-  policyEl.value = options.some(([value]) => value === current) ? current : "";
-}
-
-function applyWriteCodeDefaults() {
-  if (!writeCodeEl.checked) return;
-  if (providerEl.value === "codex") policyEl.value = "never";
-  else policyEl.value = "bypassPermissions";
-  sandboxEl.value = "danger-full-access";
-}
-
-function updateConfigSummary() {
-  if (!configSummaryEl) return;
-  const provider = providerEl?.value || "claude";
-  const effort = effortEl?.value || "default";
-  const policy = policyEl?.value || "default";
-  configSummaryEl.textContent = `${provider} · ${effort} · ${policy}`;
-}
-
-function setRunStatus(status) {
-  runStatusEl.textContent = status || "idle";
-  runStatusEl.dataset.status = status || "idle";
-}
-
-function renderRuntimeFoot() {
-  const provider = providerEl.value === "claude" ? "Claude Code" : "Codex CLI";
-  runtimeFootEl.textContent = `${provider} · Canvas CLI tools active · ${state.dbPath || "SQLite store pending"}`;
-}
-
-function updateCanvasStatus(text) {
-  if (canvasStatusEl) canvasStatusEl.textContent = text;
-}
-
-function contentKindLabel(value) {
-  if (value === "poster") return "poster";
-  return String(value || "shape").replace(/_/g, " ");
-}
-
-/* ─── utils ─── */
-function normalizeValue(value) {
-  if (value === null || value === undefined) return value;
-  if (typeof value === "bigint") return Number(value);
-  if (Array.isArray(value)) return value.map(normalizeValue);
-  if (typeof value === "object") {
-    const normalized = {};
-    for (const [key, inner] of Object.entries(value)) normalized[key] = normalizeValue(inner);
-    return normalized;
-  }
-  return value;
-}
-
 function stateSnapshot() {
   return normalizeValue({
     canvas: state.canvas,
@@ -1892,24 +1717,5 @@ function stateSnapshot() {
       documents: posterDocumentsState()
     },
     canvasContext: state.canvasContext.context
-  });
-}
-
-function nextFrame() {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
-function stringifyError(error) {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.stack || error.message;
-  try { return JSON.stringify(error, null, 2); } catch (_err) { return String(error); }
-}
-
-function rpc(op, params) {
-  return new Promise((resolve, reject) => {
-    if (!window.ipc) { reject({ error: "Capybara shell IPC unavailable" }); return; }
-    const id = `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    pending.set(id, { resolve, reject });
-    window.ipc.postMessage(JSON.stringify({ kind: "rpc", id, op, params }));
   });
 }

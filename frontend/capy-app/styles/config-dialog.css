@@ -1,0 +1,122 @@
+/* config dialog · 跟 cmd-palette 同宽 */
+.config-dialog {
+  position: fixed; inset: 0;
+  width: 100vw; height: 100vh;
+  border: 0; background: transparent;
+  padding: 0; margin: 0;
+}
+.config-dialog.is-open {
+  display: grid;
+  place-items: start center;
+  padding-top: 10vh;
+  background: rgba(28, 25, 23, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.config-dialog::backdrop {
+  background: rgba(28, 25, 23, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.config-dialog-inner {
+  width: 640px;
+  max-width: 92vw;
+  max-height: 80vh;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(32px) saturate(160%);
+  -webkit-backdrop-filter: blur(32px) saturate(160%);
+  border: 0.5px solid rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  box-shadow: var(--shadow-pop), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.config-dialog-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 0.5px solid rgba(28, 25, 23, 0.06);
+}
+.config-dialog-title {
+  display: block; margin-top: 4px;
+  font-size: 14px; font-weight: 600;
+}
+.config-dialog-foot {
+  padding: 12px 18px;
+  border-top: 0.5px solid rgba(28, 25, 23, 0.06);
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+
+.config-dialog .advanced-grid {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.advanced-grid label {
+  display: grid; gap: 4px;
+  min-width: 0;
+}
+.advanced-grid label > span:first-child {
+  font-size: 10px;
+  font-family: var(--f-mono);
+  color: var(--c-text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.advanced-grid input,
+.advanced-grid select,
+.advanced-grid textarea {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 0 0 0.5px rgba(28, 25, 23, 0.1);
+  font-size: 12px;
+  color: var(--c-text-dark);
+}
+.advanced-grid textarea {
+  height: auto;
+  min-height: 44px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.advanced-grid .grid-wide { grid-column: 1 / -1; }
+.advanced-grid .grid-toggle {
+  flex-direction: row;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--c-text-mute);
+}
+.advanced-grid .grid-toggle > span:first-child {
+  font-size: 12px; text-transform: none; letter-spacing: 0;
+  color: var(--c-text-dark);
+  font-family: var(--f-cn);
+}
+.advanced-grid .grid-toggle input { width: 14px; height: 14px; }
+
+.send {
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #b8a3ff 0%, #8b6dd8 100%);
+  color: #fff;
+  font-weight: 600; font-size: 12px;
+  border: 0.5px solid rgba(109, 78, 216, 0.5);
+  box-shadow: 0 2px 6px rgba(109, 78, 216, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  flex: 0 0 auto;
+}
+.send:hover { filter: brightness(1.05); }
+
+.runtime-foot {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  color: var(--c-text-mute);
+  text-align: right;
+  padding: 0 4px;
+}
+

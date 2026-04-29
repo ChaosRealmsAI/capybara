@@ -1,0 +1,15 @@
+@media (max-width: 980px) {
+  .topbar {
+    grid-template-columns: 1fr auto;
+    padding-left: 18px;
+  }
+  .project-tabs { display: none; }
+  .workbench {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(360px, 60vh) 1fr auto;
+  }
+  .workbench:has(.timeline-inspector:not([hidden])) { grid-template-columns: 1fr; }
+  .canvas-panel { margin: 8px 8px 0; }
+  .planner-shell,
+  .timeline-inspector { margin: 6px 8px 8px; }
+}

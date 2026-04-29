@@ -18,6 +18,9 @@ Private product specs, roadmap, research, concept assets, and evidence live at `
 
 ```bash
 scripts/check-project.sh
+scripts/check-commit.sh
+scripts/check-large-files.sh
+scripts/install-git-hooks.sh
 scripts/check-architecture.sh
 CAPYBARA_SOCKET=/tmp/capybara-main-cef-$(id -u).sock scripts/verify-cef-shell.sh --keep-open
 cargo wef build -p capy-shell
@@ -90,6 +93,8 @@ target/debug/capy timeline rebuild --composition <path>
 - Future desktop shell work must target CEF/Chromium + tao, not deeper system WebView/wry expansion. Keep wry only as legacy baseline/rollback unless private architecture spec changes.
 - Keep the frontend native HTML/CSS/JS unless the private architecture spec changes.
 - Keep user-facing AI-operability through `capy` commands.
+- Run `scripts/install-git-hooks.sh` in a fresh clone/worktree so `scripts/check-commit.sh` runs before commits.
+- Do not grow files listed in `scripts/check-large-files.sh`; split the module first, then lower the debt cap.
 - Do not share a design preview, local HTML URL, browser UI, or desktop UI as usable until it has real visible verification: screenshot/capture, DOM or state checks, one interaction check, and console/error checks with evidence saved under private `spec/`.
 - For localhost URLs, also verify the delivery surface itself: a process is listening, `curl -I <url>` returns `200`, and the service remains available after Playwright finishes. Do not rely on macOS `open` or a transient shell background process as proof.
 

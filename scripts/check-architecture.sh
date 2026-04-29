@@ -116,37 +116,6 @@ check_v15_contract_boundary() {
   fi
 }
 
-check_file_size_caps() {
-  local failures=""
-  failures+="$(check_line_cap crates/capy-shell/src/app.rs 710)"
-  failures+="$(check_line_cap crates/capy-shell/src/agent.rs 770)"
-  failures+="$(check_line_cap crates/capy-shell/src/store.rs 660)"
-  failures+="$(check_line_cap crates/capy-cli/src/main.rs 590)"
-  failures+="$(check_line_cap crates/capy-canvas-web/src/lib.rs 1250)"
-  failures+="$(check_line_cap frontend/capy-app/script.js 1920)"
-  failures+="$(check_line_cap crates/capy-canvas-core/tests/canvas_tests.rs 3300)"
-  failures+="$(check_line_cap crates/capy-canvas-core/src/state_shapes.rs 770)"
-  failures+="$(check_line_cap crates/capy-canvas-core/src/shape.rs 760)"
-
-  if [[ -n "$failures" ]]; then
-    echo "$failures" >&2
-    fail_guardrail \
-      "large migration debt files must not grow past their v0.15 baseline caps" \
-      "split the file before adding behavior, then lower the cap"
-  fi
-}
-
-check_line_cap() {
-  local path="$1"
-  local cap="$2"
-  [[ -f "$path" ]] || fail "missing size-guarded file: $path"
-  local lines
-  lines="$(wc -l < "$path" | tr -d ' ')"
-  if (( lines > cap )); then
-    printf '%s has %s lines; cap is %s\n' "$path" "$lines" "$cap"
-  fi
-}
-
 check_no_external_timeline_engine
 check_timeline_engine_dependency_boundary
 check_no_new_render_source_builders
@@ -154,7 +123,6 @@ check_no_old_timeline_compat_surface
 check_no_legacy_poster_render_source
 check_no_binary_adapter
 check_v15_contract_boundary
-check_file_size_caps
 
 for path in \
   Cargo.toml \
