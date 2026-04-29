@@ -151,8 +151,11 @@ check_v16_tts_clips_boundary() {
     fail "capy clips karaoke must remain wired for bilingual HTML review"
   rg -q 'generate_karaoke_html' crates/capy-clips-core/src crates/capy-cli/src/clips.rs ||
     fail "clips karaoke HTML generation must live behind capy-clips-core"
-  require_file python/whisper_transcribe.py
-  require_file python/align_ffa.py
+  require_file crates/capy-clips-transcribe/scripts/whisper_transcribe.py
+  require_file crates/capy-clips-align/scripts/align_ffa.py
+  if [[ -d python ]] && find python -type f -name '*.py' -print -quit | rg -q .; then
+    fail "root-level python/*.py is not allowed; put helper scripts under the owning crate's scripts/ directory"
+  fi
   rg -q 'CAPY_CLIPS_WHISPER_SCRIPT' crates/capy-clips-transcribe/src/lib.rs crates/capy-cli/src/clips.rs ||
     fail "clips transcription must use Capybara-owned helper env vars"
   rg -q 'CAPY_CLIPS_ALIGN_SCRIPT' crates/capy-clips-align/src/script.rs crates/capy-cli/src/clips.rs ||

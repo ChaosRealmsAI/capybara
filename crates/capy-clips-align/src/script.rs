@@ -66,22 +66,24 @@ pub(crate) fn align_script_path() -> Result<PathBuf> {
     }
 
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source_tree = manifest
-        .parent()
-        .and_then(Path::parent)
-        .map(|root| root.join("python/align_ffa.py"))
-        .filter(|path| path.exists());
-    if let Some(path) = source_tree {
-        return Ok(path);
+    let source_tree = manifest.join("scripts/align_ffa.py");
+    if source_tree.exists() {
+        return Ok(source_tree);
     }
 
     let exe = std::env::current_exe().context("resolve current executable")?;
     for parent in exe.ancestors() {
-        let candidate = parent.join("python/align_ffa.py");
-        if candidate.exists() {
-            return Ok(candidate);
+        for relative in [
+            "scripts/align_ffa.py",
+            "capy-clips-align/scripts/align_ffa.py",
+            "crates/capy-clips-align/scripts/align_ffa.py",
+        ] {
+            let candidate = parent.join(relative);
+            if candidate.exists() {
+                return Ok(candidate);
+            }
         }
     }
 
-    bail!("python/align_ffa.py not found (set CAPY_CLIPS_ALIGN_SCRIPT)")
+    bail!("crates/capy-clips-align/scripts/align_ffa.py not found (set CAPY_CLIPS_ALIGN_SCRIPT)")
 }

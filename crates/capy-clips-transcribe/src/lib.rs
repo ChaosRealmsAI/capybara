@@ -297,24 +297,28 @@ fn whisper_script_path() -> Result<PathBuf> {
     }
 
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source_tree = manifest
-        .parent()
-        .and_then(Path::parent)
-        .map(|root| root.join("python/whisper_transcribe.py"))
-        .filter(|path| path.exists());
-    if let Some(path) = source_tree {
-        return Ok(path);
+    let source_tree = manifest.join("scripts/whisper_transcribe.py");
+    if source_tree.exists() {
+        return Ok(source_tree);
     }
 
     let exe = std::env::current_exe().context("resolve current executable")?;
     for parent in exe.ancestors() {
-        let candidate = parent.join("python/whisper_transcribe.py");
-        if candidate.exists() {
-            return Ok(candidate);
+        for relative in [
+            "scripts/whisper_transcribe.py",
+            "capy-clips-transcribe/scripts/whisper_transcribe.py",
+            "crates/capy-clips-transcribe/scripts/whisper_transcribe.py",
+        ] {
+            let candidate = parent.join(relative);
+            if candidate.exists() {
+                return Ok(candidate);
+            }
         }
     }
 
-    bail!("python/whisper_transcribe.py not found (set CAPY_CLIPS_WHISPER_SCRIPT)")
+    bail!(
+        "crates/capy-clips-transcribe/scripts/whisper_transcribe.py not found (set CAPY_CLIPS_WHISPER_SCRIPT)"
+    )
 }
 
 #[cfg(test)]

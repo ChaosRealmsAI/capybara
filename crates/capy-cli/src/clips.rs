@@ -131,8 +131,8 @@ fn doctor() -> Result<()> {
             "python": tool_status(path_or_env("CAPY_CLIPS_PYTHON_BIN", "/Users/Zhuanz/.venvs/align/bin/python3").as_str(), &["--version"]),
         },
         "helpers": {
-            "whisper_script": env_or_default("CAPY_CLIPS_WHISPER_SCRIPT", "python/whisper_transcribe.py"),
-            "align_script": env_or_default("CAPY_CLIPS_ALIGN_SCRIPT", "python/align_ffa.py"),
+            "whisper_script": env_or_default("CAPY_CLIPS_WHISPER_SCRIPT", "crates/capy-clips-transcribe/scripts/whisper_transcribe.py"),
+            "align_script": env_or_default("CAPY_CLIPS_ALIGN_SCRIPT", "crates/capy-clips-align/scripts/align_ffa.py"),
         },
         "commands": ["download", "transcribe", "align", "cut", "preview", "karaoke"],
     }))

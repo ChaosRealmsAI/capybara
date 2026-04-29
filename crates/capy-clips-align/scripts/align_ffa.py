@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 def main() -> int:
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[3]
     helper = repo_root / "crates" / "capy-tts" / "scripts" / "align_ffa.py"
     if not helper.is_file():
         print(f"shared align helper not found: {helper}", file=sys.stderr)

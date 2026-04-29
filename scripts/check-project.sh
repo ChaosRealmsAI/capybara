@@ -52,8 +52,8 @@ fi
 cargo run -p capy-cli -- clips --help >/dev/null
 cargo run -p capy-cli -- clips doctor >/dev/null
 cargo run -p capy-cli -- clips karaoke --help >/dev/null
-test -f python/whisper_transcribe.py
-test -f python/align_ffa.py
+test -f crates/capy-clips-transcribe/scripts/whisper_transcribe.py
+test -f crates/capy-clips-align/scripts/align_ffa.py
 cargo run -p capy-cli -- media --help >/dev/null
 media_dry_run="$(cargo run -p capy-cli -- media scroll-pack \
   --input tmp/nonexistent-scroll-media-dry-run.mp4 \
