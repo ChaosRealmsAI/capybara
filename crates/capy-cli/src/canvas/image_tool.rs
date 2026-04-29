@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use clap::{Args, ValueEnum};
 use image::ImageEncoder;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use super::{absolute_path, canvas_eval, js_string, js_value, placement, snapshot};
 
@@ -49,6 +49,11 @@ pub(super) struct CanvasGenerateImageArgs {
     dry_run: bool,
     #[arg(long, help = "Make the live provider call")]
     live: bool,
+    #[arg(
+        long,
+        help = "Require prompt terms for images that will be passed to capy cutout"
+    )]
+    cutout_ready: bool,
     #[arg(long)]
     x: Option<f64>,
     #[arg(long)]
@@ -110,6 +115,7 @@ pub(super) fn generate_image(args: CanvasGenerateImageArgs) -> Result<Value, Str
         name: Some(name.clone()),
         download: true,
         task_id: None,
+        cutout_ready: args.cutout_ready,
     };
     let generation = capy_image_gen::generate_image(request).map_err(|err| err.to_string())?;
     let image_path = if live {

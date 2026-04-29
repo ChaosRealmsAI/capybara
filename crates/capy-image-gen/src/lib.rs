@@ -4,10 +4,13 @@ mod types;
 
 use std::path::PathBuf;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use thiserror::Error;
 
-pub use prompt::{REQUIRED_PROMPT_SECTIONS, missing_prompt_sections, validate_prompt_sections};
+pub use prompt::{
+    missing_cutout_prompt_requirements, missing_prompt_sections, validate_cutout_prompt,
+    validate_prompt_sections, REQUIRED_PROMPT_SECTIONS,
+};
 pub use types::{
     DoctorReport, GenerateImageRequest, ImageGenerateMode, ImageProviderId, ProviderInfo,
 };
@@ -135,6 +138,27 @@ mod tests {
     }
 
     #[test]
+    fn cutout_prompt_reports_missing_requirements() {
+        let missing = missing_cutout_prompt_requirements(&valid_prompt());
+        assert!(missing.contains(&"neutral matte #E0E0E0 background"));
+        assert!(missing.contains(&"fully visible uncropped subject"));
+        assert!(missing.contains(&"no green screen"));
+    }
+
+    #[test]
+    fn cutout_prompt_accepts_isolated_neutral_source() -> Result<()> {
+        let prompt = [
+            "Scene: Neutral matte #E0E0E0 studio background for cutout source.",
+            "Subject: One single ceramic cup centered, fully visible, uncropped, 70% frame height.",
+            "Important details: Product photo with clean silhouette, clear edges, soft even light.",
+            "Use case: Source for automated alpha cutout and transparent PNG UI composition.",
+            "Constraints: No text, no watermark, no extra objects, no green screen, no blue screen, no cast shadow, no reflection.",
+        ]
+        .join(" ");
+        validate_cutout_prompt(&prompt)
+    }
+
+    #[test]
     fn dry_run_response_contains_provider_body() -> Result<()> {
         let request = GenerateImageRequest {
             provider: ImageProviderId::ApimartGptImage2,
@@ -147,6 +171,7 @@ mod tests {
             name: Some("hero".to_string()),
             download: true,
             task_id: None,
+            cutout_ready: false,
         };
         let response = generate_image(request)?;
         assert_eq!(
@@ -167,8 +192,8 @@ mod tests {
     }
 
     #[test]
-    fn find_downloaded_image_path_recurses_into_provider_result()
-    -> std::result::Result<(), Box<dyn std::error::Error>> {
+    fn find_downloaded_image_path_recurses_into_provider_result(
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let path = std::env::temp_dir().join(format!(
             "capy-image-gen-path-test-{}.png",
             std::process::id()

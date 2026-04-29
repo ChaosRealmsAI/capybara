@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand, ValueEnum};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 #[derive(Debug, Args)]
 pub struct ImageArgs {
@@ -51,6 +51,11 @@ struct ImageGenerateArgs {
     resume: Option<String>,
     #[arg(long)]
     no_download: bool,
+    #[arg(
+        long,
+        help = "Require prompt terms for images that will be passed to capy cutout"
+    )]
+    cutout_ready: bool,
     #[arg()]
     prompt: Vec<String>,
 }
@@ -126,6 +131,7 @@ fn image_generate_request(
         name: args.name,
         download: !args.no_download,
         task_id: args.resume,
+        cutout_ready: args.cutout_ready,
     })
 }
 

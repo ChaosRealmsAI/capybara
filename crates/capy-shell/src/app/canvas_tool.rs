@@ -2,9 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::ImageEncoder;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tao::event_loop::EventLoopProxy;
 use uuid::Uuid;
 
@@ -42,6 +42,7 @@ struct ToolRequest {
     out_dir: PathBuf,
     name: String,
     live: bool,
+    cutout_ready: bool,
     x: f64,
     y: f64,
     title: String,
@@ -95,6 +96,11 @@ impl ToolRequest {
                 .unwrap_or("canvas-image")
                 .to_string(),
             live,
+            cutout_ready: params
+                .get("cutoutReady")
+                .or_else(|| params.get("cutout_ready"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             x: params.get("x").and_then(Value::as_f64).unwrap_or(360.0),
             y: params.get("y").and_then(Value::as_f64).unwrap_or(140.0),
             title: params
@@ -139,6 +145,7 @@ fn run_image_generation_inner(request: &ToolRequest) -> Result<Value, String> {
         name: Some(request.name.clone()),
         download: true,
         task_id: None,
+        cutout_ready: request.cutout_ready,
     };
     let generation =
         capy_image_gen::generate_image(image_request).map_err(|err| err.to_string())?;

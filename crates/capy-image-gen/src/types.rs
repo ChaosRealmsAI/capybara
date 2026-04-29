@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use crate::prompt::validate_prompt_sections;
+use crate::prompt::{validate_cutout_prompt, validate_prompt_sections};
 use crate::{ImageGenError, Result};
 
 pub const VALID_SIZES: &[&str] = &[
@@ -100,6 +100,7 @@ pub struct GenerateImageRequest {
     pub name: Option<String>,
     pub download: bool,
     pub task_id: Option<String>,
+    pub cutout_ready: bool,
 }
 
 impl GenerateImageRequest {
@@ -130,7 +131,11 @@ impl GenerateImageRequest {
             | ImageGenerateMode::SubmitOnly
             | ImageGenerateMode::Generate => {
                 let prompt = self.prompt.as_deref().unwrap_or_default();
-                validate_prompt_sections(prompt)?;
+                if self.cutout_ready {
+                    validate_cutout_prompt(prompt)?;
+                } else {
+                    validate_prompt_sections(prompt)?;
+                }
             }
         }
         Ok(())
@@ -147,7 +152,8 @@ impl GenerateImageRequest {
             "output_dir": self.output_dir.as_ref().map(|path| path.display().to_string()),
             "name": self.name,
             "download": self.download,
-            "task_id": self.task_id
+            "task_id": self.task_id,
+            "cutout_ready": self.cutout_ready
         })
     }
 }
