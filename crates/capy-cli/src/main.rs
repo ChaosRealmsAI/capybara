@@ -44,11 +44,25 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    #[command(about = "[dev] Run the Capybara desktop shell")]
+    #[command(
+        about = "[dev] Run the Capybara desktop shell",
+        after_help = "AI quick start:
+  Use `capy shell` only when you need a foreground shell process for local debugging.
+  Required params: none.
+  Pitfalls: this command runs until the shell exits; for normal verification prefer `capy open`, `capy ps`, then `capy verify`.
+  Next topic: `capy help dev` or `capy help desktop`."
+    )]
     Shell,
     #[command(about = "[dev] Open or focus a Capybara project window")]
     Open(OpenArgs),
-    #[command(about = "[dev] List running Capybara windows")]
+    #[command(
+        about = "[dev] List running Capybara windows",
+        after_help = "AI quick start:
+  Use `capy ps` after `capy open` to confirm the shell socket and window ids.
+  Required params: none.
+  Pitfalls: use the same CAPYBARA_SOCKET for shell and CLI; stale sockets may answer from another instance.
+  Next topic: `capy help desktop`."
+    )]
     Ps,
     #[command(about = "[dev] Read a UI state key from the active Capybara window")]
     State(StateArgs),
@@ -86,7 +100,14 @@ enum Command {
     Clips(clips::ClipsArgs),
     #[command(about = "[dev] Inspect local agent runtimes")]
     Agent(agent::AgentArgs),
-    #[command(about = "[dev] Quit the Capybara shell")]
+    #[command(
+        about = "[dev] Quit the Capybara shell",
+        after_help = "AI quick start:
+  Use `capy quit` to close the shell instance for the current CAPYBARA_SOCKET.
+  Required params: none.
+  Pitfalls: do not run it against the user's active socket unless closing the product is intended.
+  Next topic: `capy help dev`."
+    )]
     Quit,
 }
 
@@ -97,6 +118,11 @@ struct HelpArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = "AI quick start:
+  Use `capy open --project=demo` to start or focus the default project window.
+  Required params: none; optional --project names the workspace, --new-window creates another window in the same shell.
+  Pitfalls: keep CAPYBARA_SOCKET consistent across open/ps/state/devtools/capture.
+  Next topic: `capy help desktop`.")]
 struct OpenArgs {
     #[arg(long, default_value = "demo")]
     project: String,
@@ -105,6 +131,12 @@ struct OpenArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = "AI quick start:
+  Use `capy state --key=app.ready` for readiness and known UI state probes.
+  Required params: --key.
+  Common keys: app.ready, canvas.ready, canvas.nodeCount, canvas.selectedNode, planner.status.
+  Pitfalls: unknown keys fail; use `capy devtools --eval` for one-off runtime probes.
+  Next topic: `capy help desktop` or `capy help canvas`.")]
 struct StateArgs {
     #[arg(long)]
     key: String,
@@ -113,6 +145,11 @@ struct StateArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = "AI quick start:
+  Use `capy devtools --query <css> --get=bounding-rect` before click/type automation.
+  Required params: either --query or --eval; --get defaults to outerHTML for queries.
+  Pitfalls: --eval runs JavaScript in the active window; prefer click/type/state when they express the action.
+  Next topic: `capy help interaction` or `capy help desktop`.")]
 struct DevtoolsArgs {
     #[arg(long)]
     query: Option<String>,
@@ -125,6 +162,12 @@ struct DevtoolsArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = "AI quick start:
+  Use `capy screenshot --region canvas --out <png>` for cropped DOM-region evidence.
+  Required params: --out.
+  Regions: full, canvas, planner, topbar.
+  Pitfalls: this captures real native pixels after a DOM rect probe; do not replace it with browser mocks for desktop evidence.
+  Next topic: `capy help desktop`.")]
 struct ScreenshotArgs {
     #[arg(long, default_value = "full")]
     region: String,
@@ -135,6 +178,11 @@ struct ScreenshotArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = "AI quick start:
+  Use `capy capture --out <png>` for full native macOS window evidence.
+  Required params: --out.
+  Pitfalls: requires a running shell window and macOS capture permissions; keep CAPYBARA_SOCKET consistent.
+  Next topic: `capy help desktop`.")]
 struct CaptureArgs {
     #[arg(long)]
     out: PathBuf,
@@ -143,6 +191,11 @@ struct CaptureArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = "AI quick start:
+  Use `capy verify` for readiness and `capy verify --profile desktop --capture-out <png>` for visible desktop proof.
+  Required params: none for readiness; --capture-out is required for --profile desktop.
+  Pitfalls: readiness alone is not visual verification; desktop profile checks browser identity, bridge, errors, topbar, and native capture.
+  Next topic: `capy help desktop`.")]
 struct VerifyArgs {
     #[arg(long)]
     window: Option<String>,
