@@ -1,3 +1,19 @@
+pub(super) const DEV_HELP: &str = r#"
+Topic: capy dev
+
+Use when: AI needs the internal operation index before verifying or automating Capybara.
+Meaning of `[dev]`: internal AI/dev verification or automation command. It is safe to expose in `capy --help`, but it is not a PM-facing product workflow.
+Registered `[dev]` commands:
+1. Lifecycle: `shell`, `open`, `ps`, `quit`
+2. Read/inspect: `doctor`, `state`, `devtools`, `verify`
+3. Visible evidence: `screenshot`, `capture`
+4. UI automation: `click`, `type`
+5. Runtime inspection: `agent`
+Product workflow commands without `[dev]`: `chat`, `canvas`, `image`, `cutout`, `tts`, `clips`, `media`, `timeline`.
+Do not: hide these commands from help; run `click`/`type` on a user's active window without an isolated `CAPYBARA_SOCKET`; treat `[dev]` commands as a substitute for final product evidence.
+Next step: read `capy help doctor`, `capy help interaction`, or `capy help desktop` for the exact workflow.
+"#;
+
 pub(super) const DOCTOR_HELP: &str = r#"
 Topic: capy doctor
 

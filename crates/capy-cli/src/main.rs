@@ -34,7 +34,8 @@ mod tts;
   Common UI flow: `capy devtools --query <css>`, then `capy click --query <css>` or `capy type --query <css> --text <text>`.
   Required params: image prompts use five labeled sections; cutout run needs --input/--output; click/type need --query.
   Pitfalls: live image/TTS provider calls may spend credits; click/type need a running shell and the right CAPYBARA_SOCKET.
-  Help topics: doctor, interaction, desktop, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, timeline."
+  Command tag: [dev] means internal AI/dev verification or automation, not a PM-facing product workflow.
+  Help topics: dev, doctor, interaction, desktop, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, timeline."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -43,29 +44,29 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    #[command(about = "Run the Capybara desktop shell")]
+    #[command(about = "[dev] Run the Capybara desktop shell")]
     Shell,
-    #[command(about = "Open or focus a Capybara project window")]
+    #[command(about = "[dev] Open or focus a Capybara project window")]
     Open(OpenArgs),
-    #[command(about = "List running Capybara windows")]
+    #[command(about = "[dev] List running Capybara windows")]
     Ps,
-    #[command(about = "Read a UI state key from the active Capybara window")]
+    #[command(about = "[dev] Read a UI state key from the active Capybara window")]
     State(StateArgs),
-    #[command(about = "Inspect DOM state for AI verification")]
+    #[command(about = "[dev] Inspect DOM state for AI verification")]
     Devtools(DevtoolsArgs),
-    #[command(about = "Capture a real desktop PNG for a DOM region")]
+    #[command(about = "[dev] Capture a real desktop PNG for a DOM region")]
     Screenshot(ScreenshotArgs),
-    #[command(about = "Capture the native macOS window PNG")]
+    #[command(about = "[dev] Capture the native macOS window PNG")]
     Capture(CaptureArgs),
-    #[command(about = "Run a no-spend project health check")]
+    #[command(about = "[dev] Run a no-spend project health check")]
     Doctor(doctor::DoctorArgs),
-    #[command(about = "Click a DOM element in the active Capybara window")]
+    #[command(about = "[dev] Click a DOM element in the active Capybara window")]
     Click(interaction::ClickArgs),
-    #[command(about = "Type text into an input in the active Capybara window")]
+    #[command(about = "[dev] Type text into an input in the active Capybara window")]
     Type(interaction::TypeArgs),
     #[command(about = "Cut generated assets into transparent PNGs with withoutbg/focus")]
     Cutout(cutout::CutoutCliArgs),
-    #[command(about = "Run a lightweight Capybara runtime verification")]
+    #[command(about = "[dev] Run a lightweight Capybara runtime verification")]
     Verify(VerifyArgs),
     #[command(about = "Manage persistent Claude/Codex conversations")]
     Chat(Box<chat::ChatArgs>),
@@ -83,9 +84,9 @@ enum Command {
     Tts(tts::TtsArgs),
     #[command(about = "Download, transcribe, align, cut, and preview video clips")]
     Clips(clips::ClipsArgs),
-    #[command(about = "Inspect local agent runtimes")]
+    #[command(about = "[dev] Inspect local agent runtimes")]
     Agent(agent::AgentArgs),
-    #[command(about = "Quit the Capybara shell")]
+    #[command(about = "[dev] Quit the Capybara shell")]
     Quit,
 }
 

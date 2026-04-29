@@ -4,6 +4,12 @@ use super::media_docs::*;
 
 pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
     HelpTopic {
+        name: "dev",
+        aliases: &["internal", "verify-tools", "ai-dev"],
+        summary: "Index internal AI/dev verification and automation commands.",
+        body: DEV_HELP,
+    },
+    HelpTopic {
         name: "doctor",
         aliases: &["health", "diagnose"],
         summary: "Run no-spend project health checks and choose the next domain doctor.",
