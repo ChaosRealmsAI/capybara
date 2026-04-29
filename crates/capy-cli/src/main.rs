@@ -31,7 +31,7 @@ mod tts;
   Common asset flow: `capy image generate --cutout-ready ...` then `capy cutout run ...`.
   Required params: image prompts use five labeled sections; cutout run needs --input and --output.
   Pitfalls: live image/TTS provider calls may spend credits; cutout/TTS alignment may need init.
-  Help topics: desktop, canvas, chat, agent, image, image-cutout, cutout, tts, clips, media, timeline."
+  Help topics: desktop, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, timeline."
 )]
 struct Cli {
     #[command(subcommand)]
