@@ -22,6 +22,15 @@ const PYTHON_PACKAGES: [&str; 5] = [
 ];
 
 #[derive(Debug, Args)]
+#[command(
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  Use `capy cutout --help` as the index and `capy cutout help <topic>` for full workflows.
+  Common commands: `capy cutout doctor`, `capy cutout init`, `capy cutout run ...`, `capy cutout batch ...`.
+  Required params: run needs --input and --output; batch needs --manifest and --out-dir.
+  Pitfalls: first run needs a local Focus runtime/model cache; generate source images with `capy image generate --cutout-ready`.
+  Help topics: `capy cutout help agent`, `capy cutout help manifest`."
+)]
 pub struct CutoutCliArgs {
     #[command(subcommand)]
     command: CutoutCommand,
@@ -37,6 +46,14 @@ enum CutoutCommand {
     Run(CutoutRunArgs),
     #[command(about = "Cut a manifest of generated assets with withoutbg/focus")]
     Batch(CutoutBatchArgs),
+    #[command(about = "Show self-contained AI help topics for cutout")]
+    Help(CutoutHelpArgs),
+}
+
+#[derive(Debug, Args)]
+struct CutoutHelpArgs {
+    #[arg(value_name = "TOPIC")]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Args, Clone)]
@@ -126,6 +143,10 @@ pub fn handle(args: CutoutCliArgs) -> Result<(), String> {
         CutoutCommand::Init(args) => init(&args)?,
         CutoutCommand::Run(args) => run_one(&args)?,
         CutoutCommand::Batch(args) => run_batch(&args)?,
+        CutoutCommand::Help(args) => {
+            crate::help_topics::print_cutout_topic(args.topic.as_deref())?;
+            return Ok(());
+        }
     };
     println!(
         "{}",

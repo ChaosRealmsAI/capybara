@@ -1,9 +1,18 @@
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand, ValueEnum};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Debug, Args)]
+#[command(
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  Use `capy image --help` as the index and `capy image help <topic>` for full workflows.
+  Common commands: `capy image providers`, `capy image doctor`, `capy image generate --dry-run ...`, `capy image balance`.
+  Required params: `generate` needs one five-section prompt: Scene, Subject, Important details, Use case, Constraints.
+  Pitfalls: live generation spends credits unless --dry-run or --submit-only is used; use --out and --name when later steps need a file.
+  Help topics: `capy image help agent`, `capy image help cutout-ready`."
+)]
 pub struct ImageArgs {
     #[command(subcommand)]
     command: ImageCommand,
@@ -19,6 +28,14 @@ enum ImageCommand {
     Generate(ImageGenerateArgs),
     #[command(about = "Check image provider balance")]
     Balance(ImageProviderArgs),
+    #[command(about = "Show self-contained AI help topics for image generation")]
+    Help(ImageHelpArgs),
+}
+
+#[derive(Debug, Args)]
+struct ImageHelpArgs {
+    #[arg(value_name = "TOPIC")]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -90,6 +107,9 @@ pub fn handle(args: ImageArgs) -> Result<(), String> {
         ImageCommand::Generate(args) => {
             let request = image_generate_request(args)?;
             capy_image_gen::generate_image(request).map_err(|err| err.to_string())?
+        }
+        ImageCommand::Help(args) => {
+            return crate::help_topics::print_image_topic(args.topic.as_deref());
         }
     };
     print_json(&data)

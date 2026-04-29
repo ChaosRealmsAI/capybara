@@ -12,6 +12,7 @@ mod chat_context;
 mod clips;
 mod cutout;
 mod desktop_verify;
+mod help_topics;
 mod image;
 mod ipc_client;
 mod media;
@@ -22,7 +23,15 @@ mod tts;
 #[command(
     name = "capy",
     version,
-    about = "Capybara CLI for desktop control and AI-friendly verification"
+    about = "Capybara CLI for desktop control and AI-friendly verification",
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  capy --help is the index. Use `capy help <topic>` for self-contained workflows.
+  Common checks: `capy verify`, `capy image doctor`, `capy cutout doctor`.
+  Common asset flow: `capy image generate --cutout-ready ...` then `capy cutout run ...`.
+  Required params: image prompts use five labeled sections; cutout run needs --input and --output.
+  Pitfalls: live image generation spends provider credits; cutout needs `capy cutout init` before first run.
+  Help topics: `capy help image`, `capy help image-cutout`, `capy help cutout`."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -55,6 +64,8 @@ enum Command {
     Canvas(canvas::CanvasArgs),
     #[command(about = "Run AI-usable creative generation tools")]
     Image(image::ImageArgs),
+    #[command(about = "Show self-contained AI help topics")]
+    Help(HelpArgs),
     #[command(about = "Package video clips for scroll-driven HTML pages")]
     Media(media::MediaArgs),
     #[command(about = "Operate Timeline composition and recorder integration")]
@@ -67,6 +78,12 @@ enum Command {
     Agent(agent::AgentArgs),
     #[command(about = "Quit the Capybara shell")]
     Quit,
+}
+
+#[derive(Debug, Args)]
+struct HelpArgs {
+    #[arg(value_name = "TOPIC")]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -196,6 +213,7 @@ fn run() -> Result<(), String> {
         Command::Chat(args) => chat::handle(args),
         Command::Canvas(args) => canvas::handle(args),
         Command::Image(args) => image::handle(args),
+        Command::Help(args) => help_topics::print_capy_topic(args.topic.as_deref()),
         Command::Media(args) => media::handle(args),
         Command::Timeline(args) => timeline::handle(args),
         Command::Tts(args) => tts::handle(args),
