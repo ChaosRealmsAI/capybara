@@ -6,6 +6,15 @@ use serde_json::{Value, json};
 use crate::chat_context;
 
 #[derive(Debug, Args)]
+#[command(
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  Use `capy chat --help` as the index and `capy chat help <topic>` for full workflows.
+  Common commands: list, new, send, events, open, stop, export.
+  Required params: send/open/events/stop/export need --id; send also needs a prompt.
+  Pitfalls: --write-code grants broad edit permissions; use --capy-canvas-tools for canvas-aware agents.
+  Help topics: `capy chat help agent`, `capy chat help canvas-tools`."
+)]
 pub struct ChatArgs {
     #[command(subcommand)]
     command: ChatCommand,
@@ -29,6 +38,14 @@ enum ChatCommand {
     Stop(ChatOpenArgs),
     #[command(about = "Export one conversation as JSON")]
     Export(ChatOpenArgs),
+    #[command(about = "Show self-contained AI help topics for chat")]
+    Help(ChatHelpArgs),
+}
+
+#[derive(Debug, Args)]
+struct ChatHelpArgs {
+    #[arg(value_name = "TOPIC")]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Clone, ValueEnum)]
@@ -216,6 +233,7 @@ pub fn handle(args: Box<ChatArgs>) -> Result<(), String> {
         ),
         ChatCommand::Send(args) => crate::send("conversation-send", chat_send_params(args)?),
         ChatCommand::Stop(args) => crate::send("conversation-stop", json!({ "id": args.id })),
+        ChatCommand::Help(args) => crate::help_topics::print_chat_topic(args.topic.as_deref()),
     }
 }
 

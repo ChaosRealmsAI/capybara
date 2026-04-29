@@ -6,7 +6,18 @@ use clap::{Args, Parser, Subcommand};
 use super::{play::PlayCommand, synth::SynthCommand};
 
 #[derive(Debug, Parser)]
-#[command(name = "capy tts", version, about = "Capybara multi-backend TTS, agent-friendly", long_about = super::LONG_ABOUT)]
+#[command(
+    name = "capy tts",
+    version,
+    about = "Capybara multi-backend TTS, agent-friendly",
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  Use `capy tts --help` as the index and `capy tts help <topic>` for full workflows.
+  Common commands: doctor, init, synth, batch, voices, preview, play, concat.
+  Required params: synth needs text or --file; batch needs JSON input and -d <out-dir>.
+  Pitfalls: Edge ignores emotion/SSML; use punctuation for pauses; use init/doctor for alignment.
+  Help topics: `capy tts help agent`, `capy tts help karaoke`, `capy tts help batch`."
+)]
 pub struct Cli {
     /// Print one-line description and exit.
     #[arg(long)]
@@ -69,6 +80,14 @@ pub enum Command {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Show self-contained AI help topics for TTS.
+    Help(TtsHelpArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct TtsHelpArgs {
+    /// Topic name. Omit to list topics.
+    pub topic: Option<String>,
 }
 
 /// Long help for `synth` subcommand · surfaces the quality playbook.

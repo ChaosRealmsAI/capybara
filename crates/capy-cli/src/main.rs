@@ -27,11 +27,11 @@ mod tts;
     disable_help_subcommand = true,
     after_help = "AI quick start:
   capy --help is the index. Use `capy help <topic>` for self-contained workflows.
-  Common checks: `capy verify`, `capy image doctor`, `capy cutout doctor`.
+  Common checks: `capy verify`, `capy image doctor`, `capy cutout doctor`, `capy clips doctor`, `capy tts doctor`.
   Common asset flow: `capy image generate --cutout-ready ...` then `capy cutout run ...`.
   Required params: image prompts use five labeled sections; cutout run needs --input and --output.
-  Pitfalls: live image generation spends provider credits; cutout needs `capy cutout init` before first run.
-  Help topics: `capy help image`, `capy help image-cutout`, `capy help cutout`."
+  Pitfalls: live image/TTS provider calls may spend credits; cutout/TTS alignment may need init.
+  Help topics: desktop, canvas, chat, agent, image, image-cutout, cutout, tts, clips, media, timeline."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -50,7 +50,7 @@ enum Command {
     State(StateArgs),
     #[command(about = "Inspect DOM state for AI verification")]
     Devtools(DevtoolsArgs),
-    #[command(about = "Capture a DOM probe PNG")]
+    #[command(about = "Capture a real desktop PNG for a DOM region")]
     Screenshot(ScreenshotArgs),
     #[command(about = "Capture the native macOS window PNG")]
     Capture(CaptureArgs),

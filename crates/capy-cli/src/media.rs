@@ -3,6 +3,15 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand};
 
 #[derive(Debug, Args)]
+#[command(
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  Use `capy media --help` as the index and `capy media help <topic>` for full workflows.
+  Common commands: scroll-pack, story-pack, serve, inspect.
+  Required params: scroll-pack needs --input/--out; story-pack needs --manifest/--out; serve needs --root.
+  Pitfalls: do not pass --emit-html and --emit-composition together; browser verification should use HTTP.
+  Help topics: `capy media help scroll-pack`, `capy media help story-pack`."
+)]
 pub struct MediaArgs {
     #[command(subcommand)]
     command: MediaCommand,
@@ -18,6 +27,14 @@ enum MediaCommand {
     Serve(MediaServeArgs),
     #[command(about = "Inspect a scroll media manifest")]
     Inspect(MediaInspectArgs),
+    #[command(about = "Show self-contained AI help topics for media packaging")]
+    Help(MediaHelpArgs),
+}
+
+#[derive(Debug, Args)]
+struct MediaHelpArgs {
+    #[arg(value_name = "TOPIC")]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -133,6 +150,7 @@ pub fn handle(args: MediaArgs) -> Result<(), String> {
                 .map_err(|err| err.to_string())?;
             print_json(&manifest)
         }
+        MediaCommand::Help(args) => crate::help_topics::print_media_topic(args.topic.as_deref()),
     }
 }
 

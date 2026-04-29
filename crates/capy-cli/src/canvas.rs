@@ -13,6 +13,15 @@ mod image_tool;
 mod poster;
 
 #[derive(Debug, Args)]
+#[command(
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  Use `capy canvas --help` as the index and `capy canvas help <topic>` for full workflows.
+  Common commands: snapshot, select, move, create-card, context export, insert-image, generate-image.
+  Required params: select/move need --id; move needs --x/--y; create-card needs --kind/--title/--x/--y.
+  Pitfalls: use live canvas ids from `snapshot`; generated images spend credits only with --live.
+  Help topics: `capy canvas help agent`, `capy canvas help context`, `capy canvas help images`."
+)]
 pub struct CanvasArgs {
     #[command(subcommand)]
     command: CanvasCommand,
@@ -36,6 +45,14 @@ enum CanvasCommand {
     GenerateImage(image_tool::CanvasGenerateImageArgs),
     #[command(about = "Export AI-readable selected-image or region context packets")]
     Context(CanvasContextArgs),
+    #[command(about = "Show self-contained AI help topics for canvas")]
+    Help(CanvasHelpArgs),
+}
+
+#[derive(Debug, Args)]
+struct CanvasHelpArgs {
+    #[arg(value_name = "TOPIC")]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -79,6 +96,9 @@ struct CanvasCreateCardArgs {
 }
 
 pub fn handle(args: CanvasArgs) -> Result<(), String> {
+    if let CanvasCommand::Help(args) = args.command {
+        return crate::help_topics::print_canvas_topic(args.topic.as_deref());
+    }
     let command_name = args.command.name();
     let result = match args.command {
         CanvasCommand::Snapshot(args) => snapshot(args.window),
@@ -109,6 +129,7 @@ pub fn handle(args: CanvasArgs) -> Result<(), String> {
         CanvasCommand::Context(args) => match args.command {
             CanvasContextCommand::Export(args) => canvas_context::export_context(args),
         },
+        CanvasCommand::Help(_) => unreachable!("handled before command execution"),
     };
     append_tool_call_log(command_name, &result);
     let data = result?;
@@ -128,6 +149,7 @@ impl CanvasCommand {
             Self::Context(CanvasContextArgs {
                 command: CanvasContextCommand::Export(_),
             }) => "context-export",
+            Self::Help(_) => "help",
         }
     }
 }

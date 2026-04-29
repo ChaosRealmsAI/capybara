@@ -213,5 +213,133 @@ pub async fn run_command(command: Option<Command>, brief: bool) -> Result<()> {
             ConfigAction::Set { key, value } => config_cmd::run_set(&key, &value),
             ConfigAction::Get { key } => config_cmd::run_get(key),
         },
+        Command::Help(args) => {
+            print_tts_help(args.topic.as_deref())?;
+            Ok(())
+        }
     }
 }
+
+fn print_tts_help(topic: Option<&str>) -> Result<()> {
+    let topics = [
+        (
+            "agent",
+            "Use capy tts safely from an AI agent.",
+            TTS_AGENT_HELP,
+        ),
+        (
+            "karaoke",
+            "Generate timing, SRT, and karaoke HTML.",
+            TTS_KARAOKE_HELP,
+        ),
+        (
+            "batch",
+            "Batch synthesize long scripts or many voices.",
+            TTS_BATCH_HELP,
+        ),
+        (
+            "playbook",
+            "Full TTS quality and voice playbook.",
+            LONG_ABOUT,
+        ),
+    ];
+    let Some(topic) = topic else {
+        crate::output::write_stdout_line(format_args!("Available self-contained help topics:"));
+        for (name, summary, _) in topics {
+            crate::output::write_stdout_line(format_args!("  {name:<20} {summary}"));
+        }
+        crate::output::write_stdout_line(format_args!(""));
+        crate::output::write_stdout_line(format_args!("Run `capy tts help <topic>`."));
+        return Ok(());
+    };
+    let topic = topic.trim().to_ascii_lowercase().replace('_', "-");
+    let body = topics
+        .iter()
+        .find(|(name, _, _)| *name == topic)
+        .map(|(_, _, body)| *body)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "unknown help topic `{topic}`. Available topics: agent, karaoke, batch, playbook"
+            )
+        })?;
+    crate::output::write_stdout_line(format_args!("{}", body.trim()));
+    Ok(())
+}
+
+const TTS_AGENT_HELP: &str = r#"
+Topic: capy tts agent
+
+Use when:
+- AI needs speech audio plus word-level timing, SRT subtitles, and karaoke HTML.
+
+Required parameters:
+- `synth` requires text or `--file`.
+- `batch` accepts a JSON array file or `-` from stdin and requires `-d <out-dir>`.
+- `doctor`/`init` inspect or prepare the local alignment runtime.
+
+Recommended commands:
+1. `target/debug/capy tts doctor`
+2. `target/debug/capy tts init --dry-run`
+3. `target/debug/capy tts voices --lang zh`
+4. `target/debug/capy tts synth "这是一段，配好标点，的，中文演示。" -o target/tts/demo.mp3`
+5. `printf '[{\"text\":\"hello\",\"filename\":\"hello\"}]' | target/debug/capy tts batch -d target/tts --dry-run`
+
+Do not:
+- Do not expect Edge TTS to honor emotion, SSML breaks, or custom dictionaries.
+- Do not feed very long text as one job; split paragraphs and use `batch`.
+- Do not skip punctuation in Chinese; punctuation is the pause control.
+
+Next step:
+- Open `<stem>.karaoke.html` or inspect `<stem>.timeline.json`.
+"#;
+
+const TTS_KARAOKE_HELP: &str = r#"
+Topic: capy tts karaoke
+
+Use when:
+- The output needs visible synchronized text or timing for video composition.
+
+Required parameters:
+- Run `synth` or `batch` without `--no-sub`.
+- Ensure alignment runtime is ready with `capy tts doctor` or `capy tts init`.
+
+Recommended command:
+`target/debug/capy tts synth "训练中的一切，都变成了三维体验。" -o target/tts/demo.mp3`
+
+Do not:
+- Do not pass `--no-sub` if timeline, SRT, or karaoke HTML is needed.
+- Do not assume timing is good without opening the karaoke HTML once.
+
+Next step:
+- Use `.timeline.json` for programmatic composition or `.karaoke.html` for visual QA.
+"#;
+
+const TTS_BATCH_HELP: &str = r#"
+Topic: capy tts batch
+
+Use when:
+- Long scripts need paragraph splitting.
+- Multiple voices or languages must be generated in one run.
+
+Required parameters:
+- JSON input must be an array of jobs with at least `text`.
+- Use `-d <out-dir>` for stable outputs.
+
+Recommended JSON:
+```json
+[
+  {"text": "第一段。", "filename": "p1"},
+  {"text": "第二段。", "filename": "p2", "voice": "zh-CN-YunxiNeural"}
+]
+```
+
+Recommended command:
+`target/debug/capy tts batch jobs.json -d target/tts`
+
+Do not:
+- Do not batch live paid backend jobs without checking backend and cost.
+- Do not skip `--dry-run` when validating a new manifest shape.
+
+Next step:
+- Read `manifest.json`, then concatenate audio with `capy tts concat` if one file is required.
+"#;

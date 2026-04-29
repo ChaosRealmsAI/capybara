@@ -14,6 +14,15 @@ use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
 #[derive(Debug, Args)]
+#[command(
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  Use `capy clips --help` as the index and `capy clips help <topic>` for full workflows.
+  Common flow: doctor -> download -> transcribe -> align -> cut -> preview/karaoke.
+  Required params: download needs --url/--out-dir; cut needs --video/--sentences-path/--plan-path/--out-dir.
+  Pitfalls: real download acceptance requires a real YouTube URL, not a local fixture.
+  Help topics: `capy clips help pipeline`, `capy clips help youtube`."
+)]
 pub struct ClipsArgs {
     #[command(subcommand)]
     command: ClipsCommand,
@@ -21,13 +30,28 @@ pub struct ClipsArgs {
 
 #[derive(Debug, Subcommand)]
 enum ClipsCommand {
+    #[command(about = "Check yt-dlp, ffmpeg, ffprobe, and helper paths")]
     Doctor,
+    #[command(about = "Download a real source video with yt-dlp")]
     Download(DownloadArgs),
+    #[command(about = "Transcribe a video into sentence and subtitle data")]
     Transcribe(TranscribeArgs),
+    #[command(about = "Align subtitle text to word-level video timing")]
     Align(AlignArgs),
+    #[command(about = "Cut source video into clips from a sentence plan")]
     Cut(CutArgs),
+    #[command(about = "Build preview timeline JSON for generated clips")]
     Preview(PreviewArgs),
+    #[command(about = "Build self-contained clip karaoke HTML")]
     Karaoke(KaraokeArgs),
+    #[command(about = "Show self-contained AI help topics for clips")]
+    Help(ClipsHelpArgs),
+}
+
+#[derive(Debug, Args)]
+struct ClipsHelpArgs {
+    #[arg(value_name = "TOPIC")]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -116,6 +140,9 @@ fn run(args: ClipsArgs) -> Result<()> {
         ClipsCommand::Cut(args) => cut_command(args),
         ClipsCommand::Preview(args) => preview_command(args),
         ClipsCommand::Karaoke(args) => karaoke_command(args),
+        ClipsCommand::Help(args) => {
+            crate::help_topics::print_clips_topic(args.topic.as_deref()).map_err(anyhow::Error::msg)
+        }
     }
 }
 

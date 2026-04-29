@@ -7,6 +7,15 @@ mod live;
 mod report;
 
 #[derive(Debug, Args)]
+#[command(
+    disable_help_subcommand = true,
+    after_help = "AI quick start:
+  Use `capy timeline --help` as the index and `capy timeline help <topic>` for full workflows.
+  Common flow: doctor -> compose-poster -> validate -> compile -> snapshot/export -> verify-export.
+  Required params: composition commands need --composition; attach/open need --canvas-node.
+  Pitfalls: validate/compile before export; run rebuild after token changes.
+  Help topics: `capy timeline help poster-export`, `capy timeline help live`."
+)]
 pub struct TimelineArgs {
     #[command(subcommand)]
     command: TimelineCommand,
@@ -40,6 +49,14 @@ enum TimelineCommand {
     Cancel(TimelineCancelArgs),
     #[command(about = "Open a live Timeline composition preview in the desktop host")]
     Open(TimelineOpenArgs),
+    #[command(about = "Show self-contained AI help topics for Timeline")]
+    Help(TimelineHelpArgs),
+}
+
+#[derive(Debug, Args)]
+struct TimelineHelpArgs {
+    #[arg(value_name = "TOPIC")]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -165,6 +182,9 @@ pub fn handle(args: TimelineArgs) -> Result<(), String> {
         TimelineCommand::Status(args) => live::status(args),
         TimelineCommand::Cancel(args) => live::cancel(args),
         TimelineCommand::Open(args) => live::open(args),
+        TimelineCommand::Help(args) => {
+            crate::help_topics::print_timeline_topic(args.topic.as_deref())
+        }
     }
 }
 
