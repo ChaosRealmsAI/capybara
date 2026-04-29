@@ -354,6 +354,7 @@ fn run_runner(paths: &RuntimePaths, operation: &str, input: Value) -> Result<Val
     let mut child = Command::new(&paths.python)
         .arg(&paths.runner)
         .arg(operation)
+        .env("HF_HUB_DISABLE_XET", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

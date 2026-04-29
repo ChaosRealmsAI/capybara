@@ -20,6 +20,11 @@ from typing import Any
 
 FOCUS_REPO = "withoutbg/focus"
 
+# Hugging Face's optional Xet transfer backend can hang for large ONNX downloads
+# on some macOS/network setups. The standard HTTP path is slower but predictable
+# for this CLI's init flow.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
 
 def now_ms() -> int:
     return round(time.perf_counter() * 1000)
