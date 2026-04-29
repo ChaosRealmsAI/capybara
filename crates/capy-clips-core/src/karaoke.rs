@@ -406,6 +406,8 @@ mod tests {
         assert!(html.contains(r#""file":"clip_01.mp4""#));
         assert!(html.contains("Hello world."));
         assert!(html.contains("你好世界"));
+        assert!(html.contains(r#"class="video-frame""#));
+        assert!(html.contains("object-fit:contain"));
         assert!(html.contains(r#"<video id="vid""#));
         Ok(())
     }
