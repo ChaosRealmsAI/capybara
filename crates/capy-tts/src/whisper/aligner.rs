@@ -1,11 +1,12 @@
 //! whisper forced alignment process helpers
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 
+use super::runtime;
 use super::timeline::detect_language;
 
 #[derive(Debug, Deserialize)]
@@ -24,19 +25,27 @@ pub(super) struct FfaUnit {
 }
 
 pub(super) fn run_ffa(audio_path: &Path, original_text: &str) -> Result<FfaOutput> {
-    let script = align_script_path()
+    let script = runtime::align_script_path()
         .ok_or_else(|| anyhow!("scripts/align_ffa.py not found (set CAPY_TTS_ALIGN_SCRIPT)"))?;
     let language = detect_language(original_text).unwrap_or("en");
+    let py_runtime = runtime::existing_runtime(None, None);
 
-    let mut child = Command::new("python3")
+    let mut command = Command::new(&py_runtime.python);
+    command
         .arg(&script)
         .arg(audio_path.as_os_str())
         .arg(language)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("failed to spawn python3 for whisperX alignment")?;
+        .stderr(Stdio::piped());
+    runtime::apply_runtime_env(&mut command, &py_runtime);
+
+    let mut child = command.spawn().with_context(|| {
+        format!(
+            "failed to spawn python for whisperX alignment: {}",
+            py_runtime.python.display()
+        )
+    })?;
 
     if let Some(mut stdin) = child.stdin.take() {
         stdin
@@ -76,36 +85,4 @@ pub(super) fn run_ffa(audio_path: &Path, original_text: &str) -> Result<FfaOutpu
             stderr.trim()
         )
     })
-}
-
-fn align_script_path() -> Option<PathBuf> {
-    if let Ok(path) = std::env::var("CAPY_TTS_ALIGN_SCRIPT") {
-        let path = PathBuf::from(path);
-        if path.exists() {
-            return Some(path);
-        }
-    }
-
-    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
-        let candidate = PathBuf::from(manifest_dir).join("scripts/align_ffa.py");
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
-
-    if let Ok(exe) = std::env::current_exe() {
-        for parent in exe.ancestors() {
-            let candidate = parent.join("scripts/align_ffa.py");
-            if candidate.exists() {
-                return Some(candidate);
-            }
-
-            let candidate = parent.join("capy-tts/scripts/align_ffa.py");
-            if candidate.exists() {
-                return Some(candidate);
-            }
-        }
-    }
-
-    None
 }

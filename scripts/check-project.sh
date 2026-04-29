@@ -38,6 +38,12 @@ fi
 cargo run -p capy-cli -- tts --help >/dev/null
 cargo run -p capy-cli -- tts --brief >/dev/null
 cargo run -p capy-cli -- tts doctor >/dev/null
+tts_init_dry_run="$(cargo run -p capy-cli -- tts init --dry-run)"
+if ! jq -e '.kind == "tts-init" and .dry_run == true and (.runtime.python | length) > 0' \
+  <<<"$tts_init_dry_run" >/dev/null; then
+  echo "project check failed: tts init dry-run must report selected runtime" >&2
+  exit 1
+fi
 tts_dry_run="$(printf '[{"text":"hello","filename":"hello"}]' | cargo run -p capy-cli -- tts batch -d target/capy-tts-dry-run --dry-run)"
 if ! grep -q '"text": "hello"' <<<"$tts_dry_run"; then
   echo "project check failed: tts batch dry-run must echo the planned job" >&2
@@ -45,6 +51,9 @@ if ! grep -q '"text": "hello"' <<<"$tts_dry_run"; then
 fi
 cargo run -p capy-cli -- clips --help >/dev/null
 cargo run -p capy-cli -- clips doctor >/dev/null
+cargo run -p capy-cli -- clips karaoke --help >/dev/null
+test -f python/whisper_transcribe.py
+test -f python/align_ffa.py
 cargo run -p capy-cli -- media --help >/dev/null
 media_dry_run="$(cargo run -p capy-cli -- media scroll-pack \
   --input tmp/nonexistent-scroll-media-dry-run.mp4 \

@@ -142,7 +142,17 @@ check_v16_tts_clips_boundary() {
   done
 
   rg -q 'Command::Tts' crates/capy-cli/src/main.rs || fail "capy tts CLI must remain wired"
+  rg -q 'Init\(InitArgs\)' crates/capy-tts/src/cli/args.rs ||
+    fail "capy tts init must remain wired for explicit whisperX setup"
+  rg -q 'tts init --dry-run' scripts/check-project.sh ||
+    fail "project gate must keep tts init dry-run smoke"
   rg -q 'Command::Clips' crates/capy-cli/src/main.rs || fail "capy clips CLI must remain wired"
+  rg -q 'Karaoke\(KaraokeArgs\)' crates/capy-cli/src/clips.rs ||
+    fail "capy clips karaoke must remain wired for bilingual HTML review"
+  rg -q 'generate_karaoke_html' crates/capy-clips-core/src crates/capy-cli/src/clips.rs ||
+    fail "clips karaoke HTML generation must live behind capy-clips-core"
+  require_file python/whisper_transcribe.py
+  require_file python/align_ffa.py
   rg -q 'CAPY_CLIPS_WHISPER_SCRIPT' crates/capy-clips-transcribe/src/lib.rs crates/capy-cli/src/clips.rs ||
     fail "clips transcription must use Capybara-owned helper env vars"
   rg -q 'CAPY_CLIPS_ALIGN_SCRIPT' crates/capy-clips-align/src/script.rs crates/capy-cli/src/clips.rs ||

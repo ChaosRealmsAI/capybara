@@ -30,6 +30,13 @@ import os
 import sys
 from typing import Any
 
+from align_runtime import (
+    DEFAULT_ALIGN_MODELS,
+    cached_align_model_dir,
+    runtime_download_command,
+    runtime_status_command,
+)
+
 # Silence chatty libs but keep real stderr for errors we want to surface.
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
@@ -80,22 +87,6 @@ def detect_language(text: str) -> str:
 
 CHAR_UNIT_LANGS = {"zh", "ja", "ko"}
 
-# Canonical wav2vec2 CTC model id per language code. For languages that
-# whisperX ships as "torch" (torchaudio.pipelines) defaults we pin an HF
-# alternative instead so every language lives in ~/.cache/huggingface and
-# the offline-detection path is uniform. `jonatasgrosman/*-english` is the
-# community XLS-R English model, same family as the Chinese one above.
-DEFAULT_ALIGN_MODELS = {
-    "zh": "jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn",
-    "ja": "jonatasgrosman/wav2vec2-large-xlsr-53-japanese",
-    "ko": "kresnik/wav2vec2-large-xlsr-korean",
-    "en": "jonatasgrosman/wav2vec2-large-xlsr-53-english",
-    "fr": "jonatasgrosman/wav2vec2-large-xlsr-53-french",
-    "de": "jonatasgrosman/wav2vec2-large-xlsr-53-german",
-    "es": "jonatasgrosman/wav2vec2-large-xlsr-53-spanish",
-    "it": "jonatasgrosman/wav2vec2-large-xlsr-53-italian",
-}
-
 # Punctuation whisperX may emit as its own aligned token. We drop these on
 # the Python side so the Rust Timeline builder sees a clean stream of one
 # unit per CONTENT char (CJK) or per WORD (Latin). Punctuation is
@@ -115,44 +106,18 @@ def _is_punct_token(tok: str) -> bool:
     return all(c in PUNCT_CHARS for c in stripped)
 
 
-def _cached_align_model_dir(language: str) -> str | None:
-    """Return the local snapshot dir for a language's align model if it is
-    fully cached, else None.
-
-    We don't want to import huggingface_hub for this check (it pulls in
-    transformers by transitive effect of whisperX). A structural check of
-    `~/.cache/huggingface/hub/models--…/snapshots/<hash>/pytorch_model.bin`
-    is sufficient and fast.
-    """
-    repo = DEFAULT_ALIGN_MODELS.get(language)
-    if not repo:
-        # English and other "torch" models (VOXPOPULI) don't live in the HF
-        # cache — they're downloaded by torchaudio and cached elsewhere.
-        # Skip the check; whisperX's own loader handles them.
-        return None
-    cache_root = os.environ.get("HF_HOME") or os.path.join(
-        os.path.expanduser("~"), ".cache", "huggingface"
-    )
-    slug = "models--" + repo.replace("/", "--")
-    snapshots_dir = os.path.join(cache_root, "hub", slug, "snapshots")
-    if not os.path.isdir(snapshots_dir):
-        return None
-    for entry in os.listdir(snapshots_dir):
-        snap = os.path.join(snapshots_dir, entry)
-        if not os.path.isdir(snap):
-            continue
-        # Need config + weights at minimum.
-        has_cfg = os.path.exists(os.path.join(snap, "config.json"))
-        has_weights = any(
-            os.path.exists(os.path.join(snap, f))
-            for f in ("pytorch_model.bin", "model.safetensors")
-        )
-        if has_cfg and has_weights:
-            return snap
-    return None
+def _json_stdout(payload: dict[str, Any]) -> None:
+    json.dump(payload, _real_stdout, ensure_ascii=False)
+    _real_stdout.write("\n")
+    _real_stdout.flush()
 
 
 def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--status":
+        return runtime_status_command(sys.argv[2:], _json_stdout)
+    if len(sys.argv) >= 2 and sys.argv[1] == "--download":
+        return runtime_download_command(sys.argv[2:], _json_stdout)
+
     if len(sys.argv) < 2:
         eprint("usage: align_ffa.py <audio_path> [language]")
         return 2
@@ -181,7 +146,7 @@ def main() -> int:
     # cached, force offline mode so transformers / huggingface_hub don't
     # block on HEAD requests over slow networks. First-time users have to
     # do the download online; after that every subsequent run is offline.
-    cached_model_dir = _cached_align_model_dir(language)
+    cached_model_dir = cached_align_model_dir(language)
     if cached_model_dir and "HF_HUB_OFFLINE" not in os.environ:
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -290,9 +255,7 @@ def main() -> int:
         "units": units,
     }
     # Emit the JSON line on the real stdout we saved at import time.
-    json.dump(out, _real_stdout, ensure_ascii=False)
-    _real_stdout.write("\n")
-    _real_stdout.flush()
+    _json_stdout(out)
     return 0
 
 

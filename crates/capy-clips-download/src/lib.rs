@@ -11,11 +11,11 @@
 )]
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use capy_clips_core::{probe_duration, remove_existing_path};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -71,6 +71,8 @@ enum DownloadError {
     InvalidFormatHeight,
     #[error("yt-dlp metadata did not include a title")]
     MissingTitle,
+    #[error("file URL contains an invalid percent escape near `{0}`")]
+    InvalidFileUrl(String),
     #[error("downloaded video missing at {0}")]
     MissingOutput(String),
     #[error("{tool} failed with exit {code:?}")]
@@ -96,6 +98,10 @@ pub fn download(options: &DownloadOptions) -> Result<DownloadSummary> {
 
     fs::create_dir_all(&options.out_dir)
         .with_context(|| format!("create {}", options.out_dir.display()))?;
+
+    if let Some(local_source) = local_source_path(&options.url)? {
+        return import_local_file(options, &local_source);
+    }
 
     let info = fetch_info(&options.url)?;
     let video_path = options.out_dir.join(SOURCE_FILE_NAME);
@@ -128,6 +134,102 @@ pub fn download(options: &DownloadOptions) -> Result<DownloadSummary> {
         metadata_path,
         metadata,
     })
+}
+
+fn import_local_file(options: &DownloadOptions, source: &Path) -> Result<DownloadSummary> {
+    let source =
+        fs::canonicalize(source).with_context(|| format!("resolve {}", source.display()))?;
+    if !source.is_file() {
+        bail!("local source is not a file: {}", source.display());
+    }
+
+    let video_path = options.out_dir.join(SOURCE_FILE_NAME);
+    let metadata_path = options.out_dir.join(META_FILE_NAME);
+    let title = source
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("local-video")
+        .to_string();
+
+    let output_parent = fs::canonicalize(&options.out_dir)
+        .with_context(|| format!("resolve {}", options.out_dir.display()))?;
+    let output_file = output_parent.join(SOURCE_FILE_NAME);
+    if source != output_file {
+        remove_existing_path(&video_path)?;
+        fs::copy(&source, &video_path)
+            .with_context(|| format!("copy {} to {}", source.display(), video_path.display()))?;
+    }
+    remove_existing_path(&metadata_path)?;
+
+    let duration_sec = probe_duration(&video_path)?;
+    let metadata = DownloadMetadata {
+        url: options.url.clone(),
+        title,
+        duration_sec,
+        format: format!("local-{}p", options.format_height),
+        downloaded_at: now_utc_rfc3339()?,
+    };
+    fs::write(
+        &metadata_path,
+        serde_json::to_vec_pretty(&metadata).context("serialize meta.json")?,
+    )
+    .with_context(|| format!("write {}", metadata_path.display()))?;
+
+    Ok(DownloadSummary {
+        video_path,
+        metadata_path,
+        metadata,
+    })
+}
+
+fn local_source_path(input: &str) -> Result<Option<PathBuf>> {
+    if let Some(path) = input.strip_prefix("file://") {
+        return Ok(Some(PathBuf::from(percent_decode_file_path(path)?)));
+    }
+
+    let path = PathBuf::from(input);
+    if path.exists() {
+        return Ok(Some(path));
+    }
+    Ok(None)
+}
+
+fn percent_decode_file_path(input: &str) -> Result<String> {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hi = bytes.get(index + 1).copied();
+            let lo = bytes.get(index + 2).copied();
+            let (Some(hi), Some(lo)) = (hi, lo) else {
+                return Err(DownloadError::InvalidFileUrl(input[index..].to_string()).into());
+            };
+            let Some(value) = hex_pair(hi, lo) else {
+                return Err(DownloadError::InvalidFileUrl(input[index..].to_string()).into());
+            };
+            out.push(value);
+            index += 3;
+        } else {
+            out.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(out).context("decode file URL as UTF-8")
+}
+
+fn hex_pair(hi: u8, lo: u8) -> Option<u8> {
+    Some(hex_digit(hi)? * 16 + hex_digit(lo)?)
+}
+
+fn hex_digit(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn fetch_info(url: &str) -> Result<YtDlpInfo> {
@@ -253,6 +355,25 @@ mod tests {
     #[test]
     fn stderr_text_returns_default_for_empty_output() {
         assert_eq!(stderr_text(b" \n "), "no stderr output");
+    }
+
+    #[test]
+    fn file_url_path_is_percent_decoded() -> Result<()> {
+        assert_eq!(
+            percent_decode_file_path("/tmp/hello%20world.mp4")?,
+            "/tmp/hello world.mp4"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn local_source_path_accepts_existing_file() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let file = temp.path().join("source.mp4");
+        fs::write(&file, b"media")?;
+
+        assert_eq!(local_source_path(file.to_str().unwrap())?, Some(file));
+        Ok(())
     }
 
     #[test]

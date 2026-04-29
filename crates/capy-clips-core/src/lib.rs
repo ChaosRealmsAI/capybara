@@ -12,6 +12,7 @@
 
 pub mod cut_report;
 pub mod fs;
+pub mod karaoke;
 pub mod media;
 pub mod plan;
 pub mod preview;
@@ -22,6 +23,7 @@ pub mod time;
 
 pub use cut_report::{ClipFailure, ClipResult, CutReport};
 pub use fs::remove_existing_path;
+pub use karaoke::{KaraokeSummary, generate_karaoke_html};
 pub use media::{extract_audio_to_wav, probe_duration};
 pub use plan::{Plan, PlanBridge, PlanClip, PlanSkipped};
 pub use preview::{PreviewClip, PreviewTimelines, PreviewWord, remap_words_to_clip_ms};

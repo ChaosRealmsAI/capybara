@@ -3,6 +3,7 @@ pub(crate) mod args;
 pub(crate) mod batch;
 pub(crate) mod concat;
 pub(crate) mod config_cmd;
+pub(crate) mod init;
 pub(crate) mod play;
 pub(crate) mod preview;
 pub(crate) mod synth;
@@ -165,6 +166,7 @@ Pass --subdir to nest under `{dir}/{stem}/` (legacy).
 
   capy tts synth --help     synth-specific flags
   capy tts batch --help     batch JSON schema
+  capy tts init             install/check whisperX align runtime
   capy tts voices --help    voice listing
   capy tts concat --help    mp3 concatenation
 "#;
@@ -185,7 +187,8 @@ pub async fn run_command(command: Option<Command>, brief: bool) -> Result<()> {
         command.ok_or_else(|| anyhow::anyhow!("no command given. Try 'capy tts --help'"))?;
 
     match command {
-        Command::Doctor => doctor(),
+        Command::Doctor(args) => init::doctor(args),
+        Command::Init(args) => init::run(args),
         Command::Synth(args) => synth::run(args.into()).await,
         Command::Batch(args) => {
             batch::run(
@@ -211,43 +214,4 @@ pub async fn run_command(command: Option<Command>, brief: bool) -> Result<()> {
             ConfigAction::Get { key } => config_cmd::run_get(key),
         },
     }
-}
-
-fn doctor() -> Result<()> {
-    let config_path = crate::config::TtsConfig::config_path();
-    let align_env = std::env::var("CAPY_TTS_ALIGN_SCRIPT").ok();
-    let bundled_align =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/align_ffa.py");
-    let align_script = align_env
-        .clone()
-        .unwrap_or_else(|| bundled_align.display().to_string());
-    let align_script_exists = std::path::Path::new(&align_script).is_file();
-    let volcengine_configured = std::env::var("VOLCENGINE_APP_ID").is_ok()
-        && std::env::var("VOLCENGINE_ACCESS_TOKEN").is_ok();
-
-    crate::output::write_stdout_line(format_args!(
-        "{}",
-        serde_json::to_string_pretty(&serde_json::json!({
-            "ok": true,
-            "default_backend": "edge",
-            "config_path": config_path,
-            "align_script": {
-                "path": align_script,
-                "exists": align_script_exists,
-                "env": align_env,
-            },
-            "providers": {
-                "edge": {
-                    "available": true,
-                    "spend": false,
-                },
-                "volcengine": {
-                    "configured": volcengine_configured,
-                    "spend": true,
-                }
-            },
-            "commands": ["synth", "batch", "play", "preview", "voices", "concat", "config"],
-        }))?
-    ));
-    Ok(())
 }

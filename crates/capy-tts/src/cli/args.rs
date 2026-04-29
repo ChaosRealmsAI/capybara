@@ -1,4 +1,6 @@
 //! TTS CLI args helpers.
+use std::path::PathBuf;
+
 use clap::{Args, Parser, Subcommand};
 
 use super::{play::PlayCommand, synth::SynthCommand};
@@ -17,7 +19,9 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Inspect local TTS configuration and helper readiness without spending provider credits.
-    Doctor,
+    Doctor(DoctorArgs),
+    /// Initialize the local whisperX alignment runtime and missing model cache.
+    Init(InitArgs),
     /// Synthesize text to mp3 + word-level subtitles + karaoke HTML.
     #[command(long_about = SYNTH_LONG_ABOUT)]
     Synth(SynthArgs),
@@ -359,6 +363,53 @@ pub enum ConfigAction {
         /// Key to get (omit for all).
         key: Option<String>,
     },
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct AlignRuntimeArgs {
+    /// Override capy tts runtime cache; defaults to a user cache directory.
+    #[arg(long)]
+    pub cache_dir: Option<PathBuf>,
+
+    /// Override Python executable; defaults to CAPY_TTS_PYTHON, managed venv, then python3.
+    #[arg(long)]
+    pub python: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct DoctorArgs {
+    #[command(flatten)]
+    pub runtime: AlignRuntimeArgs,
+
+    /// Alignment language to check. Repeat for several languages. Default: zh.
+    #[arg(short = 'l', long = "language", value_name = "CODE")]
+    pub languages: Vec<String>,
+
+    /// Check every built-in align model language.
+    #[arg(long)]
+    pub all: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct InitArgs {
+    #[command(flatten)]
+    pub runtime: AlignRuntimeArgs,
+
+    /// Alignment language to install. Repeat for several languages. Default: zh.
+    #[arg(short = 'l', long = "language", value_name = "CODE")]
+    pub languages: Vec<String>,
+
+    /// Install every built-in align model language.
+    #[arg(long)]
+    pub all: bool,
+
+    /// Skip pip install and only check/download model files.
+    #[arg(long)]
+    pub skip_pip: bool,
+
+    /// Show the selected runtime and missing models without installing anything.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 impl From<SynthArgs> for SynthCommand {

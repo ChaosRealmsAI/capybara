@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Capybara Clips · Karaoke</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0b0c0f;
+  --panel:#14171d;
+  --panel-2:#191d24;
+  --border:#2b323c;
+  --text:#f5f7fa;
+  --muted:#9aa4b2;
+  --soft:#657084;
+  --accent:#47d18c;
+  --accent-2:#f7b84b;
+  --active:#ffffff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif}
+body{display:grid;grid-template-columns:280px minmax(0,1fr)}
+.side{min-height:100vh;border-right:1px solid var(--border);background:var(--panel);padding:20px}
+.brand{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 16px}
+.clip-list{display:grid;gap:8px}
+.clip-item{width:100%;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);color:inherit;text-align:left;padding:12px;cursor:pointer}
+.clip-item:hover,.clip-item.active{border-color:var(--accent)}
+.clip-item.active{background:#102019}
+.clip-num{font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent)}
+.clip-title{font-size:14px;font-weight:700;line-height:1.35;margin:5px 0;color:var(--text)}
+.clip-meta{display:flex;justify-content:space-between;gap:12px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--soft)}
+.main{min-width:0;min-height:100vh;padding:24px;display:grid;grid-template-rows:auto 1fr;gap:16px}
+video{width:100%;max-height:62vh;background:#000;border:1px solid var(--border);border-radius:8px}
+.cue{border:1px solid var(--border);border-radius:8px;background:var(--panel);min-height:190px;padding:28px;display:grid;align-content:center;text-align:center}
+.en{font-size:18px;line-height:1.65;color:var(--muted);font-style:italic;margin-bottom:14px}
+.zh{font-size:30px;line-height:1.5;font-weight:700;color:#dce3ea}
+.w{display:inline-block;padding:0 2px;transition:color .12s,text-shadow .12s,transform .12s,opacity .12s}
+.future{opacity:.42}
+.past{opacity:.74}
+.en .past{color:var(--accent-2)}
+.en .active{color:#ffe1ad;text-shadow:0 0 10px rgba(247,184,75,.55);transform:translateY(-1px)}
+.zh .past{color:var(--accent)}
+.zh .active{color:var(--active);text-shadow:0 0 12px rgba(71,209,140,.65);transform:translateY(-1px)}
+.tag{margin-top:16px;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--soft)}
+@media (max-width: 760px){
+  body{grid-template-columns:1fr}
+  .side{min-height:auto;border-right:0;border-bottom:1px solid var(--border);padding:14px}
+  .clip-list{grid-auto-flow:column;grid-auto-columns:minmax(210px,1fr);overflow-x:auto}
+  .main{min-height:auto;padding:14px}
+  .cue{padding:20px;min-height:150px}
+  .en{font-size:15px}
+  .zh{font-size:24px}
+}
+</style>
+</head>
+<body>
+<aside class="side">
+  <h1 class="brand">Capybara Clips</h1>
+  <div id="clipList" class="clip-list"></div>
+</aside>
+<main class="main">
+  <video id="vid" controls preload="auto"></video>
+  <section class="cue" aria-live="polite">
+    <div class="en" id="enLine"></div>
+    <div class="zh" id="zhLine"></div>
+    <div class="tag" id="tag"></div>
+  </section>
+</main>
+<script>
+const __DATA = {{DATA_JSON}};
+const CLIPS = __DATA.clips.map((clip) => ({
+  id: clip.id,
+  file: clip.file,
+  title: clip.title,
+  sub: clip.sub,
+  dur: clip.duration_s
+}));
+const DATA = Object.fromEntries(__DATA.clips.map((clip) => [clip.id, clip.segments]));
+const vid = document.getElementById('vid');
+const enLine = document.getElementById('enLine');
+const zhLine = document.getElementById('zhLine');
+const tag = document.getElementById('tag');
+const list = document.getElementById('clipList');
+let curSegs = [];
+let curSegIdx = -1;
+let rafId = null;
+
+function textNode(value) {
+  return document.createTextNode(value);
+}
+
+function makeClipButton(clip) {
+  const button = document.createElement('button');
+  button.className = 'clip-item';
+  button.type = 'button';
+  button.dataset.id = String(clip.id);
+
+  const num = document.createElement('div');
+  num.className = 'clip-num';
+  num.textContent = `CLIP #${String(clip.id).padStart(2, '0')}`;
+
+  const title = document.createElement('div');
+  title.className = 'clip-title';
+  title.textContent = clip.title;
+
+  const meta = document.createElement('div');
+  meta.className = 'clip-meta';
+  const sub = document.createElement('span');
+  sub.textContent = clip.sub;
+  const dur = document.createElement('span');
+  dur.textContent = `${clip.dur.toFixed(1)}s`;
+  meta.append(sub, dur);
+
+  button.append(num, title, meta);
+  button.addEventListener('click', () => loadClip(clip));
+  return button;
+}
+
+function renderSegmentWords(segment) {
+  enLine.replaceChildren();
+  segment.en_words.forEach((word) => {
+    const span = document.createElement('span');
+    span.className = 'w future';
+    span.textContent = word.text;
+    enLine.append(span, textNode(' '));
+  });
+
+  zhLine.replaceChildren();
+  segment.zh_chars.forEach((ch) => {
+    const span = document.createElement('span');
+    span.className = 'w future';
+    span.textContent = ch.text;
+    zhLine.append(span);
+  });
+}
+
+function highlight(container, items, timeMs) {
+  container.querySelectorAll('.w').forEach((span, index) => {
+    const item = items[index];
+    span.classList.remove('past', 'active', 'future');
+    if (!item || timeMs < item.start_ms) {
+      span.classList.add('future');
+    } else if (timeMs < item.end_ms) {
+      span.classList.add('active');
+    } else {
+      span.classList.add('past');
+    }
+  });
+}
+
+function loadClip(clip) {
+  document.querySelectorAll('.clip-item').forEach((button) => {
+    button.classList.toggle('active', Number(button.dataset.id) === clip.id);
+  });
+  curSegs = DATA[clip.id] || [];
+  curSegIdx = -1;
+  vid.src = clip.file;
+  vid.load();
+  if (curSegs[0]) {
+    curSegIdx = 0;
+    renderSegmentWords(curSegs[0]);
+    tag.textContent = `seg 1/${curSegs.length}`;
+  }
+  window.setTimeout(tick, 80);
+}
+
+function segmentIndex(timeMs) {
+  if (!curSegs.length) return -1;
+  const exact = curSegs.findIndex((segment) => timeMs >= segment.start_ms && timeMs < segment.end_ms);
+  if (exact >= 0) return exact;
+  return timeMs < curSegs[0].start_ms ? 0 : curSegs.length - 1;
+}
+
+function tick() {
+  if (!curSegs.length) return;
+  const timeMs = vid.currentTime * 1000;
+  const nextIdx = segmentIndex(timeMs);
+  if (nextIdx !== curSegIdx) {
+    curSegIdx = nextIdx;
+    renderSegmentWords(curSegs[curSegIdx]);
+    tag.textContent = `seg ${curSegIdx + 1}/${curSegs.length}`;
+  }
+  const segment = curSegs[curSegIdx];
+  highlight(enLine, segment.en_words, timeMs);
+  highlight(zhLine, segment.zh_chars, timeMs);
+  if (!vid.paused && !vid.ended) {
+    rafId = window.requestAnimationFrame(tick);
+  }
+}
+
+CLIPS.forEach((clip) => list.appendChild(makeClipButton(clip)));
+vid.addEventListener('play', () => {
+  window.cancelAnimationFrame(rafId);
+  rafId = window.requestAnimationFrame(tick);
+});
+vid.addEventListener('pause', tick);
+vid.addEventListener('seeked', tick);
+document.addEventListener('keydown', (event) => {
+  if (!curSegs.length) return;
+  if (event.key === ' ') {
+    event.preventDefault();
+    if (vid.paused) {
+      vid.play();
+    } else {
+      vid.pause();
+    }
+  } else if (event.key === 'ArrowLeft') {
+    vid.currentTime = Math.max(0, vid.currentTime - 0.5);
+  } else if (event.key === 'ArrowRight') {
+    vid.currentTime = Math.min(vid.duration || 0, vid.currentTime + 0.5);
+  }
+});
+if (CLIPS[0]) loadClip(CLIPS[0]);
+</script>
+</body>
+</html>

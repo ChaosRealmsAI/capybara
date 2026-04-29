@@ -4,7 +4,8 @@ use std::process::Command;
 use anyhow::{Result, bail};
 use capy_clips_align::{AlignOptions, align};
 use capy_clips_core::{
-    CutReport, PreviewClip, PreviewTimelines, Sentences, remap_words_to_clip_ms,
+    CutReport, PreviewClip, PreviewTimelines, Sentences, generate_karaoke_html,
+    remap_words_to_clip_ms,
 };
 use capy_clips_cut::{CutOptions, cut_plan};
 use capy_clips_download::{DownloadOptions, download};
@@ -26,6 +27,7 @@ enum ClipsCommand {
     Align(AlignArgs),
     Cut(CutArgs),
     Preview(PreviewArgs),
+    Karaoke(KaraokeArgs),
 }
 
 #[derive(Debug, Args)]
@@ -96,6 +98,11 @@ struct PreviewArgs {
     theme: String,
 }
 
+#[derive(Debug, Args)]
+struct KaraokeArgs {
+    episode_dir: PathBuf,
+}
+
 pub fn handle(args: ClipsArgs) -> Result<(), String> {
     run(args).map_err(|error| format!("{error:#}"))
 }
@@ -108,6 +115,7 @@ fn run(args: ClipsArgs) -> Result<()> {
         ClipsCommand::Align(args) => align_command(args),
         ClipsCommand::Cut(args) => cut_command(args),
         ClipsCommand::Preview(args) => preview_command(args),
+        ClipsCommand::Karaoke(args) => karaoke_command(args),
     }
 }
 
@@ -123,10 +131,10 @@ fn doctor() -> Result<()> {
             "python": tool_status(path_or_env("CAPY_CLIPS_PYTHON_BIN", "/Users/Zhuanz/.venvs/align/bin/python3").as_str(), &["--version"]),
         },
         "helpers": {
-            "whisper_script": env_or_default("CAPY_CLIPS_WHISPER_SCRIPT", "scripts/transcribe_whisper_timestamped.py"),
-            "align_script": env_or_default("CAPY_CLIPS_ALIGN_SCRIPT", "scripts/align_whisperx.py"),
+            "whisper_script": env_or_default("CAPY_CLIPS_WHISPER_SCRIPT", "python/whisper_transcribe.py"),
+            "align_script": env_or_default("CAPY_CLIPS_ALIGN_SCRIPT", "python/align_ffa.py"),
         },
-        "commands": ["download", "transcribe", "align", "cut", "preview"],
+        "commands": ["download", "transcribe", "align", "cut", "preview", "karaoke"],
     }))
 }
 
@@ -247,6 +255,16 @@ fn preview_command(args: PreviewArgs) -> Result<()> {
     print_value(json!({
         "out_path": args.out_path,
         "clips": timelines.clips.len(),
+    }))
+}
+
+fn karaoke_command(args: KaraokeArgs) -> Result<()> {
+    let summary = generate_karaoke_html(&args.episode_dir)?;
+    print_value(json!({
+        "out_path": summary.out_path,
+        "bytes": summary.bytes,
+        "clips": summary.clips,
+        "segments": summary.segments,
     }))
 }
 
