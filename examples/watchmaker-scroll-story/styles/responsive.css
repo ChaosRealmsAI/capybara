@@ -1,0 +1,104 @@
+@media (max-width: 900px) {
+  :root {
+    --header-height: 64px;
+  }
+
+  .site-header {
+    padding: 0 18px;
+  }
+
+  .brand-name {
+    display: none;
+  }
+
+  .site-nav {
+    gap: 16px;
+  }
+
+  .hero {
+    min-height: 100svh;
+    grid-template-columns: 1fr;
+    align-content: center;
+    gap: 28px;
+    padding: calc(var(--header-height) + 34px) 20px 54px;
+  }
+
+  h1 {
+    font-size: clamp(60px, 18vw, 96px);
+  }
+
+  .hero-summary {
+    font-size: 18px;
+  }
+
+  .hero-watch {
+    min-height: 34vh;
+  }
+
+  .hero-watch-image {
+    width: min(112vw, 760px);
+    margin-left: -8vw;
+  }
+
+  .assembly-story {
+    min-height: auto;
+    padding-bottom: 48px;
+  }
+
+  .assembly-visual {
+    top: 0;
+    height: 48svh;
+    place-items: end center;
+    padding-bottom: 8px;
+    background: linear-gradient(180deg, rgba(13, 11, 8, 0.98), rgba(13, 11, 8, 0.72));
+  }
+
+  .watch-stage {
+    width: min(86vw, 430px);
+  }
+
+  .chapters {
+    display: block;
+    padding: 0 20px;
+  }
+
+  .chapter,
+  .chapter.left,
+  .chapter.right {
+    min-height: 72svh;
+    max-width: 520px;
+    margin: 0 auto;
+    padding-top: 18vh;
+    filter: none;
+  }
+
+  .chapter.right {
+    justify-self: auto;
+  }
+
+  .chapter h2 {
+    font-size: clamp(40px, 12vw, 60px);
+  }
+
+  .private-viewing {
+    grid-template-columns: 1fr;
+    padding: 82px 20px 70px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+
+  .hero-watch {
+    transform: none !important;
+  }
+}

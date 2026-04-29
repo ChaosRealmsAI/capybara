@@ -39,7 +39,7 @@ pub(super) fn response(
         _ => Err(format!("unknown conversation op: {}", request.op)),
     })();
 
-    super::response_from_result(request.req_id, result)
+    super::ipc_handlers::response_from_result(request.req_id, result)
 }
 
 fn create(store: Arc<Store>, params: Value) -> Result<Value, String> {

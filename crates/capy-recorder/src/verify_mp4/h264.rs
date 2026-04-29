@@ -1,4 +1,4 @@
-use super::{describe_matrix, describe_primaries, describe_transfer, MoovInfo};
+use super::moov::{describe_matrix, describe_primaries, describe_transfer, MoovInfo};
 
 pub(super) fn strip_emulation_prevention(nal: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(nal.len());

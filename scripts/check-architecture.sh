@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${CAPY_SPEC_STRUCTURE_CHECKED:-0}" != "1" ]]; then
+  scripts/check-spec-structure.sh
+fi
+
 fail() {
   echo "architecture check failed: $*" >&2
   exit 1
@@ -203,13 +207,13 @@ rg -q 'CanvasCommand::GenerateImage' crates/capy-cli/src/canvas.rs || fail "capy
 rg -q 'CanvasCommand::LoadPoster' crates/capy-cli/src/canvas.rs || fail "capy canvas load-poster command must exist"
 rg -q 'CanvasContentKind::Poster' crates/capy-canvas-core/src crates/capy-canvas-web/src || fail "poster content kind must exist in canvas core/web boundary"
 rg -q 'create_poster_document_card' crates/capy-canvas-core/src crates/capy-canvas-web/src frontend/capy-app/script.js || fail "poster document card creation must cross Rust/WASM/frontend boundary"
-rg -q 'poster-overlay-layer' frontend/capy-app/index.html frontend/capy-app/script.js frontend/capy-app/style.css || fail "poster renderer must use current canvas overlay layer"
-rg -q 'verifyPosterRenderer' frontend/capy-app/script.js scripts/verify-poster-json-renderer.mjs || fail "poster renderer visible verification hook must exist"
+rg -q 'poster-overlay-layer' frontend/capy-app/index.html frontend/capy-app/script.js frontend/capy-app/style.css frontend/capy-app/styles frontend/capy-app/app || fail "poster renderer must use current canvas overlay layer"
+rg -q 'verifyPosterRenderer' frontend/capy-app/script.js frontend/capy-app/app scripts/verify-poster-json-renderer.mjs || fail "poster renderer visible verification hook must exist"
 rg -q 'CanvasCommand::Context' crates/capy-cli/src/canvas.rs || fail "capy canvas context export command must exist"
 rg -q 'context export --selected' crates/capy-shell/src/agent_tools.rs scripts/verify-canvas-context-interface.mjs || fail "agent canvas context contract must require context export"
-rg -q 'canvas_context' crates/capy-cli/src/main.rs crates/capy-shell/src/app.rs crates/capy-shell/src/agent.rs frontend/capy-app/script.js || fail "chat messages must persist canvas_context metadata"
-rg -q 'canvas-generate-image' crates/capy-shell/src/app.rs || fail "desktop canvas image tool RPC must exist"
-rg -q 'capyCanvasTools' crates/capy-cli/src/main.rs crates/capy-shell/src/agent.rs frontend/capy-app/script.js || fail "agent canvas CLI tool contract must be wired for chat runtimes"
+rg -q 'canvas_context' crates/capy-cli/src/main.rs crates/capy-cli/src/chat.rs crates/capy-shell/src/app.rs crates/capy-shell/src/app crates/capy-shell/src/agent.rs frontend/capy-app/script.js frontend/capy-app/app || fail "chat messages must persist canvas_context metadata"
+rg -q 'canvas-generate-image' crates/capy-shell/src/app.rs crates/capy-shell/src/app || fail "desktop canvas image tool RPC must exist"
+rg -q 'capyCanvasTools' crates/capy-cli/src/main.rs crates/capy-cli/src/chat.rs crates/capy-shell/src/agent.rs frontend/capy-app/script.js frontend/capy-app/app || fail "agent canvas CLI tool contract must be wired for chat runtimes"
 rg -q 'CAPY_TOOL_CALL_LOG' crates/capy-cli/src/canvas.rs crates/capy-shell/src/agent.rs || fail "agent canvas CLI calls must support JSONL evidence logging"
 rg -q 'v0.10-agent-canvas-image-placement' scripts/verify-agent-canvas-image-placement.mjs || fail "agent canvas placement verifier must target v0.10 evidence"
 rg -q 'provider-adapter' crates/capy-image-gen/src/apimart.rs || fail "first image provider must remain an adapter, not the top-level abstraction"

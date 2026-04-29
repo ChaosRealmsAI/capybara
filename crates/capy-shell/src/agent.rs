@@ -1,5 +1,4 @@
 use std::io::{BufRead, BufReader};
-use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
@@ -7,18 +6,28 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use tao::event_loop::EventLoopProxy;
 
-use crate::agent_tools::{
-    agent_tool_env, claude_append_system_prompt, codex_developer_instructions,
-};
+use crate::agent_tools::agent_tool_env;
 use crate::app::ShellEvent;
 use crate::store::{Conversation, CreateRunEvent, Provider, Store};
 
+mod claude;
+mod codex;
 mod jsonrpc;
 mod tool_path;
 
 use jsonrpc::{read_json_line, read_until_response, send_json};
 use tool_path::{tool_launch, tool_version};
 
+#[cfg(test)]
+use crate::agent_tools::{claude_append_system_prompt, codex_developer_instructions};
+#[cfg(test)]
+use claude::{args as claude_args, delta as claude_delta};
+#[cfg(test)]
+use codex::{
+    app_server_args as codex_app_server_args, resume_params as codex_resume_params,
+    sandbox_mode as codex_sandbox_mode, sandbox_policy as codex_sandbox_policy,
+    start_params as codex_start_params, turn_params as codex_turn_params,
+};
 #[cfg(test)]
 use tool_path::{desktop_tool_path_env, resolve_tool_path};
 
@@ -183,10 +192,10 @@ fn run_claude(
         .messages_for(&conversation.id)?
         .iter()
         .any(|message| message.role == "assistant");
-    command.args(claude_args(conversation, prompt, use_resume));
+    command.args(claude::args(conversation, prompt, use_resume));
     command.current_dir(&conversation.cwd);
     command.env("PATH", launch.path_env());
-    apply_agent_tool_env(&mut command, &conversation.config);
+    claude::apply_tool_env(&mut command, &conversation.config);
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let mut child = command
@@ -216,7 +225,7 @@ fn run_claude(
                 }
                 continue;
             }
-            if let Some(delta) = claude_delta(&value) {
+            if let Some(delta) = claude::delta(&value) {
                 content.push_str(&delta);
                 record_and_emit(
                     store,
@@ -232,7 +241,7 @@ fn run_claude(
         .map_err(|err| format!("claude wait failed: {err}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout_detail = claude_result_fallback(&last_stdout);
+        let stdout_detail = claude::result_fallback(&last_stdout);
         let detail = non_empty(Some(stderr.trim()))
             .or_else(|| non_empty(Some(content.trim())))
             .or_else(|| non_empty(Some(stdout_detail.trim())))
@@ -241,7 +250,7 @@ fn run_claude(
         return Err(format!("claude exited with {}: {}", output.status, detail));
     }
     if content.trim().is_empty() {
-        content = claude_result_fallback(&String::from_utf8_lossy(&output.stdout));
+        content = claude::result_fallback(&String::from_utf8_lossy(&output.stdout));
     }
     Ok(RunOutput {
         content,
@@ -259,7 +268,7 @@ fn run_codex(
     let launch = tool_launch("codex");
     let mut command = Command::new(launch.program());
     command.arg("app-server");
-    command.args(codex_app_server_args(&conversation.config));
+    command.args(codex::app_server_args(&conversation.config));
     command.arg("--listen").arg("stdio://");
     command
         .env("PATH", launch.path_env())
@@ -303,9 +312,9 @@ fn run_codex(
     send_json(&mut stdin, json!({ "method": "initialized", "params": {} }))?;
 
     let start_params = if let Some(thread_id) = conversation.native_thread_id.as_deref() {
-        codex_resume_params(conversation, thread_id)
+        codex::resume_params(conversation, thread_id)
     } else {
-        codex_start_params(conversation)
+        codex::start_params(conversation)
     };
     let start_method = if conversation.native_thread_id.is_some() {
         "thread/resume"
@@ -324,7 +333,7 @@ fn run_codex(
         .map(ToString::to_string)
         .ok_or_else(|| "codex thread response missing thread.id".to_string())?;
 
-    let turn_params = codex_turn_params(conversation, &thread_id, prompt)?;
+    let turn_params = codex::turn_params(conversation, &thread_id, prompt)?;
     send_json(
         &mut stdin,
         json!({ "method": "turn/start", "id": 2, "params": turn_params }),
@@ -366,165 +375,6 @@ fn run_codex(
     })
 }
 
-fn codex_app_server_args(config: &Value) -> Vec<String> {
-    let mut args = Vec::new();
-    for value in config_array(config, "codexConfig") {
-        args.push("-c".to_string());
-        args.push(value);
-    }
-    for value in config_array(config, "codexEnable") {
-        args.push("--enable".to_string());
-        args.push(value);
-    }
-    for value in config_array(config, "codexDisable") {
-        args.push("--disable".to_string());
-        args.push(value);
-    }
-    args
-}
-
-fn codex_start_params(conversation: &Conversation) -> Value {
-    let mut params = json!({
-        "cwd": conversation.cwd,
-        "serviceName": "capybara",
-        "persistExtendedHistory": true
-    });
-    apply_codex_thread_overrides(&mut params, conversation);
-    params
-}
-
-fn codex_resume_params(conversation: &Conversation, thread_id: &str) -> Value {
-    let mut params = json!({ "threadId": thread_id });
-    apply_codex_thread_overrides(&mut params, conversation);
-    params
-}
-
-fn apply_codex_thread_overrides(params: &mut Value, conversation: &Conversation) {
-    if let Some(model) = non_empty(conversation.model.as_deref()) {
-        params["model"] = json!(model);
-    }
-    set_config_str_param(params, &conversation.config, "approvalsReviewer");
-    set_config_str_param(params, &conversation.config, "baseInstructions");
-    if let Some(instructions) = codex_developer_instructions(
-        config_str(&conversation.config, "developerInstructions"),
-        &conversation.config,
-    ) {
-        params["developerInstructions"] = json!(instructions);
-    }
-    set_config_str_param(params, &conversation.config, "modelProvider");
-    set_config_str_param(params, &conversation.config, "personality");
-    set_config_str_param(params, &conversation.config, "serviceTier");
-    if let Some(approval_policy) = codex_approval_policy(&conversation.config) {
-        params["approvalPolicy"] = json!(approval_policy);
-    }
-    if let Some(sandbox) = codex_sandbox_setting(&conversation.config) {
-        params["sandbox"] = json!(codex_sandbox_mode(&sandbox));
-    }
-    if config_bool(&conversation.config, "ephemeral") {
-        params["ephemeral"] = json!(true);
-    }
-    if config_bool(&conversation.config, "search") {
-        params["config"] = json!({ "web_search": true });
-    }
-}
-
-fn codex_turn_params(
-    conversation: &Conversation,
-    thread_id: &str,
-    prompt: &str,
-) -> Result<Value, String> {
-    let mut params = json!({
-        "threadId": thread_id,
-        "input": [{ "type": "text", "text": prompt }]
-    });
-    if let Some(model) = non_empty(conversation.model.as_deref()) {
-        params["model"] = json!(model);
-    }
-    if let Some(approval_policy) = codex_approval_policy(&conversation.config) {
-        params["approvalPolicy"] = json!(approval_policy);
-    }
-    set_config_str_param(&mut params, &conversation.config, "approvalsReviewer");
-    set_config_str_param(&mut params, &conversation.config, "effort");
-    set_config_str_param(&mut params, &conversation.config, "personality");
-    set_config_str_param_rename(
-        &mut params,
-        &conversation.config,
-        "reasoningSummary",
-        "summary",
-    );
-    set_config_str_param(&mut params, &conversation.config, "serviceTier");
-    if let Some(sandbox) = codex_sandbox_setting(&conversation.config) {
-        params["sandboxPolicy"] = codex_sandbox_policy(&sandbox);
-    }
-    if let Some(output_schema) = config_str(&conversation.config, "outputSchema") {
-        params["outputSchema"] = json_or_file(&output_schema)?;
-    }
-    Ok(params)
-}
-
-fn set_config_str_param(params: &mut Value, config: &Value, key: &str) {
-    set_config_str_param_rename(params, config, key, key);
-}
-
-fn set_config_str_param_rename(params: &mut Value, config: &Value, key: &str, target: &str) {
-    if let Some(value) = config_str(config, key) {
-        params[target] = json!(value);
-    }
-}
-
-fn json_or_file(value: &str) -> Result<Value, String> {
-    let trimmed = value.trim();
-    let source = if trimmed.starts_with('{') || trimmed.starts_with('[') {
-        trimmed.to_string()
-    } else if Path::new(trimmed).exists() {
-        std::fs::read_to_string(trimmed)
-            .map_err(|err| format!("read JSON schema failed: {trimmed}: {err}"))?
-    } else {
-        trimmed.to_string()
-    };
-    serde_json::from_str(&source).map_err(|err| format!("invalid JSON schema: {err}"))
-}
-
-fn claude_delta(value: &Value) -> Option<String> {
-    if value.get("type").and_then(Value::as_str) == Some("content_block_delta") {
-        return value
-            .get("delta")
-            .and_then(|delta| delta.get("text"))
-            .and_then(Value::as_str)
-            .map(ToString::to_string);
-    }
-    if value.get("type").and_then(Value::as_str) == Some("assistant") {
-        let content = value
-            .get("message")
-            .and_then(|message| message.get("content"))
-            .and_then(Value::as_array)?;
-        let mut text = String::new();
-        for item in content {
-            if item.get("type").and_then(Value::as_str) == Some("text") {
-                if let Some(chunk) = item.get("text").and_then(Value::as_str) {
-                    text.push_str(chunk);
-                }
-            }
-        }
-        return (!text.is_empty()).then_some(text);
-    }
-    if value.get("type").and_then(Value::as_str) == Some("result") {
-        return value
-            .get("result")
-            .and_then(Value::as_str)
-            .map(ToString::to_string);
-    }
-    None
-}
-
-fn claude_result_fallback(raw: &str) -> String {
-    raw.lines()
-        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-        .filter_map(|value| claude_delta(&value))
-        .collect::<Vec<_>>()
-        .join("")
-}
-
 fn config_str(config: &Value, key: &str) -> Option<String> {
     non_empty(config.get(key).and_then(Value::as_str)).map(ToString::to_string)
 }
@@ -548,162 +398,8 @@ fn config_array(config: &Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn codex_approval_policy(config: &Value) -> Option<String> {
-    config_str(config, "approvalPolicy")
-        .or_else(|| config_bool(config, "writeCode").then(|| "never".to_string()))
-}
-
-fn codex_sandbox_setting(config: &Value) -> Option<String> {
-    config_str(config, "sandbox")
-        .or_else(|| config_bool(config, "writeCode").then(|| "danger-full-access".to_string()))
-}
-
 fn non_empty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
-}
-
-fn claude_args(conversation: &Conversation, prompt: &str, use_resume: bool) -> Vec<String> {
-    let write_code = config_bool(&conversation.config, "writeCode");
-    let mut args = vec![
-        "-p".to_string(),
-        "--output-format".to_string(),
-        "stream-json".to_string(),
-        "--verbose".to_string(),
-        "--include-partial-messages".to_string(),
-    ];
-    if let Some(session_id) = conversation.native_session_id.as_deref() {
-        args.push(if use_resume {
-            "--resume".to_string()
-        } else {
-            "--session-id".to_string()
-        });
-        args.push(session_id.to_string());
-    }
-    if let Some(model) = non_empty(conversation.model.as_deref()) {
-        args.push("--model".to_string());
-        args.push(model.to_string());
-    }
-    if let Some(effort) = config_str(&conversation.config, "effort") {
-        args.push("--effort".to_string());
-        args.push(effort);
-    }
-    if let Some(mode) = config_str(&conversation.config, "permissionMode") {
-        args.push("--permission-mode".to_string());
-        args.push(mode);
-    } else if write_code {
-        args.push("--permission-mode".to_string());
-        args.push("bypassPermissions".to_string());
-    }
-    for dir in config_array(&conversation.config, "addDirs") {
-        args.push("--add-dir".to_string());
-        args.push(dir);
-    }
-    if let Some(tools) = config_str(&conversation.config, "allowedTools") {
-        args.push("--allowedTools".to_string());
-        args.push(tools);
-    }
-    if let Some(tools) = config_str(&conversation.config, "disallowedTools") {
-        args.push("--disallowedTools".to_string());
-        args.push(tools);
-    }
-    if let Some(mcp) = config_str(&conversation.config, "mcpConfig") {
-        args.push("--mcp-config".to_string());
-        args.push(mcp);
-    }
-    if let Some(system) = config_str(&conversation.config, "systemPrompt") {
-        args.push("--system-prompt".to_string());
-        args.push(system);
-    }
-    if let Some(system) = claude_append_system_prompt(
-        config_str(&conversation.config, "appendSystemPrompt"),
-        &conversation.config,
-    ) {
-        args.push("--append-system-prompt".to_string());
-        args.push(system);
-    }
-    if let Some(budget) = config_str(&conversation.config, "maxBudgetUsd") {
-        args.push("--max-budget-usd".to_string());
-        args.push(budget);
-    }
-    if let Some(model) = config_str(&conversation.config, "fallbackModel") {
-        args.push("--fallback-model".to_string());
-        args.push(model);
-    }
-    if let Some(schema) = config_str(&conversation.config, "jsonSchema") {
-        args.push("--json-schema".to_string());
-        args.push(schema);
-    }
-    if let Some(settings) = config_str(&conversation.config, "settings") {
-        args.push("--settings".to_string());
-        args.push(settings);
-    }
-    if let Some(debug_file) = config_str(&conversation.config, "debugFile") {
-        args.push("--debug-file".to_string());
-        args.push(debug_file);
-    }
-    if let Some(agent) = config_str(&conversation.config, "agent") {
-        args.push("--agent".to_string());
-        args.push(agent);
-    }
-    if let Some(agents) = config_str(&conversation.config, "agents") {
-        args.push("--agents".to_string());
-        args.push(agents);
-    }
-    if let Some(tools) = config_str(&conversation.config, "tools") {
-        args.push("--tools".to_string());
-        args.push(tools);
-    }
-    for beta in config_array(&conversation.config, "betas") {
-        args.push("--betas".to_string());
-        args.push(beta);
-    }
-    for plugin_dir in config_array(&conversation.config, "pluginDirs") {
-        args.push("--plugin-dir".to_string());
-        args.push(plugin_dir);
-    }
-    if config_bool(&conversation.config, "bare") {
-        args.push("--bare".to_string());
-    }
-    if config_bool(&conversation.config, "strictMcpConfig") {
-        args.push("--strict-mcp-config".to_string());
-    }
-    if config_bool(&conversation.config, "includeHookEvents") {
-        args.push("--include-hook-events".to_string());
-    }
-    if config_bool(&conversation.config, "noSessionPersistence") {
-        args.push("--no-session-persistence".to_string());
-    }
-    if config_bool(&conversation.config, "allowDangerouslySkipPermissions") || write_code {
-        args.push("--allow-dangerously-skip-permissions".to_string());
-    }
-    if config_bool(&conversation.config, "dangerouslySkipPermissions") || write_code {
-        args.push("--dangerously-skip-permissions".to_string());
-    }
-    args.push("--".to_string());
-    args.push(prompt.to_string());
-    args
-}
-
-fn apply_agent_tool_env(command: &mut Command, config: &Value) {
-    for (key, value) in agent_tool_env(config) {
-        command.env(key, value);
-    }
-}
-
-fn codex_sandbox_mode(value: &str) -> &str {
-    match value {
-        "read-only" | "readOnly" => "read-only",
-        "danger-full-access" | "dangerFullAccess" => "danger-full-access",
-        _ => "workspace-write",
-    }
-}
-
-fn codex_sandbox_policy(value: &str) -> Value {
-    match value {
-        "read-only" | "readOnly" => json!({ "type": "readOnly" }),
-        "danger-full-access" | "dangerFullAccess" => json!({ "type": "dangerFullAccess" }),
-        _ => json!({ "type": "workspaceWrite" }),
-    }
 }
 
 fn event(conversation: &Conversation, run_id: &str, kind: &str) -> AgentRuntimeEvent {

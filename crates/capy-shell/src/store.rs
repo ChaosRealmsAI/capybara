@@ -1,14 +1,17 @@
-use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use uuid::Uuid;
 
+mod rows;
 mod schema;
+mod util;
+
+use rows::{collect_rows, row_to_conversation, row_to_message, row_to_run, row_to_run_event};
+use util::{app_support_dir, new_id, normalize_config, now_ms, title_from_prompt};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -487,170 +490,5 @@ impl Store {
     }
 }
 
-fn row_to_conversation(row: &rusqlite::Row<'_>) -> rusqlite::Result<Conversation> {
-    let provider: String = row.get(2)?;
-    let config_json: String = row.get(7)?;
-    let config = serde_json::from_str(&config_json).unwrap_or_else(|_| json!({}));
-    Ok(Conversation {
-        id: row.get(0)?,
-        title: row.get(1)?,
-        provider: Provider::parse(&provider).map_err(|err| {
-            rusqlite::Error::FromSqlConversionFailure(
-                2,
-                rusqlite::types::Type::Text,
-                Box::new(std::io::Error::other(err)),
-            )
-        })?,
-        cwd: row.get(3)?,
-        native_session_id: row.get(4)?,
-        native_thread_id: row.get(5)?,
-        model: row.get(6)?,
-        config,
-        status: row.get(8)?,
-        archived: row.get::<_, i64>(9)? != 0,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
-    })
-}
-
-fn row_to_message(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
-    let event_json: String = row.get(4)?;
-    Ok(Message {
-        id: row.get(0)?,
-        conversation_id: row.get(1)?,
-        role: row.get(2)?,
-        content: row.get(3)?,
-        event_json: serde_json::from_str(&event_json).unwrap_or_else(|_| json!({})),
-        created_at: row.get(5)?,
-    })
-}
-
-fn row_to_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<RunRecord> {
-    Ok(RunRecord {
-        id: row.get(0)?,
-        conversation_id: row.get(1)?,
-        pid: row.get(2)?,
-        status: row.get(3)?,
-        started_at: row.get(4)?,
-        ended_at: row.get(5)?,
-        error: row.get(6)?,
-    })
-}
-
-fn row_to_run_event(row: &rusqlite::Row<'_>) -> rusqlite::Result<RunEvent> {
-    let event_json: String = row.get(8)?;
-    Ok(RunEvent {
-        id: row.get(0)?,
-        conversation_id: row.get(1)?,
-        run_id: row.get(2)?,
-        kind: row.get(3)?,
-        delta: row.get(4)?,
-        content: row.get(5)?,
-        status: row.get(6)?,
-        error: row.get(7)?,
-        event_json: serde_json::from_str(&event_json).unwrap_or_else(|_| json!({})),
-        created_at: row.get(9)?,
-    })
-}
-
-fn collect_rows<T>(
-    rows: rusqlite::MappedRows<'_, impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>>,
-) -> Result<Vec<T>, String> {
-    let mut values = Vec::new();
-    for row in rows {
-        values.push(row.map_err(|err| err.to_string())?);
-    }
-    Ok(values)
-}
-
-fn app_support_dir() -> Result<PathBuf, String> {
-    if cfg!(target_os = "macos") {
-        let home = env::var_os("HOME").ok_or_else(|| "HOME is not set".to_string())?;
-        return Ok(PathBuf::from(home).join("Library/Application Support/Capybara"));
-    }
-    let home = env::var_os("HOME").ok_or_else(|| "HOME is not set".to_string())?;
-    Ok(PathBuf::from(home).join(".capybara"))
-}
-
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| i64::try_from(duration.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or(0)
-}
-
-fn new_id(prefix: &str) -> String {
-    format!("{prefix}_{}", Uuid::new_v4().simple())
-}
-
-fn normalize_config(value: Value) -> Value {
-    if value.is_object() { value } else { json!({}) }
-}
-
-fn title_from_prompt(prompt: &str) -> String {
-    let mut title = prompt
-        .split_whitespace()
-        .take(10)
-        .collect::<Vec<_>>()
-        .join(" ");
-    if title.chars().count() > 60 {
-        title = title.chars().take(60).collect();
-    }
-    if title.is_empty() {
-        "Untitled conversation".to_string()
-    } else {
-        title
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::{CreateConversation, CreateRunEvent, Provider, Store};
-    use serde_json::json;
-
-    #[test]
-    fn creates_and_reloads_conversation_messages() -> Result<(), Box<dyn std::error::Error>> {
-        let path = std::env::temp_dir().join(format!(
-            "capy-store-test-{}.sqlite",
-            uuid::Uuid::new_v4().simple()
-        ));
-        let store = Store::open(path.clone())?;
-        let conversation = store.create_conversation(CreateConversation {
-            provider: Provider::Claude,
-            cwd: "/tmp".to_string(),
-            model: Some("sonnet".to_string()),
-            config: json!({ "effort": "medium" }),
-        })?;
-        let run = store.create_run(&conversation.id)?;
-        store.add_message(&conversation.id, "user", "hello", json!({}))?;
-        store.add_run_event(CreateRunEvent {
-            conversation_id: &conversation.id,
-            run_id: &run.id,
-            kind: "assistant_delta",
-            delta: Some("he"),
-            content: None,
-            status: None,
-            error: None,
-            event_json: json!({ "kind": "assistant_delta" }),
-        })?;
-        store.add_run_event(CreateRunEvent {
-            conversation_id: &conversation.id,
-            run_id: &run.id,
-            kind: "assistant_done",
-            delta: None,
-            content: Some("hello"),
-            status: Some("completed"),
-            error: None,
-            event_json: json!({ "kind": "assistant_done" }),
-        })?;
-        let detail = store.conversation_detail(&conversation.id)?;
-        assert_eq!(detail.conversation.provider, Provider::Claude);
-        assert_eq!(detail.messages.len(), 1);
-        let events = store.run_events_for(&conversation.id, Some(&run.id))?;
-        assert_eq!(events.len(), 2);
-        assert_eq!(events[0].delta.as_deref(), Some("he"));
-        assert_eq!(events[1].content.as_deref(), Some("hello"));
-        let _remove_result = std::fs::remove_file(path);
-        Ok(())
-    }
-}
+mod tests;
