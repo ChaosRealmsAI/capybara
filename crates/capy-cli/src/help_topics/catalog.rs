@@ -167,12 +167,20 @@ pub(super) const CHAT_TOPICS: &[HelpTopic] = &[
     },
 ];
 
-pub(super) const AGENT_TOPICS: &[HelpTopic] = &[HelpTopic {
-    name: "doctor",
-    aliases: &["agent", "runtime"],
-    summary: "Check local Claude and Codex runtime availability.",
-    body: AGENT_HELP,
-}];
+pub(super) const AGENT_TOPICS: &[HelpTopic] = &[
+    HelpTopic {
+        name: "doctor",
+        aliases: &["agent", "runtime"],
+        summary: "Check local Claude and Codex runtime availability.",
+        body: AGENT_HELP,
+    },
+    HelpTopic {
+        name: "sdk",
+        aliases: &["agent-sdk", "full-auto"],
+        summary: "Run Claude Agent SDK or Codex SDK through Capybara.",
+        body: AGENT_SDK_HELP,
+    },
+];
 
 pub(super) const CLIPS_TOPICS: &[HelpTopic] = &[
     HelpTopic {

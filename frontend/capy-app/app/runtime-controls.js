@@ -26,7 +26,10 @@ export function createRuntimeControls({ state, dom }) {
   } = dom;
 
   function currentConfig() {
-    const config = { capyCanvasTools: true };
+    const config = {
+      runtimeBackend: "sdk",
+      capyCanvasTools: true,
+    };
     if (effortEl.value) config.effort = effortEl.value;
     if (providerEl.value === "claude" && policyEl.value) config.permissionMode = policyEl.value;
     if (providerEl.value === "codex" && policyEl.value) config.approvalPolicy = policyEl.value;
@@ -94,8 +97,8 @@ export function createRuntimeControls({ state, dom }) {
   }
 
   function renderRuntimeFoot() {
-    const provider = providerEl.value === "claude" ? "Claude Code" : "Codex CLI";
-    runtimeFootEl.textContent = `${provider} · Canvas CLI tools active · ${state.dbPath || "SQLite store pending"}`;
+    const provider = providerEl.value === "claude" ? "Claude Agent SDK" : "Codex SDK";
+    runtimeFootEl.textContent = `${provider} · SDK 后端 · Canvas CLI tools active · ${state.dbPath || "SQLite store pending"}`;
   }
 
   function updateCanvasStatus(text) {

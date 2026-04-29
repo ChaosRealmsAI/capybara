@@ -82,6 +82,10 @@ struct AgentRuntimeOptions {
         help = "Coding preset: allow provider to edit files in cwd explicitly"
     )]
     write_code: bool,
+    #[arg(long, help = "Route this conversation turn through the SDK backend")]
+    sdk: bool,
+    #[arg(long, help = "Agent runtime backend: cli or sdk")]
+    runtime_backend: Option<String>,
     #[arg(long, help = "Reasoning effort, e.g. low, medium, high, xhigh")]
     effort: Option<String>,
     #[arg(long, help = "Claude permission mode, e.g. default, plan, acceptEdits")]
@@ -293,6 +297,7 @@ fn chat_send_params(args: ChatSendArgs) -> Result<Value, String> {
 
 fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) {
     set_opt(config, "effort", args.effort);
+    set_opt(config, "runtimeBackend", args.runtime_backend);
     set_opt(config, "permissionMode", args.permission_mode);
     set_opt(config, "approvalPolicy", args.approval_policy);
     set_opt(config, "sandbox", args.sandbox);
@@ -374,6 +379,9 @@ fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) {
         if config.get("dangerouslySkipPermissions").is_none() {
             config["dangerouslySkipPermissions"] = json!(true);
         }
+    }
+    if args.sdk {
+        config["runtimeBackend"] = json!("sdk");
     }
 }
 

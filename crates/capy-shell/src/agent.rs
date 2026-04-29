@@ -13,6 +13,7 @@ use crate::store::{Conversation, CreateRunEvent, Provider, Store};
 mod claude;
 mod codex;
 mod jsonrpc;
+mod sdk;
 mod tool_path;
 
 use jsonrpc::{read_json_line, read_until_response, send_json};
@@ -28,6 +29,8 @@ use codex::{
     sandbox_mode as codex_sandbox_mode, sandbox_policy as codex_sandbox_policy,
     start_params as codex_start_params, turn_params as codex_turn_params,
 };
+#[cfg(test)]
+use sdk::args as sdk_args;
 #[cfg(test)]
 use tool_path::{desktop_tool_path_env, resolve_tool_path};
 
@@ -88,9 +91,13 @@ pub fn spawn_turn(
 
     let run_id = run.id.clone();
     std::thread::spawn(move || {
-        let result = match conversation.provider {
-            Provider::Claude => run_claude(&store, &proxy, &conversation, &run_id, &prompt),
-            Provider::Codex => run_codex(&store, &proxy, &conversation, &run_id, &prompt),
+        let result = if sdk::enabled(&conversation.config) {
+            run_sdk(&store, &conversation, &run_id, &prompt)
+        } else {
+            match conversation.provider {
+                Provider::Claude => run_claude(&store, &proxy, &conversation, &run_id, &prompt),
+                Provider::Codex => run_codex(&store, &proxy, &conversation, &run_id, &prompt),
+            }
         };
 
         match result {
@@ -176,6 +183,19 @@ pub fn doctor() -> Value {
         "claude": tool_version("claude", &["--version"]),
         "codex": tool_version("codex", &["--version"]),
         "codex_app_server": tool_version("codex", &["app-server", "--help"])
+    })
+}
+
+fn run_sdk(
+    store: &Store,
+    conversation: &Conversation,
+    run_id: &str,
+    prompt: &str,
+) -> Result<RunOutput, String> {
+    let output = sdk::run(store, conversation, run_id, prompt)?;
+    Ok(RunOutput {
+        content: output.content,
+        native_thread_id: output.native_thread_id,
     })
 }
 
@@ -457,5 +477,7 @@ fn emit(proxy: &EventLoopProxy<ShellEvent>, event: AgentRuntimeEvent) {
     let _send_result = proxy.send_event(ShellEvent::AgentRuntimeEvent { event });
 }
 
+#[cfg(test)]
+mod sdk_tests;
 #[cfg(test)]
 mod tests;

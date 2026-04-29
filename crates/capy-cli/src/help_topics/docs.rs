@@ -8,7 +8,7 @@ Registered `[dev]` commands:
 2. Read/inspect: `doctor`, `state`, `devtools`, `verify`
 3. Visible evidence: `screenshot`, `capture`
 4. UI automation: `click`, `type`
-5. Runtime inspection: `agent`
+5. Runtime inspection: `agent`, `agent sdk`
 Product workflow commands without `[dev]`: `chat`, `canvas`, `image`, `cutout`, `tts`, `clips`, `media`, `timeline`.
 Do not: hide these commands from help; run `click`/`type` on a user's active window without an isolated `CAPYBARA_SOCKET`; treat `[dev]` commands as a substitute for final product evidence.
 Next step: read `capy help doctor`, `capy help interaction`, or `capy help desktop` for the exact workflow.
@@ -100,8 +100,8 @@ Use when: AI needs persistent Claude/Codex conversations with events and export.
 Required parameters: `send/open/events/stop/export` need `--id`; `send` also needs a prompt.
 Recommended commands:
 1. `target/debug/capy chat list`
-2. `target/debug/capy chat new --provider codex --cwd <repo>`
-3. `target/debug/capy chat send --id <id> "Summarize current state"`
+2. `target/debug/capy chat new --provider codex --cwd <repo> --sdk`
+3. `target/debug/capy chat send --id <id> --sdk "Summarize current state"`
 4. `target/debug/capy chat events --id <id>`
 5. `target/debug/capy chat export --id <id>`
 Do not: create throwaway sessions when continuity matters; use `--write-code` casually; attach canvas context as prose when `--canvas-context` exists.
@@ -125,7 +125,50 @@ Use when: AI needs to know whether local Claude and Codex runtimes are available
 Required parameters: none.
 Recommended command: `target/debug/capy agent doctor`
 Do not: start a long agent run before checking runtime availability.
-Next step: create a conversation with `capy chat new --provider claude|codex`.
+Next step: use `capy agent sdk doctor` for SDK readiness or create a conversation with `capy chat new --provider claude|codex --sdk`.
+"#;
+
+pub(super) const AGENT_SDK_HELP: &str = r#"
+Topic: capy agent sdk
+
+Use when: AI needs to call Claude Agent SDK or Codex SDK through Capybara's public CLI.
+Required parameters: `normalize` and `run` need `--provider claude|codex`; `run` also needs `--prompt` or positional prompt text.
+Recommended commands:
+1. `target/debug/capy agent sdk doctor`
+2. `target/debug/capy agent sdk normalize --provider codex --write-code`
+3. `target/debug/capy agent sdk normalize --provider claude --write-code`
+4. `target/debug/capy agent sdk run --provider codex --cwd <repo> --write-code --prompt "Reply with exactly: ok" --json`
+5. `target/debug/capy agent sdk run --provider claude --cwd <repo> --write-code --prompt "Reply with exactly: ok" --json`
+Meaning of `--write-code`: full-auto local coding authority. Codex gets `approvalPolicy=never` and `sandbox=danger-full-access`; Claude gets `permissionMode=bypassPermissions` and `allowDangerouslySkipPermissions=true`.
+Shared parameters:
+- `--cwd <path>` working directory.
+- `--model <name>` provider model.
+- `--effort <minimal|low|medium|high|xhigh|max>` normalized reasoning effort.
+- `--add-dir <path>` extra filesystem root.
+- `--allowed-tools`, `--disallowed-tools`, `--tools` Claude tool controls.
+- `--mcp-config <json-or-path>` MCP servers.
+- `--output-schema <json-or-path>` structured output schema.
+- `--max-turns <n>` Claude turn cap.
+- `--raw` include native SDK messages/items in JSON output.
+Codex parameters:
+- `--approval-policy <never|on-request|on-failure|untrusted>`
+- `--sandbox <read-only|workspace-write|danger-full-access>`
+- `--thread-id <id>` resume SDK thread.
+- `--search` enable web search/network flags.
+- `--skip-git-repo-check`
+- `--codex-config <key=value>` repeated config override.
+- `--codex-path <path>` Codex CLI path override.
+Claude parameters:
+- `--permission-mode <default|acceptEdits|bypassPermissions|plan|dontAsk|auto>`
+- `--max-budget-usd <usd>`
+- `--setting-source <user|project|local>` repeated setting source.
+- `--session-id <uuid>` new session id.
+- `--resume <uuid>` resume session.
+- `--no-session-persistence`
+- `--claude-path <path>` Claude executable path override.
+Known provider boundary: Codex SDK rejects reasoning effort `minimal` when image_gen/web_search tools are present; use `low` for smoke runs.
+Do not: call `tools/capy-agent-sdk/src/cli.mjs` as the product entrypoint; the supported external entrypoint is `capy agent sdk ...`.
+Next step: for persistent chat, use `capy chat new --provider claude|codex --sdk --write-code`.
 "#;
 
 pub(super) const IMAGE_HELP: &str = r#"
