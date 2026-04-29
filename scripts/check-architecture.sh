@@ -27,7 +27,7 @@ require_file() {
 
 check_no_external_timeline_engine() {
   local matches
-  matches="$(rg -n 'external/Timeline|/Users/Zhuanz/workspace/Timeline|Timeline/target/debug' Cargo.toml crates frontend scripts CLAUDE.md | rg -v 'scripts/check-architecture.sh' || true)"
+  matches="$(rg -n 'external/Timeline|/Users/Zhuanz/workspace/Timeline|Timeline/target/debug' Cargo.toml crates frontend scripts README.md AGENTS.md CLAUDE.md | rg -v 'scripts/check-architecture.sh' || true)"
   if [[ -n "$matches" ]]; then
     echo "$matches" >&2
     fail_guardrail \
@@ -66,7 +66,7 @@ check_no_new_render_source_builders() {
 
 check_no_old_timeline_compat_surface() {
   local matches
-  matches="$(rg -n 'NextFrame|nextframe|legacy_nextframe|CAPY_NEXTFRAME|OP_NEXTFRAME|KIND_NEXTFRAME|attachNextFrame|openNextFrame|name = "nextframe"|capy nextframe' crates frontend scripts CLAUDE.md | rg -v 'scripts/check-architecture.sh' || true)"
+  matches="$(rg -n 'NextFrame|nextframe|legacy_nextframe|CAPY_NEXTFRAME|OP_NEXTFRAME|KIND_NEXTFRAME|attachNextFrame|openNextFrame|name = "nextframe"|capy nextframe' crates frontend scripts README.md AGENTS.md CLAUDE.md | rg -v 'scripts/check-architecture.sh' || true)"
   if [[ -n "$matches" ]]; then
     echo "$matches" >&2
     fail_guardrail \
@@ -120,6 +120,50 @@ check_v15_contract_boundary() {
   fi
 }
 
+check_v16_tts_clips_boundary() {
+  for member in \
+    '"crates/capy-tts"' \
+    '"crates/capy-clips-core"' \
+    '"crates/capy-clips-download"' \
+    '"crates/capy-clips-transcribe"' \
+    '"crates/capy-clips-align"' \
+    '"crates/capy-clips-cut"'; do
+    rg -q "$member" Cargo.toml || fail "v0.16 workspace member missing: $member"
+  done
+
+  for dep in \
+    '^capy-tts\.workspace = true' \
+    '^capy-clips-core\.workspace = true' \
+    '^capy-clips-download\.workspace = true' \
+    '^capy-clips-transcribe\.workspace = true' \
+    '^capy-clips-align\.workspace = true' \
+    '^capy-clips-cut\.workspace = true'; do
+    rg -q "$dep" crates/capy-cli/Cargo.toml || fail "capy-cli missing v0.16 dependency: $dep"
+  done
+
+  rg -q 'Command::Tts' crates/capy-cli/src/main.rs || fail "capy tts CLI must remain wired"
+  rg -q 'Command::Clips' crates/capy-cli/src/main.rs || fail "capy clips CLI must remain wired"
+  rg -q 'CAPY_CLIPS_WHISPER_SCRIPT' crates/capy-clips-transcribe/src/lib.rs crates/capy-cli/src/clips.rs ||
+    fail "clips transcription must use Capybara-owned helper env vars"
+  rg -q 'CAPY_CLIPS_ALIGN_SCRIPT' crates/capy-clips-align/src/script.rs crates/capy-cli/src/clips.rs ||
+    fail "clips alignment must use Capybara-owned helper env vars"
+  rg -q 'CAPY_TTS_ALIGN_SCRIPT' crates/capy-tts/src/whisper ||
+    fail "TTS alignment must use Capybara-owned helper env vars"
+
+  local legacy_matches
+  legacy_matches="$(
+    rg -n 'nf-tts|nf-source|VIDEOCUT_|VOX_ALIGN_SCRIPT|\.vox-cache|name = "vox"|capy cue' \
+      Cargo.toml crates \
+      | rg -v 'target/' || true
+  )"
+  if [[ -n "$legacy_matches" ]]; then
+    echo "$legacy_matches" >&2
+    fail_guardrail \
+      "TTS and clips migration must not expose old NextFrame/standalone product names" \
+      "route through capy tts / capy clips and Capybara-owned CAPY_* environment variables"
+  fi
+}
+
 check_no_external_timeline_engine
 check_timeline_engine_dependency_boundary
 check_no_new_render_source_builders
@@ -127,6 +171,7 @@ check_no_old_timeline_compat_surface
 check_no_legacy_poster_render_source
 check_no_binary_adapter
 check_v15_contract_boundary
+check_v16_tts_clips_boundary
 
 for path in \
   Cargo.toml \
@@ -223,7 +268,7 @@ rg -q '206' crates/capy-scroll-media/src/range_server.rs || fail "scroll media s
 rg -q 'capy-multi-video-scroll-story' crates/capy-scroll-media/src/types.rs || fail "multi-video story manifest kind must be explicit"
 rg -q 'StoryPack' crates/capy-cli/src/media.rs || fail "capy media story-pack CLI must remain wired"
 rg -q 'Timeline\(timeline::TimelineArgs\)' crates/capy-cli/src/main.rs || fail "capy timeline CLI must remain wired"
-if rg -n 'Nextframe\(timeline::TimelineArgs\)|name = "nextframe"|capy nextframe' crates/capy-cli/src scripts CLAUDE.md | rg -v 'scripts/check-architecture.sh'; then
+if rg -n 'Nextframe\(timeline::TimelineArgs\)|name = "nextframe"|capy nextframe' crates/capy-cli/src scripts README.md AGENTS.md CLAUDE.md | rg -v 'scripts/check-architecture.sh'; then
   fail "capy nextframe legacy alias must not remain wired"
 fi
 rg -q 'capy.poster-document' crates/capy-poster/src/component.rs || fail "poster component id must remain explicit"

@@ -350,7 +350,7 @@ pub async fn snapshot_from_source(
         .map(|d| d.subsec_nanos())
         .unwrap_or(0);
     let tmp_html: PathBuf =
-        std::env::temp_dir().join(format!("nf-source-snapshot-{pid}-{nanos}.html"));
+        std::env::temp_dir().join(format!("capy-recorder-snapshot-{pid}-{nanos}.html"));
     std::fs::write(&tmp_html, html.as_bytes())
         .map_err(|err| SnapshotError::BundleLoad(format!("write tmp html: {err}")))?;
     let result = cef_osr::snapshot_png(&tmp_html, t_ms, output, vp_w, vp_h)

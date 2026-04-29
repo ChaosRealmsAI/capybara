@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-scripts/check-spec-structure.sh
+scripts/lint-spec.sh
 export CAPY_SPEC_STRUCTURE_CHECKED=1
 scripts/check-large-files.sh
 scripts/check-architecture.sh

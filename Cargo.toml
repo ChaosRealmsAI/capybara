@@ -9,6 +9,12 @@ members = [
     "crates/capy-image-gen",
     "crates/capy-timeline-project",
     "crates/capy-timeline",
+    "crates/capy-tts",
+    "crates/capy-clips-core",
+    "crates/capy-clips-download",
+    "crates/capy-clips-transcribe",
+    "crates/capy-clips-align",
+    "crates/capy-clips-cut",
     "crates/capy-poster",
     "crates/capy-scroll-media",
     "crates/capy-shell",
@@ -52,6 +58,12 @@ capy-creative-core = { path = "crates/capy-creative-core" }
 capy-image-gen = { path = "crates/capy-image-gen" }
 capy-timeline-project = { path = "crates/capy-timeline-project" }
 capy-timeline = { path = "crates/capy-timeline" }
+capy-tts = { path = "crates/capy-tts" }
+capy-clips-core = { path = "crates/capy-clips-core" }
+capy-clips-download = { path = "crates/capy-clips-download" }
+capy-clips-transcribe = { path = "crates/capy-clips-transcribe" }
+capy-clips-align = { path = "crates/capy-clips-align" }
+capy-clips-cut = { path = "crates/capy-clips-cut" }
 capy-poster = { path = "crates/capy-poster" }
 capy-scroll-media = { path = "crates/capy-scroll-media" }
 which = "7"

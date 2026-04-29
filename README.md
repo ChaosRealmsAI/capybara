@@ -1,68 +1,77 @@
 # Capybara
 
-Capybara is a local-first AI design desktop workspace.
+Capybara is a local-first AI design desktop workspace. The public repository is
+the open-source core: Rust crates, a native HTML/CSS/JS desktop UI, CLI
+automation, and local verification scripts.
 
-The open-source core is a thin Rust desktop shell with a CLI-first control surface. The product direction is: desktop first, headless first, AI-operable, and no Electron.
+Private product specs, roadmap, research, prompts, concept assets, and evidence
+live in the nested private `spec/` repository. Do not add `spec/` to the public
+repo index.
 
-## Status
+## AI Entry
 
-`v0.4` is the desktop foundation: bundled CEF/Chromium + tao is merged on `main`. `v0.2` remains only as the legacy wry/tao baseline and rollback reference.
+- `AGENTS.md` is the source project entry for AI agents.
+- `CLAUDE.md` is an exact plain-file copy for Claude Code compatibility.
+- `README.md` is only the public repo overview; it is not the current-version
+  truth source.
+- Discover active and parallel versions from `spec/versions/REGISTRY.json`,
+  then open the relevant version `status.json` before reading BDD, architecture,
+  evidence, or devlog details.
 
-**v0.13** · NextFrame fusion complete. Capybara is now a creative AI workstation built on a single timeline/composition engine. Poster JSON, scroll media, brand tokens all flow through `capy nextframe compose-poster` into the NextFrame pipeline.
+This project assumes multi-model and multi-worktree development. Use progressive
+disclosure: read the registry and status first, then only the task-relevant spec
+layer.
 
-- `capy` CLI for AI-friendly operation.
-- `capy-image-gen` provider-neutral image generation tool module.
-- `capy-scroll-media` video-to-scroll-HTML packager with small committed examples.
-- `capy-shell` CEF/Chromium + tao desktop shell POC.
-- Unix socket NDJSON IPC.
-- Native macOS window capture.
-- DOM inspection and probe screenshot commands.
-- Local SQLite conversation persistence for Claude/Codex runtime experiments.
-- Native HTML/CSS/JS frontend, no React/Vue/Next.js.
-- Future desktop mainline: CEF/Chromium + tao, with wry retained only as legacy baseline/rollback.
+## Architecture
+
+- Desktop shell: CEF/Chromium + tao.
+- Frontend: native HTML/CSS/JS, loaded by the shell.
+- AI operation: `capy` CLI, Unix socket IPC, state/devtools/screenshot/capture
+  commands, and repeatable verification scripts.
+- Creative pipeline: Capybara-owned Timeline, poster, scroll-media, canvas,
+  recorder, and provider-boundary crates.
+- Persistence and runtime: local-first, CLI-observable, evidence-oriented.
 
 ## Repository Layout
 
 ```text
-crates/capy-cli/      CLI entrypoint
-crates/capy-image-gen/ Image generation provider contract and adapters
-crates/capy-scroll-media/ Video in, scroll HTML package out
-crates/capy-shell/    CEF desktop shell, IPC, capture, store, agent runtime
-frontend/capy-app/    native HTML/CSS/JS UI loaded by the shell
-scripts/              local developer gates
+crates/capy-cli/              capy CLI and AI verification entrypoint
+crates/capy-shell/            CEF desktop shell, IPC, capture, store, runtime
+crates/capy-contracts/        shared CLI/shell wire contracts
+crates/capy-canvas-core/      canvas data model and operations
+crates/capy-canvas-web/       canvas web/WASM adapter
+crates/capy-image-gen/        provider-neutral image generation boundary
+crates/capy-poster/           Poster JSON parsing and composition helpers
+crates/capy-scroll-media/     video/story media packaging and range serving
+crates/capy-timeline/         Timeline product boundary
+crates/capy-timeline-project/ internal Timeline project engine
+crates/capy-recorder/         internal snapshot/export recorder
+crates/capy-shell-mac/        macOS shell helpers
+frontend/capy-app/            native desktop UI
+scripts/                      local gates, verifiers, and repo checks
 ```
-
-Private product specs, research, evidence, and concept assets are not tracked in this public repository. They live in a separate private repository.
 
 ## Development
 
 ```bash
-scripts/check-project.sh
+scripts/check-spec-structure.sh
 scripts/check-architecture.sh
-CAPYBARA_SOCKET=/tmp/capybara-main-cef-$(id -u).sock scripts/verify-cef-shell.sh --keep-open
+scripts/check-commit.sh
+scripts/check-project.sh
 cargo wef build -p capy-shell
 cargo run -p capy-cli -- --help
-target/debug/capy open --project=demo
-target/debug/capy ps
-target/debug/capy state --key=app.ready
-target/debug/capy devtools --eval='document.documentElement.dataset.capyBrowser'
-target/debug/capy devtools --query=.topbar --get=bounding-rect
-target/debug/capy verify
-target/debug/capy image providers
-target/debug/capy image doctor
-target/debug/capy image generate --dry-run 'Scene: Warm studio. Subject: One ceramic cup centered. Important details: Product photo, soft light. Use case: Hero card. Constraints: No text, no watermark.'
-crates/capy-scroll-media/examples/build-examples.sh
-target/debug/capy media serve --root crates/capy-scroll-media/examples/outputs/card-pan-2s --port 5202
-target/debug/capy capture --out=tmp/capy-window.png
-target/debug/capy quit
 ```
 
-Use the same `CAPYBARA_SOCKET` value for both shell and CLI when multiple worktrees are running.
+For desktop verification, use the same socket for shell and CLI when multiple
+worktrees are running:
 
-## Current CLI
+```bash
+CAPYBARA_SOCKET=/tmp/capybara-main-cef-$(id -u).sock scripts/verify-cef-shell.sh --launch launchctl --keep-open
+```
+
+## CLI Surface
 
 ```text
-capy shell
 capy open
 capy ps
 capy state
@@ -70,12 +79,32 @@ capy devtools
 capy screenshot
 capy capture
 capy verify
+capy timeline
+capy canvas
 capy image
 capy media
 capy chat
 capy agent doctor
 capy quit
 ```
+
+Run `cargo run -p capy-cli -- --help` and command-specific `--help` before using
+new or unfamiliar commands.
+
+## Maintenance Contract
+
+- Update `AGENTS.md` first for project-entry changes, then copy it to
+  `CLAUDE.md`.
+- Keep volatile product state out of `README.md`; write it to `spec/README.md`,
+  `spec/versions/REGISTRY.json`, and the relevant version `status.json`.
+- When behavior, CLI output, IPC shape, runtime commands, module boundaries, or
+  evidence process changes, update code and matching private spec in the same
+  work unit.
+- Run `scripts/check-spec-structure.sh` after entry/spec changes.
+- Run `scripts/check-architecture.sh` after architecture, naming, module, or
+  public README changes.
+- Do not add Electron, Tauri, React, Vue, Next.js, Tailwind, or shadcn unless the
+  private architecture spec changes.
 
 ## License
 

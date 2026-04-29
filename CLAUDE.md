@@ -9,20 +9,33 @@ User-level AGENTS rules define how AI agents work. This file records only
 Capybara-specific local facts. If documents disagree, follow this order:
 user-level AGENTS rules, then `spec/`, then project scripts, then this entry.
 
+`AGENTS.md` is the source project entry for this repo. `CLAUDE.md` is a
+plain-file copy kept only for Claude Code compatibility; update `AGENTS.md`
+first, then copy it to `CLAUDE.md`.
+
+## Progressive Disclosure
+
+Do not load the whole spec tree or hard-code one active version from this file.
+Capybara assumes multi-model, multi-worktree work. Discover the current task
+layer by layer, then read only the docs needed for that layer.
+
 ## Start Here
 
-1. Read `spec/README.md`.
-2. Read active version paths from `spec/versions/REGISTRY.json`.
-3. For current work, read:
-   - `spec/versions/v0.15-project-architecture-migration/brief.md`
-   - `spec/versions/v0.15-project-architecture-migration/bdd.json`
-   - `spec/versions/v0.15-project-architecture-migration/status.json`
-   - `spec/versions/v0.15-project-architecture-migration/evidence/index.html`
-4. Read project rules in `spec/standards/00-index.md`.
-5. Check public repo and nested spec repo status before editing.
-
-Current active version: `v0.15-project-architecture-migration` on `main`.
-Status: `quality-gates-passed`.
+1. Read `spec/README.md` for the truth map and write destinations.
+2. Read `spec/versions/REGISTRY.json` to discover active and parallel versions,
+   branches, worktrees, owners, stages, dependencies, and status.
+3. Open the relevant version `status.json` first. Use it to choose the current
+   task, owner, blockers, evidence directory, and next needed docs.
+4. Then read only the task-relevant layer:
+   - Scope or PM question: version `brief.md` and `bdd.json`.
+   - Architecture or contracts: `spec/architecture.md`, `spec/data-model.md`,
+     `spec/interfaces.md`, `spec/runtime.md`, and `spec/standards/`.
+   - Implementation: the owning crate/module plus matching BDD/status entries.
+   - Verification: `spec/ai-verify/`, version `evidence/`, and relevant gates.
+   - History or root cause: `spec/devlog/`, `spec/pocs/`, and `bugs.json`.
+5. For parallel agent work, respect `status.json` owners/dependencies and record
+   new parallel tasks there before splitting work.
+6. Check public repo and nested spec repo status before editing.
 
 ## What Goes Where
 
@@ -32,7 +45,8 @@ Status: `quality-gates-passed`.
 - CLI, IPC, JS bridge, file contracts: `spec/interfaces.md`
 - Runtime commands, env vars, gates, troubleshooting: `spec/runtime.md`
 - AI verification commands and scenarios: `spec/ai-verify/`
-- Version goals, BDD, bugs, evidence, report: `spec/versions/<active>/`
+- Version goals, BDD, bugs, evidence, report: `spec/versions/<version>/`
+- Contract fixtures and evidence manifest schema: `spec/contracts/`
 - Process decisions and root causes: `spec/devlog/`
 - Design rules and visual examples: `spec/design/`
 - Evidence retention, privacy, provider spend: `spec/standards/project/`
@@ -58,6 +72,7 @@ matching spec file in the same work unit.
 ## Required Gates
 
 ```bash
+scripts/lint-spec.sh
 scripts/check-spec-structure.sh
 scripts/check-architecture.sh
 scripts/check-commit.sh

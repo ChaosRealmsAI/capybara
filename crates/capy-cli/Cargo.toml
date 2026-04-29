@@ -13,10 +13,17 @@ path = "src/main.rs"
 [dependencies]
 base64.workspace = true
 capy-contracts.workspace = true
+capy-clips-align.workspace = true
+capy-clips-core.workspace = true
+capy-clips-cut.workspace = true
+capy-clips-download.workspace = true
+capy-clips-transcribe.workspace = true
 capy-image-gen.workspace = true
 capy-timeline.workspace = true
 capy-scroll-media.workspace = true
+capy-tts.workspace = true
 capy-shell = { path = "../capy-shell" }
+anyhow.workspace = true
 clap.workspace = true
 image.workspace = true
 interprocess.workspace = true
@@ -25,6 +32,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+tempfile = "3.15"
 
 [lints]
 workspace = true

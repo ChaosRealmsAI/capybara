@@ -59,6 +59,11 @@ check_required_tree() {
     spec/interfaces.md
     spec/runtime.md
     spec/milestones.html
+    spec/contracts/README.md
+    spec/contracts/evidence/manifest.schema.json
+    spec/contracts/evidence/manifest.example.json
+    spec/contracts/registry/parallel-registry.example.json
+    spec/contracts/registry/status-task.example.json
     spec/standards/00-index.md
     spec/standards/scorecard.md
     spec/standards/automation-map.md
@@ -92,14 +97,20 @@ check_required_tree() {
 }
 
 check_project_entry_docs() {
-  if [[ -f AGENTS.md && -f CLAUDE.md ]] && ! cmp -s AGENTS.md CLAUDE.md; then
-    fail "AGENTS.md and CLAUDE.md must stay identical"
+  [[ -f AGENTS.md && ! -L AGENTS.md ]] ||
+    fail "AGENTS.md must be the regular-file source project entry"
+  [[ -f CLAUDE.md && ! -L CLAUDE.md ]] ||
+    fail "CLAUDE.md must be a regular-file copy of AGENTS.md"
+
+  if ! cmp -s AGENTS.md CLAUDE.md; then
+    fail "CLAUDE.md must be an exact copy of AGENTS.md"
   fi
 
   local entry required_text
   for entry in AGENTS.md CLAUDE.md; do
-    [[ -f "$entry" ]] || continue
     for required_text in \
+      "\`AGENTS.md\` is the source project entry" \
+      "Progressive Disclosure" \
       "spec/README.md" \
       "spec/versions/REGISTRY.json" \
       "scripts/check-spec-structure.sh" \
@@ -109,8 +120,20 @@ check_project_entry_docs() {
     done
   done
 
+  for required_text in \
+    "\`AGENTS.md\` is the source project entry" \
+    "\`README.md\` is only the public repo overview" \
+    "spec/versions/REGISTRY.json"; do
+    grep -Fq "$required_text" README.md || fail "README.md missing required maintenance text: $required_text"
+  done
+
   grep -Fq "## Write Destination Matrix" spec/README.md ||
     fail "spec/README.md must include ## Write Destination Matrix"
+  grep -Fq "## Version Discovery" spec/README.md ||
+    fail "spec/README.md must include ## Version Discovery"
+  if grep -Fq "Registry active version:" spec/README.md; then
+    fail "spec/README.md must not copy a current-version pointer; use REGISTRY.json and status.json discovery"
+  fi
 
   local standard
   for standard in \
@@ -142,6 +165,23 @@ check_json_files() {
   )
 }
 
+check_contract_fixtures() {
+  local fixture
+  for fixture in \
+    spec/contracts/evidence/manifest.schema.json \
+    spec/contracts/evidence/manifest.example.json \
+    spec/contracts/registry/parallel-registry.example.json \
+    spec/contracts/registry/status-task.example.json; do
+    jq empty "$fixture" >/dev/null 2>&1 || fail "invalid contract fixture JSON: $fixture"
+  done
+
+  grep -Fq "capy.evidence.manifest.v1" spec/contracts/README.md ||
+    fail "spec/contracts/README.md must name the evidence manifest schema"
+  jq -e '.properties.schema.const == "capy.evidence.manifest.v1"' \
+    spec/contracts/evidence/manifest.schema.json >/dev/null 2>&1 ||
+    fail "evidence manifest schema must enforce capy.evidence.manifest.v1"
+}
+
 check_version_dirs() {
   local dir file
   while IFS= read -r -d '' dir; do
@@ -154,58 +194,117 @@ check_version_dirs() {
   done < <(find spec/versions -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 }
 
-check_active_version() {
-  local active
-  active="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json 2>/dev/null || true)"
-  [[ -n "$active" ]] || {
-    fail "REGISTRY.json active_version is missing"
+check_version_consistency() {
+  local version_id="$1"
+  local require_current_worktree="$2"
+  local version_dir="spec/versions/$version_id"
+  local status_file="$version_dir/status.json"
+  local bdd_file="$version_dir/bdd.json"
+  local manifest_file="$version_dir/evidence/manifest.json"
+
+  [[ -d "$version_dir" ]] || {
+    fail "version directory missing: $version_dir"
     return
   }
-
-  local active_dir="spec/versions/$active"
-  [[ -d "$active_dir" ]] || fail "active version directory missing: $active_dir"
-  jq -e --arg active "$active" '.versions[] | select(.id == $active)' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
-    fail "REGISTRY.json must include an entry for active_version $active"
-  grep -Fq "Registry active version: \`$active\`" spec/README.md ||
-    fail "spec/README.md Current Version must name active version $active"
-
-  local status_file="$active_dir/status.json"
-  local bdd_file="$active_dir/bdd.json"
+  jq -e --arg version "$version_id" '.versions[] | select(.id == $version)' \
+    spec/versions/REGISTRY.json >/dev/null 2>&1 ||
+    fail "REGISTRY.json must include an entry for $version_id"
   [[ -f "$status_file" ]] || return
   [[ -f "$bdd_file" ]] || return
 
   local status_version current_branch current_worktree
   status_version="$(jq -r '.version // empty' "$status_file")"
-  [[ "$status_version" == "$active" ]] || fail "active status.json version must be $active"
+  [[ "$status_version" == "$version_id" ]] || fail "$version_id status.json version must be $version_id"
 
-  current_branch="$(git branch --show-current)"
-  current_worktree="$(pwd -P)"
   local status_branch status_worktree registry_branch registry_worktree status_stage registry_stage status_status registry_status
   status_branch="$(jq -r '.branch // empty' "$status_file")"
   status_worktree="$(jq -r '.worktree // empty' "$status_file")"
   status_stage="$(jq -r '.stage // empty' "$status_file")"
   status_status="$(jq -r '.status // empty' "$status_file")"
-  registry_branch="$(jq -r --arg active "$active" '.versions[] | select(.id == $active) | .branch // empty' spec/versions/REGISTRY.json)"
-  registry_worktree="$(jq -r --arg active "$active" '.versions[] | select(.id == $active) | .worktree // empty' spec/versions/REGISTRY.json)"
-  registry_stage="$(jq -r --arg active "$active" '.versions[] | select(.id == $active) | .stage // empty' spec/versions/REGISTRY.json)"
-  registry_status="$(jq -r --arg active "$active" '.versions[] | select(.id == $active) | .status // empty' spec/versions/REGISTRY.json)"
+  registry_branch="$(jq -r --arg version "$version_id" '.versions[] | select(.id == $version) | .branch // empty' spec/versions/REGISTRY.json)"
+  registry_worktree="$(jq -r --arg version "$version_id" '.versions[] | select(.id == $version) | .worktree // empty' spec/versions/REGISTRY.json)"
+  registry_stage="$(jq -r --arg version "$version_id" '.versions[] | select(.id == $version) | .stage // empty' spec/versions/REGISTRY.json)"
+  registry_status="$(jq -r --arg version "$version_id" '.versions[] | select(.id == $version) | .status // empty' spec/versions/REGISTRY.json)"
 
-  [[ "$status_branch" == "$current_branch" ]] || fail "active status branch $status_branch does not match current branch $current_branch"
-  [[ "$status_worktree" == "$current_worktree" ]] || fail "active status worktree $status_worktree does not match current worktree $current_worktree"
-  [[ "$registry_branch" == "$status_branch" ]] || fail "active registry branch must match status.json branch"
-  [[ "$registry_worktree" == "$status_worktree" ]] || fail "active registry worktree must match status.json worktree"
-  [[ "$registry_stage" == "$status_stage" ]] || fail "active registry stage must match status.json stage"
-  [[ "$registry_status" == "$status_status" ]] || fail "active registry status must match status.json status"
+  [[ "$registry_branch" == "$status_branch" ]] || fail "$version_id registry branch must match status.json branch"
+  [[ "$registry_worktree" == "$status_worktree" ]] || fail "$version_id registry worktree must match status.json worktree"
+  [[ "$registry_stage" == "$status_stage" ]] || fail "$version_id registry stage must match status.json stage"
+  [[ "$registry_status" == "$status_status" ]] || fail "$version_id registry status must match status.json status"
+
+  if [[ "$require_current_worktree" == "true" ]]; then
+    current_branch="$(git branch --show-current)"
+    current_worktree="$(pwd -P)"
+    [[ "$status_branch" == "$current_branch" ]] || fail "focus version $version_id branch $status_branch does not match current branch $current_branch"
+    [[ "$status_worktree" == "$current_worktree" ]] || fail "focus version $version_id worktree $status_worktree does not match current worktree $current_worktree"
+  fi
 
   jq -e '
     (.scenarios // []) as $scenarios |
     ($scenarios | length) > 0 and
     all($scenarios[]; (.delivery_status | type) == "object" and (.test_cases | type) == "array" and (.self_verification_steps | type) == "array")
   ' "$bdd_file" >/dev/null 2>&1 ||
-    fail "active bdd.json scenarios must include delivery_status, test_cases[], and self_verification_steps[]"
+    fail "$version_id bdd.json scenarios must include delivery_status, test_cases[], and self_verification_steps[]"
 
-  grep -Fq "$active" AGENTS.md || fail "AGENTS.md must name active version $active"
-  grep -Fq "$active" CLAUDE.md || fail "CLAUDE.md must name active version $active"
+  jq -e '
+    (.tasks // []) as $tasks |
+    ($tasks | length) > 0 and
+    all($tasks[];
+      (.id | type) == "string" and
+      (.title | type) == "string" and
+      (.status | type) == "string" and
+      (.owner | type) == "string" and
+      (.agent | type) == "string" and
+      (.session | type) == "string" and
+      (.write_set | type) == "array" and
+      (.blocked_by | type) == "array" and
+      (.last_updated | type) == "string" and
+      (.required_evidence | type) == "array" and
+      (.handoff_notes | type) == "string"
+    )
+  ' "$status_file" >/dev/null 2>&1 ||
+    fail "$version_id status.json tasks must include enhanced parallel handoff metadata"
+
+  [[ -f "$manifest_file" ]] || fail "$version_id missing evidence/manifest.json"
+  if [[ -f "$manifest_file" ]]; then
+    jq -e --arg version "$version_id" '
+      .schema == "capy.evidence.manifest.v1" and
+      .version == $version and
+      (.runs | type) == "array" and
+      (.artifacts | type) == "array" and
+      (.verdict | type) == "object"
+    ' "$manifest_file" >/dev/null 2>&1 ||
+      fail "$version_id evidence/manifest.json must match capy.evidence.manifest.v1"
+  fi
+}
+
+check_active_version() {
+  local active focus
+  active="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json 2>/dev/null || true)"
+  focus="$(jq -r '.focus_version // empty' spec/versions/REGISTRY.json 2>/dev/null || true)"
+  [[ -n "$active" ]] || {
+    fail "REGISTRY.json active_version is missing"
+    return
+  }
+  [[ -n "$focus" ]] || fail "REGISTRY.json focus_version is missing"
+  [[ "$active" == "$focus" ]] || fail "active_version compatibility default must match focus_version"
+
+  jq -e '.registry_model == "parallel"' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
+    fail "REGISTRY.json registry_model must be parallel"
+  jq -e '(.active_versions | type) == "array" and (.active_versions | length) > 0 and all(.active_versions[]; type == "string")' \
+    spec/versions/REGISTRY.json >/dev/null 2>&1 ||
+    fail "REGISTRY.json active_versions must be a non-empty string array"
+  jq -e --arg focus "$focus" '.active_versions | index($focus)' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
+    fail "REGISTRY.json active_versions must include focus_version"
+
+  local version_id
+  while IFS= read -r version_id; do
+    check_version_consistency "$version_id" "false"
+  done < <(jq -r '.active_versions[]' spec/versions/REGISTRY.json)
+  check_version_consistency "$focus" "true"
+
+  if grep -Fq "$active" AGENTS.md || grep -Fq "$active" CLAUDE.md || grep -Fq "$active" README.md || grep -Fq "$active" spec/README.md; then
+    fail "entry docs and README files must discover active versions from REGISTRY.json, not hard-code $active"
+  fi
 }
 
 check_outer_git_boundary
@@ -213,6 +312,7 @@ check_required_tree
 check_project_entry_docs
 check_version_dirs
 check_json_files
+check_contract_fixtures
 check_active_version
 
 if [[ "${#failures[@]}" -gt 0 ]]; then

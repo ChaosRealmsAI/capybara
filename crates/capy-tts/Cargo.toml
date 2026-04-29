@@ -1,0 +1,31 @@
+[package]
+name = "capy-tts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Capybara TTS engine and CLI handlers"
+keywords = ["tts", "cli", "speech", "audio", "edge"]
+categories = ["command-line-utilities", "multimedia::audio"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+blake3 = "1"
+toml = "0.8"
+anyhow = "1"
+async-trait = "0.1"
+futures = "0.3"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+dirs = "6"

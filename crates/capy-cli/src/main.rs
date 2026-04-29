@@ -9,12 +9,14 @@ mod canvas;
 mod canvas_context;
 mod chat;
 mod chat_context;
+mod clips;
 mod cutout;
 mod desktop_verify;
 mod image;
 mod ipc_client;
 mod media;
 mod timeline;
+mod tts;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -57,6 +59,10 @@ enum Command {
     Media(media::MediaArgs),
     #[command(about = "Operate Timeline composition and recorder integration")]
     Timeline(timeline::TimelineArgs),
+    #[command(about = "Generate, preview, play, batch, and align TTS audio")]
+    Tts(tts::TtsArgs),
+    #[command(about = "Download, transcribe, align, cut, and preview video clips")]
+    Clips(clips::ClipsArgs),
     #[command(about = "Inspect local agent runtimes")]
     Agent(agent::AgentArgs),
     #[command(about = "Quit the Capybara shell")]
@@ -192,6 +198,8 @@ fn run() -> Result<(), String> {
         Command::Image(args) => image::handle(args),
         Command::Media(args) => media::handle(args),
         Command::Timeline(args) => timeline::handle(args),
+        Command::Tts(args) => tts::handle(args),
+        Command::Clips(args) => clips::handle(args),
         Command::Agent(args) => agent::handle(args),
         Command::Quit => send("quit", json!({})),
     }
@@ -202,7 +210,7 @@ pub(crate) fn send(op: &str, params: Value) -> Result<(), String> {
     print_json(&data)
 }
 
-fn print_json(data: &Value) -> Result<(), String> {
+pub(crate) fn print_json(data: &Value) -> Result<(), String> {
     println!(
         "{}",
         serde_json::to_string_pretty(data).map_err(|err| err.to_string())?

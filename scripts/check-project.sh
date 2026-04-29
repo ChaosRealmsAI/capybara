@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-scripts/check-spec-structure.sh
+scripts/lint-spec.sh
 export CAPY_SPEC_STRUCTURE_CHECKED=1
 scripts/check-architecture.sh
 scripts/check-large-files.sh
@@ -35,6 +35,16 @@ if ! jq -e '.schema_version == "capy.timeline.render_source.v1" and (.tracks | l
   echo "project check failed: timeline compile must emit render_source.v1 with one component track" >&2
   exit 1
 fi
+cargo run -p capy-cli -- tts --help >/dev/null
+cargo run -p capy-cli -- tts --brief >/dev/null
+cargo run -p capy-cli -- tts doctor >/dev/null
+tts_dry_run="$(printf '[{"text":"hello","filename":"hello"}]' | cargo run -p capy-cli -- tts batch -d target/capy-tts-dry-run --dry-run)"
+if ! grep -q '"text": "hello"' <<<"$tts_dry_run"; then
+  echo "project check failed: tts batch dry-run must echo the planned job" >&2
+  exit 1
+fi
+cargo run -p capy-cli -- clips --help >/dev/null
+cargo run -p capy-cli -- clips doctor >/dev/null
 cargo run -p capy-cli -- media --help >/dev/null
 media_dry_run="$(cargo run -p capy-cli -- media scroll-pack \
   --input tmp/nonexistent-scroll-media-dry-run.mp4 \

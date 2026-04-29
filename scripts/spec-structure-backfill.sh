@@ -17,8 +17,15 @@ Rules:
 
 - `spec/.git` must exist locally, and the public repository must keep `spec/`
   ignored and untracked.
-- `spec/README.md` is the first entry point and must name the same active
-  version as `spec/versions/REGISTRY.json`.
+- `spec/README.md` is the first spec entry point and must explain version
+  discovery through `spec/versions/REGISTRY.json` plus version `status.json`;
+  it must not copy a current-version pointer.
+- `spec/versions/REGISTRY.json` uses parallel registry semantics:
+  `focus_version`, compatibility `active_version`, and `active_versions[]`.
+- Every active/focus version must keep enhanced task metadata in `status.json`
+  and `evidence/manifest.json` using `capy.evidence.manifest.v1`.
+- `spec/contracts/` stores runnable JSON fixtures and schemas for shared
+  handoff surfaces.
 - Global current-truth files must exist: charter, collaboration, architecture,
   data model, interfaces, runtime, milestones, design, standards, and AI verify.
 - Every directory under `spec/versions/` must contain `brief.md`, `bdd.json`,
@@ -31,6 +38,7 @@ Rules:
 Automation:
 
 ```bash
+scripts/lint-spec.sh
 scripts/check-spec-structure.sh
 scripts/check-spec-structure.sh --fix
 ```
