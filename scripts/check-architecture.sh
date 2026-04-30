@@ -204,6 +204,7 @@ check_desktop_shell_docs_consistent() {
     fail_guardrail "desktop shell docs still describe wry as the mainline or CEF as future/moving" "rewrite the wording so CEF/Chromium + tao is canonical and wry is legacy rollback only"
   fi
 }
+check_v50_video_clip_semantics_boundary() { rg -q 'VIDEO_CLIP_SEMANTICS_SCHEMA_VERSION' crates/capy-project/src/lib.rs && rg -q 'video_clip_semantics' crates/capy-project/src/lib.rs || fail "v0.50 semantics must live in capy-project"; rg -q 'project-video-clip-semantics-get' crates/capy-contracts/src/project.rs crates/capy-shell/src/project_ipc.rs && rg -q 'project-video-clip-semantics-analyze' crates/capy-contracts/src/project.rs crates/capy-shell/src/project_ipc.rs || fail "v0.50 semantics IPC ops must live in contracts and shell"; rg -q 'Analyze\(ProjectClipQueuePathArgs\)' crates/capy-cli/src/project/clip_queue.rs && rg -q 'Semantics\(ProjectClipQueuePathArgs\)' crates/capy-cli/src/project/clip_queue.rs || fail "capy project clip-queue semantics commands must remain wired"; rg -q 'createVideoClipSemanticsController' frontend/capy-app/app/video-clip-semantics.js frontend/capy-app/app/video-clip-delivery.js && require_file scripts/verify-video-clip-semantics.mjs || fail "desktop semantic UI and verifier must remain wired"; }
 check_no_external_timeline_engine
 check_timeline_engine_dependency_boundary
 check_no_new_render_source_builders
@@ -214,6 +215,7 @@ check_v15_contract_boundary
 check_v16_tts_clips_boundary
 check_no_default_screen_recording_capture
 check_desktop_shell_docs_consistent
+check_v50_video_clip_semantics_boundary
 scripts/check-sdk-only-agent-runtime.sh
 scripts/check-desktop-signing-boundary.sh
 for path in \

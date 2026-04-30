@@ -39,6 +39,28 @@ pub(crate) fn suggest(params: &Value) -> Result<Value, String> {
     .map_err(|err| err.to_string())
 }
 
+pub(crate) fn semantics_get(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .video_clip_semantics()
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
+pub(crate) fn semantics_analyze(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .analyze_video_clip_semantics()
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
 fn required_path(params: &Value, key: &str) -> Result<PathBuf, String> {
     params
         .get(key)

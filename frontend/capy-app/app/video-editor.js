@@ -1,6 +1,5 @@
 import { createVideoPreviewController } from "./video-preview.js";
 import { createVideoClipDeliveryController } from "./video-clip-delivery.js";
-
 export function createVideoEditor(ctx) {
   const {
     state,
@@ -26,7 +25,6 @@ export function createVideoEditor(ctx) {
     selectedTrack,
     firstTrackForClip,
   });
-
   function installVideoEditor() {
     dom.workspaceTabs.forEach((button) => {
       button.addEventListener("click", () => switchWorkspace(button.dataset.workspaceTab || "canvas"));
@@ -57,7 +55,6 @@ export function createVideoEditor(ctx) {
     switchWorkspace(state.workspace.activeTab);
     renderVideoEditor();
   }
-
   function switchWorkspace(tab) {
     state.workspace.activeTab = ["video", "poster", "game-assets"].includes(tab) ? tab : "canvas";
     const videoActive = state.workspace.activeTab === "video";
@@ -118,7 +115,6 @@ export function createVideoEditor(ctx) {
       });
     }
   }
-
   async function openComposition(path) {
     state.video.status = "loading";
     state.video.error = null;
@@ -133,26 +129,32 @@ export function createVideoEditor(ctx) {
       renderVideoEditor();
     }
   }
-
   async function loadProjectQueue(projectPath = state.projectPackage.path) {
     if (!projectPath) {
       clipDelivery.applyProjectQueueManifest(null, "");
+      clipDelivery.applyProjectSemanticsManifest(null);
       return null;
     }
     try {
-      const manifest = await rpc("project-video-clip-queue-get", { project: projectPath });
+      const [manifest, semantics] = await Promise.all([
+        rpc("project-video-clip-queue-get", { project: projectPath }),
+        rpc("project-video-clip-semantics-get", { project: projectPath })
+      ]);
       clipDelivery.applyProjectQueueManifest(manifest, projectPath);
+      clipDelivery.applyProjectSemanticsManifest(semantics);
       return manifest;
     } catch (error) {
       state.video.clipQueue = [];
       state.video.clipQueueManifest = null;
       state.video.clipQueuePersistStatus = "error";
       state.video.clipQueuePersistError = stringifyError(error);
+      state.video.clipSemantics = null;
+      state.video.clipSemanticsStatus = "error";
+      state.video.clipSemanticsError = stringifyError(error);
       renderVideoEditor();
       return null;
     }
   }
-
   function applyOpenResult(result) {
     state.video.status = "ready";
     state.video.error = null;
@@ -178,7 +180,6 @@ export function createVideoEditor(ctx) {
     }
     renderVideoEditor();
   }
-
   function renderVideoEditor() {
     renderSummary();
     renderClips();
@@ -188,7 +189,6 @@ export function createVideoEditor(ctx) {
     renderExportState();
     preview.renderPreviewFrame();
   }
-
   function renderSummary() {
     if (!dom.videoStatusEl) return;
     const editor = state.video.editor;
@@ -216,7 +216,6 @@ export function createVideoEditor(ctx) {
     dom.videoStatusEl.textContent = `${editor.name || "Composition"} · ${formatTime(editor.duration_ms || 0)} · ${editor.tracks?.length || 0} tracks`;
     dom.videoStatusEl.dataset.status = state.video.status;
   }
-
   function renderClips() {
     if (!dom.videoClipsEl) return;
     const clips = Array.isArray(state.video.editor?.clips) ? state.video.editor.clips : [];
@@ -230,7 +229,6 @@ export function createVideoEditor(ctx) {
       return button;
     }));
   }
-
   function renderTimeline() {
     if (!dom.videoTimelineEl) return;
     const tracks = Array.isArray(state.video.editor?.tracks) ? state.video.editor.tracks : [];
@@ -268,7 +266,6 @@ export function createVideoEditor(ctx) {
       dom.videoTimeEl.textContent = `${formatTime(state.video.playheadMs || 0)} / ${formatTime(duration)}`;
     }
   }
-
   function renderInspector() {
     if (!dom.videoInspectorEl) return;
     const track = selectedTrack();
@@ -307,7 +304,6 @@ export function createVideoEditor(ctx) {
     }
     if (input && first) input.value = primitiveToInput(first.value);
   }
-
   function renderExportState() {
     if (!dom.videoExportStatusEl) return;
     const job = state.video.exportJob;
@@ -317,28 +313,23 @@ export function createVideoEditor(ctx) {
     }
     dom.videoExportStatusEl.textContent = `${job.status || "unknown"} · ${job.output_path || ""}`;
   }
-
   function selectTrack(id) {
     state.video.selectedTrackId = id;
     state.video.selectedField = "";
     renderVideoEditor();
   }
-
   function selectedTrack() {
     const tracks = Array.isArray(state.video.editor?.tracks) ? state.video.editor.tracks : [];
     return tracks.find((track) => track.id === state.video.selectedTrackId) || tracks[0] || null;
   }
-
   function selectedField(track) {
     const fields = Array.isArray(track?.fields) ? track.fields : [];
     return fields.find((field) => field.field === state.video.selectedField) || null;
   }
-
   function firstTrackForClip(clipId) {
     const tracks = Array.isArray(state.video.editor?.tracks) ? state.video.editor.tracks : [];
     return tracks.find((track) => track.clip_id === clipId) || null;
   }
-
   async function saveSelectedField() {
     const track = selectedTrack();
     if (!track || !state.video.compositionPath) return;
@@ -362,7 +353,6 @@ export function createVideoEditor(ctx) {
       renderVideoEditor();
     }
   }
-
   async function exportComposition(options = {}) {
     if (!state.video.compositionPath) return;
     state.video.exportJob = { status: options.mode === "record" ? "recording" : "exporting" };
@@ -402,13 +392,11 @@ export function createVideoEditor(ctx) {
       setRunStatus("error");
     }
   }
-
   function seek(value) {
     state.video.playheadMs = Math.max(0, Math.min(Number(value || 0), state.video.durationMs || Number.MAX_SAFE_INTEGER));
     renderTimeline();
     preview.renderPreviewFrame();
   }
-
   return {
     installVideoEditor,
     switchWorkspace,
@@ -418,13 +406,11 @@ export function createVideoEditor(ctx) {
     setVideoSelectedRange: (...args) => clipDelivery.setSelectedRange(...args),
   };
 }
-
 function primitiveToInput(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
-
 function coerceInputValue(value) {
   const trimmed = String(value || "").trim();
   if (trimmed === "true") return true;
@@ -432,12 +418,10 @@ function coerceInputValue(value) {
   if (trimmed && !Number.isNaN(Number(trimmed))) return Number(trimmed);
   return value;
 }
-
 function formatTime(ms) {
   const seconds = Number(ms || 0) / 1000;
   return `${seconds.toFixed(seconds >= 10 ? 1 : 2)}s`;
 }
-
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")

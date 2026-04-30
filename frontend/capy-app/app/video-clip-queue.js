@@ -51,7 +51,11 @@ export function queueExportRange(item) {
     scene: item.scene || item.clip_id,
     source_video: item.source_video || null,
     suggestion_id: item.suggestion_id || "",
-    suggestion_reason: item.suggestion_reason || ""
+    suggestion_reason: item.suggestion_reason || "",
+    semantic_ref: item.semantic_ref || "",
+    semantic_summary: item.semantic_summary || "",
+    semantic_tags: item.semantic_tags || [],
+    semantic_reason: item.semantic_reason || ""
   };
 }
 
@@ -70,6 +74,10 @@ export function queueManifestItem(item) {
     source_video: item.source_video || null,
     suggestion_id: item.suggestion_id || "",
     suggestion_reason: item.suggestion_reason || "",
+    semantic_ref: item.semantic_ref || "",
+    semantic_summary: item.semantic_summary || "",
+    semantic_tags: item.semantic_tags || [],
+    semantic_reason: item.semantic_reason || "",
     updated_at: item.updated_at || Date.now()
   };
 }
@@ -90,6 +98,10 @@ export function queueFromManifest(manifest, projectPath) {
     source_video: item.source_video || null,
     suggestion_id: item.suggestion_id || "",
     suggestion_reason: item.suggestion_reason || "",
+    semantic_ref: item.semantic_ref || "",
+    semantic_summary: item.semantic_summary || "",
+    semantic_tags: item.semantic_tags || [],
+    semantic_reason: item.semantic_reason || "",
     updated_at: item.updated_at || 0
   })));
 }
@@ -122,7 +134,9 @@ function queueCard({ item, total, moveQueueItem, removeQueueItem, formatTime, es
     <div class="video-queue-copy">
       <strong>${escapeHtml(item.source_video?.filename || item.scene || item.clip_id)}</strong>
       <span>${escapeHtml(item.scene || item.clip_id)} · ${formatTime(item.start_ms)} - ${formatTime(item.end_ms)} · ${formatTime(item.duration_ms)}</span>
+      ${item.semantic_summary ? `<small>${escapeHtml(item.semantic_summary)}</small>` : ""}
       ${item.suggestion_reason ? `<em>${escapeHtml(item.suggestion_reason)}</em>` : ""}
+      ${item.semantic_reason ? `<em>${escapeHtml(item.semantic_reason)}</em>` : ""}
     </div>
     <div class="video-queue-actions">
       <button class="tool-button secondary" type="button" data-video-queue-move="-1" ${item.sequence <= 1 ? "disabled" : ""}>上移</button>

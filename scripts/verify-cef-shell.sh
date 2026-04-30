@@ -195,6 +195,11 @@ if [[ ! -S "$SOCKET" ]]; then
   exit 1
 fi
 
+if ! run_capy ps > "$ASSETS/capy-cef-live-open.json" \
+  || ! jq -e '.count > 0' "$ASSETS/capy-cef-live-open.json" >/dev/null; then
+  run_capy open --project="$OPEN_PROJECT" > "$ASSETS/capy-cef-explicit-open.json" 2>/dev/null || true
+fi
+
 OPEN_OK=0
 for _ in $(seq 1 40); do
   if run_capy ps > "$ASSETS/capy-cef-live-open.json" \

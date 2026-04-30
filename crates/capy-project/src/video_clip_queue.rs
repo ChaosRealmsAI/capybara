@@ -41,6 +41,14 @@ pub struct ProjectVideoClipQueueItemV1 {
     pub suggestion_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggestion_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub semantic_tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_reason: Option<String>,
     pub updated_at: u64,
 }
 
@@ -132,6 +140,18 @@ impl ProjectPackage {
             suggestion_id: item.suggestion_id.filter(|value| !value.trim().is_empty()),
             suggestion_reason: item
                 .suggestion_reason
+                .filter(|value| !value.trim().is_empty()),
+            semantic_ref: item.semantic_ref.filter(|value| !value.trim().is_empty()),
+            semantic_summary: item
+                .semantic_summary
+                .filter(|value| !value.trim().is_empty()),
+            semantic_tags: item
+                .semantic_tags
+                .into_iter()
+                .filter(|value| !value.trim().is_empty())
+                .collect(),
+            semantic_reason: item
+                .semantic_reason
                 .filter(|value| !value.trim().is_empty()),
             updated_at: now,
         })
@@ -225,6 +245,10 @@ mod tests {
             source_video: Some(serde_json::json!({ "filename": "camera-a.webm" })),
             suggestion_id: Some("sug-demo".to_string()),
             suggestion_reason: Some("保留已选开场".to_string()),
+            semantic_ref: Some("sem-demo".to_string()),
+            semantic_summary: Some("开场产品近景".to_string()),
+            semantic_tags: vec!["开场".to_string(), "产品".to_string()],
+            semantic_reason: Some("语义理由：适合开场。".to_string()),
             updated_at: 0,
         }])?;
         assert_eq!(written.schema_version, VIDEO_CLIP_QUEUE_SCHEMA_VERSION);
@@ -243,6 +267,8 @@ mod tests {
             .ok_or("source video metadata should round-trip")?;
         assert_eq!(source_video["filename"], "camera-a.webm");
         assert_eq!(reopened.items[0].suggestion_id.as_deref(), Some("sug-demo"));
+        assert_eq!(reopened.items[0].semantic_ref.as_deref(), Some("sem-demo"));
+        assert_eq!(reopened.items[0].semantic_tags.len(), 2);
         Ok(())
     }
 }

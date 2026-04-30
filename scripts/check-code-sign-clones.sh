@@ -212,6 +212,9 @@ for root in "${roots[@]}"; do
     | xargs -0 stat -f '%m	%N' 2>/dev/null \
     | sort -rn \
     | cut -f2-)
+  if (( ${#clones[@]} == 0 )); then
+    continue
+  fi
   index=0
   for clone in "${clones[@]}"; do
     index=$((index + 1))

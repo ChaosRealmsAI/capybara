@@ -1,9 +1,20 @@
 import { normalizedQueue, queueFromManifest, queueExportRange, queueItemFromRange, queueManifestItem, queueTotalDuration, renumberQueue, renderQueue } from "./video-clip-queue.js";
+import { createVideoClipSemanticsController } from "./video-clip-semantics.js";
 import { createVideoClipSuggestionController } from "./video-clip-suggestion.js";
-
 export function createVideoClipDeliveryController(ctx) {
   const { state, dom, rpc, projectPath, stringifyError, exportComposition, seek, renderVideoEditor, selectedTrack, firstTrackForClip } = ctx;
   let persistSerial = 0;
+  const clipSemantics = createVideoClipSemanticsController({
+    state,
+    dom,
+    rpc,
+    projectPath,
+    stringifyError,
+    renderVideoEditor,
+    renderDelivery: render,
+    formatTime,
+    escapeHtml
+  });
   const clipSuggestion = createVideoClipSuggestionController({
     state,
     dom,
@@ -15,15 +26,14 @@ export function createVideoClipDeliveryController(ctx) {
     formatTime,
     escapeHtml
   });
-
   function install() {
     dom.videoProposalGenerateEl?.addEventListener("click", () => generateClipProposal());
+    dom.videoSemanticsAnalyzeEl?.addEventListener("click", () => clipSemantics.analyze());
     dom.videoSuggestionGenerateEl?.addEventListener("click", () => clipSuggestion.generate());
     dom.videoQueueAddEl?.addEventListener("click", () => addCurrentRangeToQueue());
     dom.videoRangeStartEl?.addEventListener("input", () => updateRangeFromInputs());
     dom.videoRangeEndEl?.addEventListener("input", () => updateRangeFromInputs());
   }
-
   function applyOpenResult(clips) {
     const selectedClipId = state.video.selectedRange?.clip_id;
     const clip = clips.find((item) => item.id === selectedClipId) || clips[0] || null;
@@ -33,7 +43,6 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.proposalStatus = "idle";
     state.video.lastExport = null;
   }
-
   function applyProjectQueueManifest(manifest, loadedProjectPath = projectPath?.()) {
     state.video.clipQueueManifest = manifest || null;
     state.video.clipQueue = queueFromManifest(manifest, loadedProjectPath);
@@ -43,23 +52,25 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.proposalStatus = "idle";
     renderVideoEditor();
   }
-
+  function applyProjectSemanticsManifest(manifest) {
+    clipSemantics.applyManifest(manifest);
+    renderVideoEditor();
+  }
   function render() {
     const range = state.video.selectedRange;
     syncRangeInputs(range);
     renderRangeSummary(range);
     renderQueue({ state, dom, moveQueueItem, removeQueueItem, formatTime, escapeHtml });
+    clipSemantics.render();
     clipSuggestion.render();
     renderProposal();
   }
-
   function renderRangeSummary(range) {
     if (!dom.videoRangeSummaryEl) return;
     dom.videoRangeSummaryEl.textContent = range
       ? `${range.scene || range.clip_id} · ${formatTime(range.start_ms)} - ${formatTime(range.end_ms)}`
       : "未选择片段";
   }
-
   function renderProposal() {
     if (!dom.videoProposalEl) return;
     const proposal = state.video.clipProposal;
@@ -82,7 +93,6 @@ export function createVideoClipDeliveryController(ctx) {
     }
     renderSingleProposal(proposal);
   }
-
   function renderQueueProposal(proposal) {
     const exported = proposal.status === "exported";
     const rows = (proposal.clips || []).map((item) => `
@@ -107,7 +117,6 @@ export function createVideoClipDeliveryController(ctx) {
       confirm.addEventListener("click", () => confirmClipProposal());
     }
   }
-
   function renderSingleProposal(proposal) {
     const exported = proposal.status === "exported";
     dom.videoProposalEl.innerHTML = `
@@ -125,7 +134,6 @@ export function createVideoClipDeliveryController(ctx) {
       confirm.addEventListener("click", () => confirmClipProposal());
     }
   }
-
   function selectClipRange(clip) {
     setSelectedRange(rangeFromClip(clip), false);
     state.video.clipProposal = null;
@@ -135,7 +143,6 @@ export function createVideoClipDeliveryController(ctx) {
     seek(Number(clip.start_ms || 0));
     renderVideoEditor();
   }
-
   function selectRangeFromTrack(track) {
     setSelectedRange(rangeFromTrack(track), false);
     state.video.clipProposal = null;
@@ -143,7 +150,6 @@ export function createVideoClipDeliveryController(ctx) {
     seek(Number(track.start_ms || 0));
     renderVideoEditor();
   }
-
   function addCurrentRangeToQueue() {
     const range = state.video.selectedRange || rangeFromTrack(selectedTrack());
     if (!range || !state.video.compositionPath) return;
@@ -162,7 +168,6 @@ export function createVideoClipDeliveryController(ctx) {
     persistQueue("add");
     renderVideoEditor();
   }
-
   function moveQueueItem(id, delta) {
     const queue = normalizedQueue(state);
     const index = queue.findIndex((item) => item.id === id);
@@ -177,7 +182,6 @@ export function createVideoClipDeliveryController(ctx) {
     persistQueue("move");
     renderVideoEditor();
   }
-
   function removeQueueItem(id) {
     state.video.clipQueue = renumberQueue(normalizedQueue(state).filter((item) => item.id !== id));
     state.video.clipProposal = null;
@@ -185,7 +189,6 @@ export function createVideoClipDeliveryController(ctx) {
     persistQueue("remove");
     renderVideoEditor();
   }
-
   function generateClipProposal() {
     const queue = normalizedQueue(state);
     if (queue.length) {
@@ -195,7 +198,6 @@ export function createVideoClipDeliveryController(ctx) {
     }
     generateSingleClipProposal();
   }
-
   function generateSingleClipProposal() {
     const range = state.video.selectedRange || rangeFromTrack(selectedTrack());
     if (!range || !state.video.compositionPath) return;
@@ -222,7 +224,6 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.proposalStatus = "ready";
     render();
   }
-
   function generateQueueProposal(queue) {
     const total = queueTotalDuration(queue);
     const outputFilename = `clip-queue-${queue.length}-${Math.round(total)}.mp4`;
@@ -238,7 +239,6 @@ export function createVideoClipDeliveryController(ctx) {
     };
     state.video.proposalStatus = "ready";
   }
-
   function confirmClipProposal() {
     if (!state.video.clipProposal) generateClipProposal();
       const proposal = state.video.clipProposal;
@@ -263,12 +263,11 @@ export function createVideoClipDeliveryController(ctx) {
       proposal
     });
   }
-
   function persistQueue(reason) {
     const project = projectPath?.();
     if (!project || !rpc) return;
     const serial = ++persistSerial;
-    const items = normalizedQueue(state).map(queueManifestItem);
+    const items = normalizedQueue(state).map(clipSemantics.enrichQueueItem).map(queueManifestItem);
     state.video.clipQueuePersistStatus = "saving";
     state.video.clipQueuePersistError = null;
     rpc("project-video-clip-queue-set", { project, items, reason })
@@ -287,7 +286,6 @@ export function createVideoClipDeliveryController(ctx) {
         renderVideoEditor();
       });
   }
-
   function setSelectedRange(range, shouldRender = true) {
     if (!range) return null;
     const duration = Math.max(1, Number(state.video.durationMs || range.end_ms || 0));
@@ -305,7 +303,6 @@ export function createVideoClipDeliveryController(ctx) {
     if (shouldRender) renderVideoEditor();
     return state.video.selectedRange;
   }
-
   function updateRangeFromInputs() {
     const current = state.video.selectedRange || rangeFromTrack(selectedTrack());
     if (!current) return;
@@ -317,7 +314,6 @@ export function createVideoClipDeliveryController(ctx) {
       end_ms: Math.round(end * 1000)
     });
   }
-
   function syncRangeInputs(range) {
     if (!dom.videoRangeStartEl || !dom.videoRangeEndEl) return;
     if (domInputLocked(dom.videoRangeStartEl) || domInputLocked(dom.videoRangeEndEl)) return;
@@ -327,7 +323,6 @@ export function createVideoClipDeliveryController(ctx) {
     dom.videoRangeStartEl.max = maxSeconds ? String(maxSeconds) : "";
     dom.videoRangeEndEl.max = maxSeconds ? String(maxSeconds) : "";
   }
-
   function currentVideoSourceSummary() {
     const editorSource = state.video.editor?.source_video;
     const renderSource = videoSourceSummary(state.video.renderSource);
@@ -342,18 +337,17 @@ export function createVideoClipDeliveryController(ctx) {
       source_end_ms: Number(source.source_end_ms || 0)
     };
   }
-
   return {
     install,
     applyOpenResult,
     applyProjectQueueManifest,
+    applyProjectSemanticsManifest,
     render,
     selectClipRange,
     selectRangeFromTrack,
     setSelectedRange
   };
 }
-
 export function rangeFromClip(clip) {
   if (!clip) return null;
   return {
@@ -364,7 +358,6 @@ export function rangeFromClip(clip) {
     duration_ms: Number(clip.duration_ms || 0)
   };
 }
-
 function rangeFromTrack(track) {
   if (!track) return null;
   return {
@@ -376,11 +369,9 @@ function rangeFromTrack(track) {
     duration_ms: Number(track.duration_ms || 0)
   };
 }
-
 function outputFilenameForRange(range) {
   return `clip-${safeSlug(range.clip_id)}-${Math.round(Number(range.start_ms || 0))}-${Math.round(Number(range.end_ms || 0))}.mp4`;
 }
-
 function outputPathForProposal(compositionPath, filename) {
   if (globalThis.CAPY_VIDEO_EXPORT_DIR) {
     return `${String(globalThis.CAPY_VIDEO_EXPORT_DIR).replace(/\/+$/, "")}/${filename}`;
@@ -390,7 +381,6 @@ function outputPathForProposal(compositionPath, filename) {
   const directory = slash >= 0 ? normalized.slice(0, slash) : ".";
   return `${directory}/exports/${filename}`;
 }
-
 function videoSourceSummary(source) {
   const tracks = Array.isArray(source?.tracks) ? source.tracks : [];
   for (const track of tracks) {
@@ -412,21 +402,17 @@ function videoSourceSummary(source) {
   }
   return null;
 }
-
 function secondsInput(input, fallback) {
   const value = Number(input?.value || fallback || 0);
   return Number.isFinite(value) ? Math.max(0, value) : fallback;
 }
-
 function secondsValue(ms) {
   const seconds = Number(ms || 0) / 1000;
   return seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.?0+$/, "");
 }
-
 function domInputLocked(input) {
   return document.activeElement === input;
 }
-
 function safeSlug(value) {
   return String(value || "clip")
     .trim()
@@ -435,12 +421,10 @@ function safeSlug(value) {
     .replace(/^-+|-+$/g, "")
     || "clip";
 }
-
 function formatTime(ms) {
   const seconds = Number(ms || 0) / 1000;
   return `${seconds.toFixed(seconds >= 10 ? 1 : 2)}s`;
 }
-
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")

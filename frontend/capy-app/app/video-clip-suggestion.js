@@ -38,7 +38,10 @@ export function createVideoClipSuggestionController(ctx) {
       <li>
         <strong>${String(item.sequence).padStart(2, "0")} · ${escapeHtml(item.source_video?.filename || item.scene || item.clip_id)}</strong>
         <span>${formatTime(item.start_ms)} - ${formatTime(item.end_ms)} · ${formatTime(item.duration_ms)}</span>
+        ${item.semantic_summary ? `<small>摘要：${escapeHtml(item.semantic_summary)}</small>` : ""}
+        ${item.semantic_tags?.length ? `<small>标签：${item.semantic_tags.map(escapeHtml).join(" · ")}</small>` : ""}
         <em>${escapeHtml(item.reason || "本地 planner 建议")}</em>
+        ${item.semantic_reason ? `<em>语义理由：${escapeHtml(item.semantic_reason)}</em>` : ""}
       </li>
     `).join("");
     dom.videoSuggestionEl.innerHTML = `
@@ -131,6 +134,10 @@ function suggestionQueueItem(item, suggestion) {
     source_video: item.source_video || null,
     suggestion_id: suggestion.suggestion_id || item.suggestion_id || "",
     suggestion_reason: item.reason || "",
+    semantic_ref: item.semantic_ref || "",
+    semantic_summary: item.semantic_summary || "",
+    semantic_tags: item.semantic_tags || [],
+    semantic_reason: item.semantic_reason || "",
     updated_at: Date.now()
   };
 }

@@ -1,9 +1,14 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::model::ArtifactKind;
 use crate::package::{ProjectPackage, ProjectPackageResult, now_ms};
 use crate::video_clip_queue::{ProjectVideoClipQueueItemV1, VIDEO_CLIP_QUEUE_SCHEMA_VERSION};
+use crate::video_clip_semantics::{
+    ProjectVideoClipSemanticItemV1, ProjectVideoClipSemanticsManifestV1, clip_semantic_key,
+};
 
 pub const VIDEO_CLIP_SUGGESTION_SCHEMA_VERSION: &str = "capy.project-video-clip-suggestion.v1";
 
@@ -40,6 +45,14 @@ pub struct ProjectVideoClipSuggestionItemV1 {
     pub source_video: Option<Value>,
     pub reason: String,
     pub suggestion_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub semantic_tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_reason: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +72,8 @@ impl ProjectPackage {
         let project = self.project_manifest()?;
         let queue = self.video_clip_queue()?;
         let videos = self.video_candidates()?;
+        let semantics_manifest = self.video_clip_semantics().ok();
+        let semantics = semantic_map(semantics_manifest.as_ref());
         let basis = json!({
             "schema_version": VIDEO_CLIP_QUEUE_SCHEMA_VERSION,
             "project_id": project.id,
@@ -83,10 +98,17 @@ impl ProjectPackage {
         );
         let mut items = Vec::new();
         for item in queue.items.iter().take(4) {
+            let semantic = semantics.get(&clip_semantic_key(
+                &item.composition_path,
+                &item.clip_id,
+                item.start_ms,
+                item.end_ms,
+            ));
             items.push(suggestion_from_queue_item(
                 item,
                 &suggestion_id,
                 items.len() + 1,
+                semantic.copied(),
             ));
         }
         for video in &videos {
@@ -103,6 +125,7 @@ impl ProjectPackage {
                 video,
                 &suggestion_id,
                 items.len() + 1,
+                &semantics,
             ));
         }
         if items.is_empty() {
@@ -111,6 +134,7 @@ impl ProjectPackage {
                     video,
                     &suggestion_id,
                     items.len() + 1,
+                    &semantics,
                 ));
             }
         }
@@ -181,12 +205,13 @@ fn suggestion_from_queue_item(
     item: &ProjectVideoClipQueueItemV1,
     suggestion_id: &str,
     index: usize,
+    semantic: Option<&ProjectVideoClipSemanticItemV1>,
 ) -> ProjectVideoClipSuggestionItemV1 {
     let duration_ms = item
         .duration_ms
         .max(item.end_ms.saturating_sub(item.start_ms))
         .max(1);
-    ProjectVideoClipSuggestionItemV1 {
+    let mut suggestion = ProjectVideoClipSuggestionItemV1 {
         id: format!("{suggestion_id}-{:02}", index),
         sequence: index as u64,
         composition_path: item.composition_path.clone(),
@@ -204,13 +229,20 @@ fn suggestion_from_queue_item(
         source_video: item.source_video.clone(),
         reason: format!("保留持久化队列第 {index} 段，延续 PM 已经整理过的项目节奏。"),
         suggestion_id: suggestion_id.to_string(),
-    }
+        semantic_ref: None,
+        semantic_summary: None,
+        semantic_tags: Vec::new(),
+        semantic_reason: None,
+    };
+    apply_semantic_reason(&mut suggestion, semantic);
+    suggestion
 }
 
 fn suggestion_from_video(
     video: &VideoCandidate,
     suggestion_id: &str,
     index: usize,
+    semantics: &BTreeMap<String, &ProjectVideoClipSemanticItemV1>,
 ) -> ProjectVideoClipSuggestionItemV1 {
     let source_duration = video.duration_ms.max(1);
     let target_duration = source_duration.min(1_800).max(source_duration.min(1_000));
@@ -225,7 +257,13 @@ fn suggestion_from_video(
         .saturating_add(target_duration)
         .min(source_duration);
     let duration_ms = end_ms.saturating_sub(start_ms).max(1);
-    ProjectVideoClipSuggestionItemV1 {
+    let semantic = semantics.get(&clip_semantic_key(
+        &video.composition_path,
+        "source",
+        start_ms,
+        end_ms,
+    ));
+    let mut suggestion = ProjectVideoClipSuggestionItemV1 {
         id: format!("{suggestion_id}-{:02}", index),
         sequence: index as u64,
         composition_path: video.composition_path.clone(),
@@ -246,7 +284,42 @@ fn suggestion_from_video(
         })),
         reason: "补充项目中尚未覆盖的视频素材，让方案能体现多来源素材。".to_string(),
         suggestion_id: suggestion_id.to_string(),
+        semantic_ref: None,
+        semantic_summary: None,
+        semantic_tags: Vec::new(),
+        semantic_reason: None,
+    };
+    apply_semantic_reason(&mut suggestion, semantic.copied());
+    suggestion
+}
+
+fn apply_semantic_reason(
+    suggestion: &mut ProjectVideoClipSuggestionItemV1,
+    semantic: Option<&ProjectVideoClipSemanticItemV1>,
+) {
+    let Some(semantic) = semantic else {
+        return;
+    };
+    suggestion.reason = semantic.recommendation.clone();
+    suggestion.semantic_ref = Some(semantic.id.clone());
+    suggestion.semantic_summary = Some(semantic.summary_zh.clone());
+    suggestion.semantic_tags = semantic.tags.clone();
+    suggestion.semantic_reason = Some(format!(
+        "{} 摘要：{}",
+        semantic.recommendation, semantic.summary_zh
+    ));
+}
+
+fn semantic_map(
+    manifest: Option<&ProjectVideoClipSemanticsManifestV1>,
+) -> BTreeMap<String, &ProjectVideoClipSemanticItemV1> {
+    let mut map = BTreeMap::new();
+    if let Some(manifest) = manifest {
+        for item in &manifest.items {
+            map.insert(item.clip_key.clone(), item);
+        }
     }
+    map
 }
 
 fn fnv1a64(bytes: &[u8]) -> u64 {
@@ -288,6 +361,10 @@ mod tests {
                 source_video: Some(json!({ "filename": "camera-a.webm" })),
                 suggestion_id: None,
                 suggestion_reason: None,
+                semantic_ref: None,
+                semantic_summary: None,
+                semantic_tags: Vec::new(),
+                semantic_reason: None,
                 updated_at: 0,
             },
             ProjectVideoClipQueueItemV1 {
@@ -304,9 +381,14 @@ mod tests {
                 source_video: Some(json!({ "filename": "camera-b.webm" })),
                 suggestion_id: None,
                 suggestion_reason: None,
+                semantic_ref: None,
+                semantic_summary: None,
+                semantic_tags: Vec::new(),
+                semantic_reason: None,
                 updated_at: 0,
             },
         ])?;
+        package.analyze_video_clip_semantics()?;
 
         let suggestion = package.suggest_video_clip_queue()?;
         assert_eq!(
@@ -317,6 +399,12 @@ mod tests {
         assert_eq!(suggestion.existing_queue_count, 2);
         assert_eq!(suggestion.items.len(), 2);
         assert!(suggestion.items.iter().all(|item| !item.reason.is_empty()));
+        assert!(suggestion.items.iter().all(|item| {
+            item.semantic_reason
+                .as_deref()
+                .unwrap_or("")
+                .contains("摘要")
+        }));
         assert_eq!(suggestion.items[0].scene, "Camera A existing opener");
         assert_eq!(suggestion.items[1].scene, "Camera B existing closeup");
         assert!(suggestion.suggestion_id.starts_with("sug-fnv1a64-"));

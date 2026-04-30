@@ -100,6 +100,18 @@ pub(in crate::app::timeline_editor) fn write_clip_queue_proposal_composition(
         if let Some(reason) = item.get("suggestion_reason").and_then(Value::as_str) {
             delivery_item["suggestion_reason"] = json!(reason);
         }
+        if let Some(semantic_ref) = item.get("semantic_ref").and_then(Value::as_str) {
+            delivery_item["semantic_ref"] = json!(semantic_ref);
+        }
+        if let Some(summary) = item.get("semantic_summary").and_then(Value::as_str) {
+            delivery_item["semantic_summary"] = json!(summary);
+        }
+        if let Some(tags) = item.get("semantic_tags").and_then(Value::as_array) {
+            delivery_item["semantic_tags"] = json!(tags);
+        }
+        if let Some(reason) = item.get("semantic_reason").and_then(Value::as_str) {
+            delivery_item["semantic_reason"] = json!(reason);
+        }
         delivery_items.push(delivery_item);
         total_duration_ms = total_duration_ms.saturating_add(duration_ms);
         let item_root = project_root_for_composition(&item_composition_path);
