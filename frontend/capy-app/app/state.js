@@ -58,6 +58,14 @@ export const state = {
     lastResult: null,
     error: null
   },
+  projectPackage: {
+    path: null,
+    status: "idle",
+    inspection: null,
+    selectedArtifactId: null,
+    previewSource: "",
+    error: null
+  },
   poster: {
     renderState: "idle",
     selectedLayerId: "headline",

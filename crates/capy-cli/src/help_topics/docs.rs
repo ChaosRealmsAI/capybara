@@ -16,8 +16,48 @@ Recommended commands:
 2. `target/debug/capy help`
 3. `target/debug/capy help desktop`
 4. `target/debug/capy help interaction`
+Project context commands: `project`, `context`, `patch`.
 Do not: hide these commands from help; run `click`/`type` on a user's active window without an isolated `CAPYBARA_SOCKET`; treat `[dev]` commands as a substitute for final product evidence.
 Next step: read `capy help doctor`, `capy help interaction`, or `capy help desktop` for the exact workflow.
+"#;
+
+pub(super) const PROJECT_HELP: &str = r#"
+Topic: capy project
+
+Use when: AI or a workflow needs a local `.capy` file package that carries project metadata, design-language assets, source artifacts, runs, and evidence.
+Required parameters: every command needs `--project <dir>`. `add-design` and `add-artifact` need `--path` inside the project root plus `--title`.
+Recommended commands:
+1. `target/debug/capy project init --project <dir> --name "Campaign"`
+2. `target/debug/capy project add-design --project <dir> --path design/tokens.css --kind css --title "Tokens"`
+3. `target/debug/capy project add-artifact --project <dir> --path web/index.html --kind html --title "Landing" --design-ref <dl_id>`
+4. `target/debug/capy project inspect --project <dir>`
+Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact.
+Next step: build context with `capy context build --project <dir> --artifact <art_id>`.
+"#;
+
+pub(super) const PROJECT_CONTEXT_HELP: &str = r#"
+Topic: capy context
+
+Use when: AI needs a precise project context package before editing an artifact.
+Required parameters: `build` needs `--project <dir>` and `--artifact <art_id>`.
+Optional parameters: `--selector <css>` records the user-selected DOM target; `--canvas-node <id>` records the visible surface node; `--out <json>` saves the packet.
+Recommended command: `target/debug/capy context build --project <dir> --artifact <art_id> --selector '[data-capy-section="hero-title"]' --out target/context.json`
+Do not: call a model from this command; paste screenshots without the JSON packet; invent artifact ids.
+Next step: create a `capy.patch.v1` document and run `capy patch apply --dry-run`.
+"#;
+
+pub(super) const PROJECT_PATCH_HELP: &str = r#"
+Topic: capy patch
+
+Use when: AI or UI has a proposed edit to a real project source artifact.
+Required parameters: `apply` needs `--project <dir>` and `--patch <json>`.
+Patch schema: `capy.patch.v1`; first operation is `replace_exact_text` with `artifact_id`, `old_text`, `new_text`, optional `source_path`, and optional `selector_hint`.
+Recommended commands:
+1. `target/debug/capy patch apply --project <dir> --patch patch.json --dry-run`
+2. `target/debug/capy patch apply --project <dir> --patch patch.json`
+3. `target/debug/capy context build --project <dir> --artifact <art_id> --selector <css>`
+Do not: patch derived screenshots or outputs; skip dry-run for AI-generated patches; use vague text that matches multiple places.
+Next step: reopen or refresh the surface and capture evidence.
 "#;
 
 pub(super) const DOCTOR_HELP: &str = r#"

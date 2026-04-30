@@ -148,6 +148,14 @@ Use `scripts/open-debug-shell.sh` for parallel desktop debugging. It launches a
 separate app process with an explicit socket and launchctl label, so one debug
 window cannot accidentally answer another window's CLI commands.
 
+Project Core is canonical for project-level context:
+
+```bash
+target/debug/capy project inspect --project fixtures/project/html-context
+target/debug/capy context build --project <project-dir> --artifact <artifact-id> [--selector <selector>] [--out <path>]
+target/debug/capy patch apply --project <project-dir> --patch <patch.json> [--dry-run]
+```
+
 Timeline surface is canonical:
 
 ```bash

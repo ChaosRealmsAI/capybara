@@ -2,7 +2,8 @@ use super::HelpTopic;
 use super::docs::{
     AGENT_HELP, AGENT_SDK_HELP, CANVAS_CONTEXT_HELP, CANVAS_HELP, CANVAS_IMAGES_HELP,
     CHAT_CANVAS_TOOLS_HELP, CHAT_HELP, CUTOUT_HELP, CUTOUT_MANIFEST_HELP, DESKTOP_HELP, DEV_HELP,
-    DOCTOR_HELP, IMAGE_CUTOUT_HELP, IMAGE_HELP, INTERACTION_HELP,
+    DOCTOR_HELP, IMAGE_CUTOUT_HELP, IMAGE_HELP, INTERACTION_HELP, PROJECT_CONTEXT_HELP,
+    PROJECT_HELP, PROJECT_PATCH_HELP,
 };
 use super::media_docs::{
     CLIPS_HELP, CLIPS_YOUTUBE_HELP, MEDIA_SCROLL_HELP, MEDIA_STORY_HELP, TIMELINE_HELP,
@@ -39,6 +40,24 @@ pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
         aliases: &["canvas-agent"],
         summary: "Operate live canvas state and AI-readable context.",
         body: CANVAS_HELP,
+    },
+    HelpTopic {
+        name: "project",
+        aliases: &["project-package", "capy-project"],
+        summary: "Create and inspect file-backed Capybara project packages.",
+        body: PROJECT_HELP,
+    },
+    HelpTopic {
+        name: "context",
+        aliases: &["project-context", "context-package"],
+        summary: "Build AI-readable context packets from project artifacts.",
+        body: PROJECT_CONTEXT_HELP,
+    },
+    HelpTopic {
+        name: "patch",
+        aliases: &["project-patch", "patch-run"],
+        summary: "Dry-run or apply exact-text patches to project artifacts.",
+        body: PROJECT_PATCH_HELP,
     },
     HelpTopic {
         name: "chat",

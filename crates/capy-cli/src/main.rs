@@ -18,6 +18,9 @@ mod image;
 mod interaction;
 mod ipc_client;
 mod media;
+mod project;
+mod project_context;
+mod project_patch;
 mod timeline;
 mod tts;
 
@@ -35,7 +38,7 @@ mod tts;
   Required params: image prompts use five labeled sections; cutout run needs --input/--output; click/type need --query.
   Pitfalls: live image/TTS provider calls may spend credits; click/type need a running shell and the right CAPYBARA_SOCKET.
   Command tag: [dev] means internal AI/dev verification or automation, not a PM-facing product workflow.
-  Help topics: dev, doctor, interaction, desktop, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, timeline."
+  Help topics: dev, doctor, interaction, desktop, project, context, patch, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, timeline."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -84,6 +87,12 @@ enum Command {
     Verify(VerifyArgs),
     #[command(about = "Manage persistent Claude/Codex conversations")]
     Chat(Box<chat::ChatArgs>),
+    #[command(about = "Manage file-backed Capybara project packages")]
+    Project(Box<project::ProjectArgs>),
+    #[command(about = "Build AI-readable context packages from project artifacts")]
+    Context(Box<project_context::ContextArgs>),
+    #[command(about = "Dry-run or apply exact-text patches to project artifacts")]
+    Patch(Box<project_patch::PatchArgs>),
     #[command(about = "Operate the live canvas through AI-safe commands")]
     Canvas(Box<canvas::CanvasArgs>),
     #[command(about = "Run AI-usable creative generation tools")]
@@ -288,6 +297,9 @@ fn run() -> Result<(), String> {
             VerifyProfile::Desktop => desktop_verify::verify(args.window, args.capture_out),
         },
         Command::Chat(args) => chat::handle(args),
+        Command::Project(args) => project::handle(*args),
+        Command::Context(args) => project_context::handle(*args),
+        Command::Patch(args) => project_patch::handle(*args),
         Command::Canvas(args) => canvas::handle(*args),
         Command::Image(args) => image::handle(*args),
         Command::Help(args) => help_topics::print_capy_topic(args.topic.as_deref()),

@@ -53,6 +53,7 @@
   border-radius: 12px;
   box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
+
 .seg {
   padding: 5px 12px;
   font-size: 12px;

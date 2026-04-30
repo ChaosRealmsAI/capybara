@@ -38,7 +38,9 @@ ensure_required_path() {
 
 check_outer_git_boundary() {
   [[ -d spec/.git ]] || fail "spec/ must be a nested git repository with spec/.git"
-  if ! git check-ignore -q spec/README.md; then
+  if ! git check-ignore -q spec/README.md 2>/dev/null &&
+    ! git check-ignore -q spec 2>/dev/null &&
+    ! git check-ignore -q spec/ 2>/dev/null; then
     fail "public repo must ignore spec/; git check-ignore spec/README.md failed"
   fi
   if [[ -n "$(git ls-files 'spec' 'spec/**')" ]]; then
@@ -278,14 +280,16 @@ check_version_consistency() {
 }
 
 check_active_version() {
-  local active focus
+  local active focus validation_focus
   active="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json 2>/dev/null || true)"
   focus="$(jq -r '.focus_version // empty' spec/versions/REGISTRY.json 2>/dev/null || true)"
+  validation_focus="${CAPY_FOCUS_VERSION:-$focus}"
   [[ -n "$active" ]] || {
     fail "REGISTRY.json active_version is missing"
     return
   }
   [[ -n "$focus" ]] || fail "REGISTRY.json focus_version is missing"
+  [[ -n "$validation_focus" ]] || fail "validation focus version is missing"
   [[ "$active" == "$focus" ]] || fail "active_version compatibility default must match focus_version"
 
   jq -e '.registry_model == "parallel"' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
@@ -295,12 +299,14 @@ check_active_version() {
     fail "REGISTRY.json active_versions must be a non-empty string array"
   jq -e --arg focus "$focus" '.active_versions | index($focus)' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
     fail "REGISTRY.json active_versions must include focus_version"
+  jq -e --arg focus "$validation_focus" '.active_versions | index($focus)' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
+    fail "REGISTRY.json active_versions must include validation focus $validation_focus"
 
   local version_id
   while IFS= read -r version_id; do
     check_version_consistency "$version_id" "false"
   done < <(jq -r '.active_versions[]' spec/versions/REGISTRY.json)
-  check_version_consistency "$focus" "true"
+  check_version_consistency "$validation_focus" "true"
 
   if grep -Fq "$active" AGENTS.md || grep -Fq "$active" CLAUDE.md || grep -Fq "$active" README.md || grep -Fq "$active" spec/README.md; then
     fail "entry docs and README files must discover active versions from REGISTRY.json, not hard-code $active"

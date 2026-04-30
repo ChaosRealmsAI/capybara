@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HTML Context Fixture</title>
+  <link rel="stylesheet" href="../design/tokens.css">
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: var(--capy-bg);
+      color: var(--capy-ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(760px, calc(100vw - 48px));
+      border: 1px solid rgba(138, 111, 174, 0.22);
+      border-radius: 20px;
+      padding: 34px;
+      background: rgba(255, 255, 255, 0.74);
+      box-shadow: 0 28px 90px rgba(47, 36, 55, 0.14);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 44px;
+      line-height: 1;
+    }
+    p {
+      margin: 0;
+      max-width: 560px;
+      font-size: 18px;
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+  <main data-capy-section="hero">
+    <h1 data-capy-section="hero-title">Project Context Draft</h1>
+    <p data-capy-section="hero-copy">This HTML source belongs to the project package. Capybara can build context, patch the source, refresh preview, and leave evidence.</p>
+  </main>
+</body>
+</html>

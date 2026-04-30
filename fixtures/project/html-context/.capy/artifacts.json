@@ -1,0 +1,23 @@
+{
+  "schema_version": "capy.artifacts.v1",
+  "artifacts": [
+    {
+      "id": "art_00000000000000000000000000000001",
+      "kind": "html",
+      "title": "Landing HTML",
+      "source_path": "web/index.html",
+      "source_refs": [],
+      "output_refs": [],
+      "design_language_refs": [
+        "dl_00000000000000000000000000000001",
+        "dl_00000000000000000000000000000002"
+      ],
+      "asset_refs": [],
+      "provenance": {
+        "source": "fixture"
+      },
+      "evidence_refs": [],
+      "updated_at": 1767000000000
+    }
+  ]
+}

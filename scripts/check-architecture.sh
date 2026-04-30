@@ -318,6 +318,31 @@ if rg -n 'CutoutRequest|cutout::execute|flood|tolerance|feather_radius|hole_min_
   fail "cutout CLI must not expose the old fixed-background algorithm"
 fi
 
+rg -q '"crates/capy-project"' Cargo.toml || fail "capy-project must be a workspace member"
+rg -q '^capy-project\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-project"
+rg -q '^capy-project\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must depend on capy-project"
+rg -q 'pub mod project' crates/capy-contracts/src/lib.rs || fail "project IPC op constants must live in capy-contracts"
+rg -q 'OP_PROJECT_INSPECT' crates/capy-contracts/src/project.rs || fail "project inspect op must be contracted"
+rg -q 'ProjectPackage' crates/capy-project/src/lib.rs crates/capy-project/src/package.rs || fail "ProjectPackage must own .capy file package behavior"
+rg -q 'replace_exact_text' crates/capy-project/src/patch.rs || fail "v0.27 patch runner must use exact-text source patching"
+rg -q 'capy.context.v1' crates/capy-project/src/model.rs || fail "context package schema must be explicit"
+rg -q 'project-inspect' crates/capy-shell/src crates/capy-contracts/src/project.rs || fail "shell must expose project-inspect IPC"
+
+frontend_write_matches="$(rg -n 'writeFile|(^|[^[:alnum:]_])fs\.|\.capy/' frontend || true)"
+if [[ -n "$frontend_write_matches" ]]; then
+  echo "$frontend_write_matches" >&2
+  fail "frontend must not write .capy project truth directly; route writes through capy-project"
+fi
+
+provider_matches="$(
+  rg -n 'openai|anthropic|claude|codex|gpt|sora|veo|provider' crates/capy-project crates/capy-cli/src/project.rs crates/capy-cli/src/project_context.rs crates/capy-cli/src/project_patch.rs \
+    | rg -v 'Project Context|context package|design-language' || true
+)"
+if [[ -n "$provider_matches" ]]; then
+  echo "$provider_matches" >&2
+  fail "v0.27 project/context/patch commands must not call real AI providers"
+fi
+
 active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"
 [[ -n "$active_version" ]] || fail "spec active_version is missing"
 require_file "spec/versions/$active_version/bdd.json"

@@ -424,6 +424,7 @@ dependencies = [
  "capy-clips-transcribe",
  "capy-contracts",
  "capy-image-gen",
+ "capy-project",
  "capy-scroll-media",
  "capy-shell",
  "capy-timeline",
@@ -531,6 +532,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "capy-project"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "capy-recorder"
 version = "0.1.0"
 dependencies = [
@@ -572,6 +584,7 @@ dependencies = [
  "base64",
  "capy-contracts",
  "capy-image-gen",
+ "capy-project",
  "capy-timeline",
  "ctrlc",
  "image",

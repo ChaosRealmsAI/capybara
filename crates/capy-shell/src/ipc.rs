@@ -132,6 +132,7 @@ async fn dispatch(
     state: &ShellState,
 ) -> IpcResponse {
     match req.op.as_str() {
+        op if crate::project_ipc::handles(op) => crate::project_ipc::response(req),
         "state-query" if state.can_answer_directly(&req) => state.state_query(req),
         OP_TIMELINE_STATE => state.timeline_state_query(req),
         OP_TIMELINE_COMPOSITION_STATE => state.timeline_composition_state_query(req),

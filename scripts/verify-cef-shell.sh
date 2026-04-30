@@ -41,6 +41,7 @@ VERSION_DIR="${CAPY_VERIFY_VERSION_DIR:-$ROOT/spec/versions/v0.4-cef-shell-poc}"
 ASSETS="${CAPY_VERIFY_ASSETS:-$VERSION_DIR/evidence/assets}"
 SOCKET="${CAPYBARA_SOCKET:-/tmp/capybara-main-cef-$(id -u).sock}"
 LABEL="${CAPY_LAUNCH_LABEL:-com.capybara.cef.poc}"
+OPEN_PROJECT="${CAPY_VERIFY_OPEN_PROJECT:-${CAPY_OPEN_ON_START:-demo}}"
 ROOT_JSON="$(printf '%s' "$ROOT" | jq -Rs .)"
 APP="$ROOT/target/debug/capy-shell.app"
 case "$VERSION_DIR" in
@@ -113,11 +114,11 @@ if [[ "$LAUNCH_MODE" == "launchctl" ]]; then
     -l "$LABEL" \
     -o "$ASSETS/capy-cef-launchctl.out.log" \
     -e "$ASSETS/capy-cef-launchctl.err.log" \
-    -- /usr/bin/env CAPYBARA_SOCKET="$SOCKET" CAPY_DEFAULT_CWD="$ROOT" CAPY_OPEN_ON_START="demo" "$APP/Contents/MacOS/capy-shell"
+    -- /usr/bin/env CAPYBARA_SOCKET="$SOCKET" CAPY_DEFAULT_CWD="$ROOT" CAPY_OPEN_ON_START="$OPEN_PROJECT" "$APP/Contents/MacOS/capy-shell"
 else
   launchctl setenv CAPYBARA_SOCKET "$SOCKET"
   launchctl setenv CAPY_DEFAULT_CWD "$ROOT"
-  launchctl setenv CAPY_OPEN_ON_START "demo"
+  launchctl setenv CAPY_OPEN_ON_START "$OPEN_PROJECT"
   open -n "$APP"
 fi
 

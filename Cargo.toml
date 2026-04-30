@@ -6,6 +6,7 @@ members = [
     "crates/capy-canvas-web",
     "crates/capy-contracts",
     "crates/capy-creative-core",
+    "crates/capy-project",
     "crates/capy-image-gen",
     "crates/capy-timeline-project",
     "crates/capy-timeline",
@@ -55,6 +56,7 @@ wasm-bindgen = "0.2"
 capy-canvas-core = { path = "crates/capy-canvas-core" }
 capy-contracts = { path = "crates/capy-contracts" }
 capy-creative-core = { path = "crates/capy-creative-core" }
+capy-project = { path = "crates/capy-project" }
 capy-image-gen = { path = "crates/capy-image-gen" }
 capy-timeline-project = { path = "crates/capy-timeline-project" }
 capy-timeline = { path = "crates/capy-timeline" }

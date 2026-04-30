@@ -22,34 +22,9 @@ import initCanvas, {
   zoom_view_at,
   start as startCanvas
 } from "./canvas-pkg/capy_canvas_web.js";
-import {
-  buildPosterState,
-  cloneDefaultPosterDocument,
-  cloneDocument,
-  parsePosterDocument,
-  renderPosterStage,
-  validatePosterDocument
-} from "./poster-renderer.js";
-import {
-  clampRectToBounds,
-  compactGeometry,
-  nodeBounds,
-  normalizeRect,
-  regionPercent,
-  roundGeometry,
-  worldBoxToScreen
-} from "./workbench/geometry.js";
-import {
-  compileRows,
-  compositionRows,
-  evidenceRows,
-  exportRows,
-  exportStatus,
-  inspectorMessage,
-  sourceRows,
-  stageCard,
-  stageLabel,
-} from "./timeline/inspector-render.js";
+import { buildPosterState, cloneDefaultPosterDocument, cloneDocument, parsePosterDocument, renderPosterStage, validatePosterDocument } from "./poster-renderer.js";
+import { clampRectToBounds, compactGeometry, nodeBounds, normalizeRect, regionPercent, roundGeometry, worldBoxToScreen } from "./workbench/geometry.js";
+import { compileRows, compositionRows, evidenceRows, exportRows, exportStatus, inspectorMessage, sourceRows, stageCard, stageLabel } from "./timeline/inspector-render.js";
 import { createCanvasContext } from "./app/canvas-context.js";
 import { createCanvasControls } from "./app/canvas-controls.js";
 import { createCanvasRenderer } from "./app/canvas-renderer.js";
@@ -57,6 +32,7 @@ import { createCanvasWorkbench } from "./app/canvas-workbench.js";
 import { createConversations } from "./app/conversations.js";
 import { dom } from "./app/dom.js";
 import { installIpcReceiver, installNativeWindowDrag, installShellEventListeners, createRpc } from "./app/ipc.js";
+import { createProjectPackageWiring } from "./app/project-package-wiring.js";
 import { createRuntimeControls } from "./app/runtime-controls.js";
 import { installShellUi } from "./app/shell-ui.js";
 import { labelSync, nodeRegistry, pending, posterDocuments, state } from "./app/state.js";
@@ -102,6 +78,7 @@ let timelineApi;
 let videoEditorApi;
 let posterWorkspaceApi;
 let conversationsApi;
+let projectPackageApi;
 
 conversationsApi = createConversations({
   state, rpc, currentConfig, syncPolicyOptions, applyWriteCodeDefaults,
@@ -141,6 +118,8 @@ videoEditorApi = createVideoEditor({
   renderPosterWorkspace: (...args) => posterWorkspaceApi.renderPosterWorkspace(...args),
   ensurePosterDocument: (...args) => posterWorkspaceApi.ensureDefaultDocument(...args),
 });
+
+projectPackageApi = createProjectPackageWiring({ state, rpc, dom, stringifyError });
 
 contextApi = createCanvasContext({
   state, canvasEl, canvasPanelEl, regionLayerEl, regionModeEl, plannerContextEl,
@@ -227,6 +206,8 @@ installWindowFacade({
     stateSnapshot, attachTimelineComposition: (...args) => timelineApi.attachTimelineComposition(...args),
     openTimelineComposition: (...args) => timelineApi.openTimelineComposition(...args),
     openTimelineInspector: (...args) => timelineApi.openTimelineInspector(...args),
+    loadProjectPackage: (...args) => projectPackageApi.loadProjectPackage(...args),
+    buildSelectedProjectContext: (...args) => projectPackageApi.buildSelectedContext(...args),
     switchWorkspaceTab: (...args) => videoEditorApi.switchWorkspace(...args),
     openVideoComposition: (...args) => videoEditorApi.openComposition(...args),
     renderVideoEditor: (...args) => videoEditorApi.renderVideoEditor(...args),
@@ -421,7 +402,8 @@ function stateSnapshot() {
       ...state.poster,
       documents: rendererApi.posterDocumentsState()
     },
-    canvasContext: state.canvasContext.context
+    canvasContext: state.canvasContext.context,
+    projectPackage: state.projectPackage
   });
 }
 
@@ -434,6 +416,7 @@ async function init() {
   conversationsApi.renderMessages();
   updateConfigSummary();
   await workbenchApi.initCanvasWorkbench();
+  await projectPackageApi.loadProjectPackage();
   try {
     const data = await rpc("conversation-list", {});
     state.dbPath = data.db_path || null;

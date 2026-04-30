@@ -262,6 +262,8 @@ pub(super) fn handle_js_ipc(
                 request.params,
             ),
         )
+    } else if crate::project_ipc::handles(op) {
+        crate::project_ipc::response(request)
     } else if op == OP_CANVAS_NODES_REGISTER {
         canvas_nodes::register_response(request.req_id.clone(), &state, request.params)
     } else if op == OP_TIMELINE_ATTACH {

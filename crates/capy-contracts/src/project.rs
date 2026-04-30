@@ -1,0 +1,22 @@
+pub const OP_PROJECT_INSPECT: &str = "project-inspect";
+pub const OP_ARTIFACT_REGISTER: &str = "artifact-register";
+pub const OP_ARTIFACT_READ: &str = "artifact-read";
+pub const OP_CONTEXT_BUILD: &str = "context-build";
+pub const OP_PATCH_APPLY: &str = "patch-apply";
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY,
+        OP_PROJECT_INSPECT,
+    };
+
+    #[test]
+    fn project_ops_are_stable() {
+        assert_eq!(OP_PROJECT_INSPECT, "project-inspect");
+        assert_eq!(OP_ARTIFACT_REGISTER, "artifact-register");
+        assert_eq!(OP_ARTIFACT_READ, "artifact-read");
+        assert_eq!(OP_CONTEXT_BUILD, "context-build");
+        assert_eq!(OP_PATCH_APPLY, "patch-apply");
+    }
+}

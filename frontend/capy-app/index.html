@@ -43,6 +43,18 @@
           <span class="seg-info" id="canvas-status">Canvas loading</span>
         </div>
 
+        <section class="project-package-panel" id="project-package-panel" data-component="project-package" hidden>
+          <header class="project-package-head">
+            <div>
+              <span class="context-eyebrow">PROJECT</span>
+              <h2 id="project-package-title">Project package</h2>
+            </div>
+            <span class="project-package-meta" id="project-package-meta">waiting</span>
+          </header>
+          <div class="project-artifact-list" id="project-artifact-list"></div>
+          <iframe id="project-preview-frame" class="project-preview-frame" title="HTML artifact preview" sandbox="allow-scripts"></iframe>
+        </section>
+
         <div class="canvas-bottom canvas-tool-island" data-component="canvas-tool-bar" aria-label="Canvas tools" role="toolbar">
           <div class="tool-group" data-tool-group="navigation">
             <button class="bt active" type="button" data-canvas-tool="select" aria-label="Select" aria-pressed="true" title="Select"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 5-4.5 1.5L7 13z"/></svg></button>

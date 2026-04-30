@@ -1,0 +1,15 @@
+{
+  "schema_version": "capy.patch.v1",
+  "project_id": "proj_00000000000000000000000000000001",
+  "actor": "cli",
+  "operations": [
+    {
+      "op": "replace_exact_text",
+      "artifact_id": "art_00000000000000000000000000000001",
+      "source_path": "web/index.html",
+      "old_text": "Project Context Draft",
+      "new_text": "Project Context Locked",
+      "selector_hint": "[data-capy-section=\"hero-title\"]"
+    }
+  ]
+}

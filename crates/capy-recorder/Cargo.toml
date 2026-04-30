@@ -8,6 +8,8 @@ publish = false
 name = "capy-recorder"
 path = "src/main.rs"
 
+[workspace]
+
 [dependencies]
 capy-shell-mac = { path = "../capy-shell-mac" }
 # objc2 VT / AVFoundation

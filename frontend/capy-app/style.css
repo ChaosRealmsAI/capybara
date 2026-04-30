@@ -2,6 +2,7 @@
 @import "./styles/topbar.css";
 @import "./styles/canvas.css";
 @import "./styles/canvas-controls.css";
+@import "./styles/project-package.css";
 @import "./styles/timeline-inspector.css";
 @import "./styles/video-editor.css";
 @import "./styles/poster-workspace.css";

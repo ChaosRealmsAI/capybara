@@ -1,0 +1,19 @@
+{
+  "schema_version": "capy.design-language.v1",
+  "assets": [
+    {
+      "id": "dl_00000000000000000000000000000001",
+      "kind": "css",
+      "path": "design/tokens.css",
+      "title": "Warm Prism tokens",
+      "description": "Fixture tokens used by the HTML artifact context package."
+    },
+    {
+      "id": "dl_00000000000000000000000000000002",
+      "kind": "markdown",
+      "path": "design/language.md",
+      "title": "Design language note",
+      "description": "Short AI-readable design constraints."
+    }
+  ]
+}

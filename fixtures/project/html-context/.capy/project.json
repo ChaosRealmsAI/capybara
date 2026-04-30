@@ -1,0 +1,8 @@
+{
+  "schema_version": "capy.project.v1",
+  "id": "proj_00000000000000000000000000000001",
+  "name": "HTML Context Fixture",
+  "root": "fixtures/project/html-context",
+  "created_at": 1767000000000,
+  "updated_at": 1767000000000
+}
