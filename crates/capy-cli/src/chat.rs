@@ -82,9 +82,9 @@ struct AgentRuntimeOptions {
         help = "Coding preset: allow provider to edit files in cwd explicitly"
     )]
     write_code: bool,
-    #[arg(long, help = "Route this conversation turn through the SDK backend")]
+    #[arg(long, help = "Compatibility no-op: SDK is always the chat runtime")]
     sdk: bool,
-    #[arg(long, help = "Agent runtime backend: cli or sdk")]
+    #[arg(long, help = "Agent runtime backend; only sdk is supported")]
     runtime_backend: Option<String>,
     #[arg(long, help = "Reasoning effort, e.g. low, medium, high, xhigh")]
     effort: Option<String>,
@@ -160,7 +160,7 @@ struct AgentRuntimeOptions {
     output_schema: Option<String>,
     #[arg(long, help = "Codex personality, e.g. pragmatic, friendly, none")]
     personality: Option<String>,
-    #[arg(long, help = "Codex app-server config override key=value")]
+    #[arg(long, help = "Codex SDK config override key=value")]
     codex_config: Vec<String>,
     #[arg(long, help = "Codex feature flag to enable")]
     codex_enable: Vec<String>,
@@ -226,7 +226,7 @@ pub fn handle(args: Box<ChatArgs>) -> Result<(), String> {
         ChatCommand::List => crate::send("conversation-list", json!({})),
         ChatCommand::New(args) => crate::send("conversation-create", chat_new_params(args)?),
         ChatCommand::Configure(args) => {
-            crate::send("conversation-update-config", chat_configure_params(args))
+            crate::send("conversation-update-config", chat_configure_params(args)?)
         }
         ChatCommand::Open(args) | ChatCommand::Export(args) => {
             crate::send("conversation-open", json!({ "id": args.id }))
@@ -247,7 +247,7 @@ fn chat_new_params(args: ChatNewArgs) -> Result<Value, String> {
         None => std::env::current_dir().map_err(|err| format!("read cwd failed: {err}"))?,
     };
     let mut config = json!({});
-    fill_agent_config(&mut config, args.runtime);
+    fill_agent_config(&mut config, args.runtime)?;
     Ok(json!({
         "provider": args.provider.as_str(),
         "cwd": cwd.display().to_string(),
@@ -256,9 +256,9 @@ fn chat_new_params(args: ChatNewArgs) -> Result<Value, String> {
     }))
 }
 
-fn chat_configure_params(args: ChatConfigureArgs) -> Value {
+fn chat_configure_params(args: ChatConfigureArgs) -> Result<Value, String> {
     let mut config = json!({});
-    fill_agent_config(&mut config, args.runtime);
+    fill_agent_config(&mut config, args.runtime)?;
     let mut params = json!({
         "id": args.id,
         "config": config
@@ -266,12 +266,12 @@ fn chat_configure_params(args: ChatConfigureArgs) -> Value {
     if let Some(model) = args.model {
         params["model"] = json!(model);
     }
-    params
+    Ok(params)
 }
 
 fn chat_send_params(args: ChatSendArgs) -> Result<Value, String> {
     let mut config = json!({});
-    fill_agent_config(&mut config, args.runtime);
+    fill_agent_config(&mut config, args.runtime)?;
     let canvas_context = args
         .canvas_context
         .map(chat_context::load_canvas_context_packet)
@@ -295,9 +295,20 @@ fn chat_send_params(args: ChatSendArgs) -> Result<Value, String> {
     Ok(params)
 }
 
-fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) {
+fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) -> Result<(), String> {
+    config["runtimeBackend"] = json!("sdk");
+    if let Some(backend) = args
+        .runtime_backend
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        if !backend.eq_ignore_ascii_case("sdk") {
+            return Err(format!(
+                "agent runtime backend is SDK-only; --runtime-backend={backend} was removed"
+            ));
+        }
+    }
     set_opt(config, "effort", args.effort);
-    set_opt(config, "runtimeBackend", args.runtime_backend);
     set_opt(config, "permissionMode", args.permission_mode);
     set_opt(config, "approvalPolicy", args.approval_policy);
     set_opt(config, "sandbox", args.sandbox);
@@ -380,9 +391,8 @@ fn fill_agent_config(config: &mut Value, args: AgentRuntimeOptions) {
             config["dangerouslySkipPermissions"] = json!(true);
         }
     }
-    if args.sdk {
-        config["runtimeBackend"] = json!("sdk");
-    }
+    let _sdk_compat_flag = args.sdk;
+    Ok(())
 }
 
 fn set_opt(config: &mut Value, key: &str, value: Option<String>) {
@@ -394,5 +404,54 @@ fn set_opt(config: &mut Value, key: &str, value: Option<String>) {
 fn set_default(config: &mut Value, key: &str, value: &str) {
     if config.get(key).is_none() {
         config[key] = json!(value);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AgentRuntimeOptions, fill_agent_config};
+    use serde_json::json;
+
+    #[test]
+    fn chat_runtime_defaults_to_sdk() -> Result<(), String> {
+        let mut config = json!({});
+        fill_agent_config(&mut config, AgentRuntimeOptions::default())?;
+
+        assert_eq!(config["runtimeBackend"], "sdk");
+        Ok(())
+    }
+
+    #[test]
+    fn chat_runtime_rejects_removed_cli_backend() -> Result<(), String> {
+        let mut config = json!({});
+        let result = fill_agent_config(
+            &mut config,
+            AgentRuntimeOptions {
+                runtime_backend: Some("cli".to_string()),
+                ..AgentRuntimeOptions::default()
+            },
+        );
+        let Err(err) = result else {
+            return Err("cli backend should be rejected".to_string());
+        };
+
+        assert!(err.contains("SDK-only"));
+        Ok(())
+    }
+
+    #[test]
+    fn chat_runtime_accepts_sdk_backend_compat_flag() -> Result<(), String> {
+        let mut config = json!({});
+        fill_agent_config(
+            &mut config,
+            AgentRuntimeOptions {
+                sdk: true,
+                runtime_backend: Some("sdk".to_string()),
+                ..AgentRuntimeOptions::default()
+            },
+        )?;
+
+        assert_eq!(config["runtimeBackend"], "sdk");
+        Ok(())
     }
 }

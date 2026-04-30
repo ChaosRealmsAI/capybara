@@ -147,14 +147,14 @@ pub(super) const CHAT_HELP: &str = r#"
 Topic: capy chat agent
 
 Use when: AI needs persistent Claude/Codex conversations with events and export.
-Required parameters: `send/open/events/stop/export` need `--id`; `send` also needs a prompt.
+Required parameters: `send/open/events/stop/export` need `--id`; `send` also needs a prompt. SDK is the default and only runtime.
 Recommended commands:
 1. `target/debug/capy chat list`
-2. `target/debug/capy chat new --provider codex --cwd <repo> --sdk`
-3. `target/debug/capy chat send --id <id> --sdk "Summarize current state"`
+2. `target/debug/capy chat new --provider codex --cwd <repo>`
+3. `target/debug/capy chat send --id <id> "Summarize current state"`
 4. `target/debug/capy chat events --id <id>`
 5. `target/debug/capy chat export --id <id>`
-Do not: create throwaway sessions when continuity matters; use `--write-code` casually; attach canvas context as prose when `--canvas-context` exists.
+Do not: create throwaway sessions when continuity matters; use `--runtime-backend=cli`; use `--write-code` casually; attach canvas context as prose when `--canvas-context` exists.
 Next step: read `capy chat help canvas-tools` for canvas-aware runs.
 "#;
 
@@ -171,11 +171,11 @@ Next step: use `capy canvas snapshot` plus the JSONL log as evidence.
 pub(super) const AGENT_HELP: &str = r#"
 Topic: capy agent doctor
 
-Use when: AI needs to know whether local Claude and Codex runtimes are available.
+Use when: AI needs to know whether Capybara's SDK-only agent runtime is available.
 Required parameters: none.
 Recommended command: `target/debug/capy agent doctor`
-Do not: start a long agent run before checking runtime availability.
-Next step: use `capy agent sdk doctor` for SDK readiness or create a conversation with `capy chat new --provider claude|codex --sdk`.
+Do not: start a long agent run before checking SDK package and provider availability; do not reintroduce direct Claude/Codex CLI backends.
+Next step: use `capy agent sdk doctor` for the explicit SDK readiness path, or create a conversation with `capy chat new --provider claude|codex`.
 "#;
 
 pub(super) const AGENT_SDK_HELP: &str = r#"
@@ -217,8 +217,8 @@ Claude parameters:
 - `--no-session-persistence`
 - `--claude-path <path>` Claude executable path override.
 Known provider boundary: Codex SDK rejects reasoning effort `minimal` when image_gen/web_search tools are present; use `low` for smoke runs.
-Do not: call `tools/capy-agent-sdk/src/cli.mjs` as the product entrypoint; the supported external entrypoint is `capy agent sdk ...`.
-Next step: for persistent chat, use `capy chat new --provider claude|codex --sdk --write-code`.
+Do not: call `tools/capy-agent-sdk/src/cli.mjs` as the product entrypoint; re-enable the removed direct CLI backend; use `--runtime-backend=cli`.
+Next step: for persistent chat, use `capy chat new --provider claude|codex --write-code`.
 "#;
 
 pub(super) const IMAGE_HELP: &str = r#"

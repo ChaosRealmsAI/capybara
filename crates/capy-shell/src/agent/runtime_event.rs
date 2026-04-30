@@ -52,11 +52,6 @@ impl AgentRuntimeEvent {
         self
     }
 
-    pub(super) fn with_delta(mut self, delta: impl Into<String>) -> Self {
-        self.delta = Some(delta.into());
-        self
-    }
-
     pub(super) fn with_event(mut self, event: Value) -> Self {
         self.event = event;
         self

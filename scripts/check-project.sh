@@ -8,7 +8,7 @@ scripts/lint-spec.sh
 export CAPY_SPEC_STRUCTURE_CHECKED=1
 scripts/check-architecture.sh
 scripts/check-large-files.sh
-bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts/open-debug-shell.sh scripts/verify-cef-shell.sh
+bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts/open-debug-shell.sh scripts/verify-cef-shell.sh scripts/check-sdk-only-agent-runtime.sh
 scripts/check-code-sign-clones.sh
 scripts/build-canvas-for-app.sh >/dev/null
 scripts/check-frontend-js.sh >/dev/null
@@ -22,7 +22,7 @@ if [[ ! -x "$CAPY_BIN" ]]; then
   cargo build -p capy-cli >/dev/null
 fi
 "$CAPY_BIN" --help >/dev/null
-"$CAPY_BIN" agent doctor >/dev/null
+"$CAPY_BIN" agent sdk doctor >/dev/null
 "$CAPY_BIN" cutout --help >/dev/null
 "$CAPY_BIN" cutout doctor >/dev/null
 "$CAPY_BIN" motion --help >/dev/null

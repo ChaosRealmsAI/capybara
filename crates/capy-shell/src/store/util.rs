@@ -26,7 +26,11 @@ pub(super) fn new_id(prefix: &str) -> String {
 }
 
 pub(super) fn normalize_config(value: Value) -> Value {
-    if value.is_object() { value } else { json!({}) }
+    let mut config = if value.is_object() { value } else { json!({}) };
+    if let Some(object) = config.as_object_mut() {
+        object.insert("runtimeBackend".to_string(), json!("sdk"));
+    }
+    config
 }
 
 pub(super) fn title_from_prompt(prompt: &str) -> String {
