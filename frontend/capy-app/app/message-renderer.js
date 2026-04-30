@@ -1,4 +1,5 @@
 import { codePre, htmlArtifact, isHtmlBlock, safeHref } from "./html-preview-renderer.js";
+import { sanitizePlannerMessageText } from "./planner-message-whitelist.js";
 
 const BLOCK_TAGS = new Set(["p", "ul", "ol", "pre", "h1", "h2", "h3", "blockquote"]);
 
@@ -9,7 +10,7 @@ export function renderMessageContent(content, options = {}) {
     root.append(typingBubble());
     return root;
   }
-  const text = String(content || "");
+  const text = sanitizePlannerMessageText(content);
   const blocks = parseBlocks(text);
   if (blocks.some((block) => block.type === "code" && isHtmlBlock(block))) {
     root.classList.add("has-html-artifact");

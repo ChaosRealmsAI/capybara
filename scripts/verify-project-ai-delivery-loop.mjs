@@ -51,6 +51,7 @@ try {
   assert(report.checks.generation.run?.provider === "codex", "generation must use codex provider in verification");
   assert(report.checks.generation.previewIncludesLaunch === true, "preview must show AI-produced headline");
   assert(report.checks.generation.plannerMentionsSummary === true, "Planner must explain the AI output");
+  assert(report.checks.generation.plannerHasInternalLeak === false, "Planner must hide internal provider/artifact/run fields");
   assert(report.checks.generation.pageErrors.length === 0, "page errors after generation must be empty");
   assert(report.checks.generation.consoleErrors.length === 0, "console errors after generation must be empty");
 
@@ -201,6 +202,7 @@ function generationProbe(sdkResponsePath) {
         const previewSource = state?.projectPackage?.previewSource || '';
         const frameSource = document.querySelector('#project-preview-frame')?.srcdoc || '';
         const plannerText = document.querySelector('#message-list')?.textContent || '';
+        const internalLeakPattern = /Provider:|Artifact:|Changed:|Status:|Run:|\\.capy\\/runs|\\b(?:art|surf_art|proj)_[a-z0-9_]{16,}\\b|\\b(?:gen|run)_[a-f0-9]{16,}\\b/i;
         const pageErrors = window.__capyPageErrors || [];
         const consoleErrors = (window.__capyConsoleEvents || []).filter((event) => event.level === 'error');
         resolve({
@@ -209,6 +211,7 @@ function generationProbe(sdkResponsePath) {
           run,
           previewIncludesLaunch: previewSource.includes('Project Context Launch') || frameSource.includes('Project Context Launch'),
           plannerMentionsSummary: plannerText.includes('首屏标题和说明') || plannerText.includes('Project Context Launch'),
+          plannerHasInternalLeak: internalLeakPattern.test(plannerText),
           plannerText,
           pageErrors,
           consoleErrors

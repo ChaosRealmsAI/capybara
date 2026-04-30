@@ -1,3 +1,5 @@
+import { projectGenerateMessageContent } from "./planner-message-whitelist.js";
+
 export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage }) {
   const {
     projectPackagePanelEl,
@@ -84,7 +86,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       state.projectPackage.workbench = await rpc("project-workbench", { project: state.projectPackage.path });
       state.projectPackage.status = "ready";
       renderProjectPackage();
-      appendPlannerMessage?.(projectGenerateMessage(result, artifact, provider));
+      appendPlannerMessage?.(projectGenerateMessage(result, artifact));
       return result;
     } catch (error) {
       state.projectPackage.status = "error";
@@ -260,13 +262,9 @@ function previewFrameSource(artifact, source) {
   return `<!doctype html><pre style="white-space:pre-wrap;font:12px ui-monospace,monospace;padding:16px;color:#2f2437">${escapeText(source)}</pre>`;
 }
 
-function projectGenerateMessage(result, artifact, provider) {
-  const summary = result?.run?.output?.summary_zh || "项目源文件已生成。";
-  const runPath = result?.run_path || "";
-  const changed = (result?.run?.changed_artifact_refs || []).join(", ") || artifact.id;
-  const status = result?.run?.status || "completed";
+function projectGenerateMessage(result, artifact) {
   return {
     role: "assistant",
-    content: `### ${summary}\n\n- Provider: ${provider}\n- Artifact: ${artifact.title || artifact.id}\n- Changed: ${changed}\n- Status: ${status}\n- Run: ${runPath}`
+    content: projectGenerateMessageContent(result, artifact)
   };
 }
