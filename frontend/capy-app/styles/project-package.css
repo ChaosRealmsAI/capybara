@@ -1,9 +1,101 @@
+.project-workbench {
+  position: absolute;
+  left: 28px;
+  right: 420px;
+  top: 88px;
+  z-index: 7;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 22px;
+  background: rgba(255, 250, 244, 0.72);
+  box-shadow: 0 24px 70px rgba(78, 54, 96, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.project-workbench-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.project-workbench-head h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.project-selected-summary {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.project-workbench-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(145px, 1fr));
+  gap: 12px;
+}
+
+.project-workbench-card {
+  min-height: 130px;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid rgba(138, 111, 174, 0.24);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 12px 34px rgba(78, 54, 96, 0.08);
+}
+
+.project-workbench-card[data-selected="true"] {
+  border-color: rgba(251, 191, 36, 0.88);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.25), 0 14px 38px rgba(78, 54, 96, 0.1);
+}
+
+.project-card-kind,
+.project-workbench-card em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+.project-workbench-card strong {
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.project-workbench-card small {
+  min-height: 32px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.project-card-action {
+  width: fit-content;
+  margin-top: 2px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.16);
+  color: var(--purple);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .project-package-panel {
   position: absolute;
-  left: 24px;
+  right: 24px;
   top: 86px;
   z-index: 8;
-  width: min(520px, calc(100% - 48px));
+  width: min(360px, calc(100% - 48px));
   max-height: calc(100% - 180px);
   display: grid;
   grid-template-rows: auto auto minmax(220px, 1fr);
@@ -83,4 +175,20 @@
   border: 1px solid rgba(138, 111, 174, 0.18);
   border-radius: 14px;
   background: #fff;
+}
+
+@media (max-width: 1120px) {
+  .project-workbench {
+    right: 28px;
+    bottom: 360px;
+  }
+
+  .project-package-panel {
+    left: 28px;
+    right: 28px;
+    top: auto;
+    bottom: 24px;
+    width: auto;
+    max-height: 320px;
+  }
 }

@@ -18,6 +18,88 @@
       },
       "evidence_refs": [],
       "updated_at": 1767000000000
+    },
+    {
+      "id": "art_00000000000000000000000000000002",
+      "kind": "image",
+      "title": "Key Visual",
+      "source_path": "assets/key-visual.svg",
+      "source_refs": [],
+      "output_refs": [],
+      "design_language_refs": [
+        "dl_00000000000000000000000000000001",
+        "dl_00000000000000000000000000000002"
+      ],
+      "asset_refs": [],
+      "provenance": {
+        "source": "fixture"
+      },
+      "evidence_refs": [],
+      "updated_at": 1767000000000
+    },
+    {
+      "id": "art_00000000000000000000000000000003",
+      "kind": "poster-json",
+      "title": "Launch Poster",
+      "source_path": "poster/campaign-poster.json",
+      "source_refs": [
+        "assets/key-visual.svg"
+      ],
+      "output_refs": [],
+      "design_language_refs": [
+        "dl_00000000000000000000000000000001",
+        "dl_00000000000000000000000000000002"
+      ],
+      "asset_refs": [
+        "art_00000000000000000000000000000002"
+      ],
+      "provenance": {
+        "source": "fixture"
+      },
+      "evidence_refs": [],
+      "updated_at": 1767000000000
+    },
+    {
+      "id": "art_00000000000000000000000000000004",
+      "kind": "ppt-json",
+      "title": "Launch Deck",
+      "source_path": "deck/campaign-deck.json",
+      "source_refs": [
+        "poster/campaign-poster.json"
+      ],
+      "output_refs": [],
+      "design_language_refs": [
+        "dl_00000000000000000000000000000001",
+        "dl_00000000000000000000000000000002"
+      ],
+      "asset_refs": [
+        "art_00000000000000000000000000000003"
+      ],
+      "provenance": {
+        "source": "fixture"
+      },
+      "evidence_refs": [],
+      "updated_at": 1767000000000
+    },
+    {
+      "id": "art_00000000000000000000000000000005",
+      "kind": "composition-json",
+      "title": "Launch Video Storyboard",
+      "source_path": "video/storyboard.json",
+      "source_refs": [
+        "deck/campaign-deck.json"
+      ],
+      "output_refs": [],
+      "design_language_refs": [
+        "dl_00000000000000000000000000000001",
+        "dl_00000000000000000000000000000002"
+      ],
+      "asset_refs": [],
+      "provenance": {
+        "source": "fixture"
+      },
+      "evidence_refs": [],
+      "updated_at": 1767000000000
     }
   ]
 }

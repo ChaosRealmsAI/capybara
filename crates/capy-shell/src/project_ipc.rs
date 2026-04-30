@@ -3,9 +3,12 @@ use std::path::PathBuf;
 
 use capy_contracts::ipc::{IpcRequest, IpcResponse};
 use capy_contracts::project::{
-    OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY, OP_PROJECT_INSPECT,
+    OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY, OP_PROJECT_GENERATE,
+    OP_PROJECT_INSPECT, OP_PROJECT_WORKBENCH,
 };
-use capy_project::{ArtifactKind, ContextBuildRequest, PatchDocumentV1, ProjectPackage};
+use capy_project::{
+    ArtifactKind, ContextBuildRequest, PatchDocumentV1, ProjectGenerateRequestV1, ProjectPackage,
+};
 use serde_json::{Value, json};
 
 pub(crate) fn handles(op: &str) -> bool {
@@ -16,6 +19,8 @@ pub(crate) fn handles(op: &str) -> bool {
             | OP_ARTIFACT_READ
             | OP_CONTEXT_BUILD
             | OP_PATCH_APPLY
+            | OP_PROJECT_WORKBENCH
+            | OP_PROJECT_GENERATE
     )
 }
 
@@ -26,6 +31,8 @@ pub(crate) fn response(request: IpcRequest) -> IpcResponse {
         OP_ARTIFACT_READ => artifact_read(&request.params),
         OP_CONTEXT_BUILD => context_build(&request.params),
         OP_PATCH_APPLY => patch_apply(&request.params),
+        OP_PROJECT_WORKBENCH => project_workbench(&request.params),
+        OP_PROJECT_GENERATE => project_generate(&request.params),
         _ => Err(format!("unknown project op: {}", request.op)),
     };
     match result {
@@ -48,6 +55,33 @@ fn project_inspect(params: &Value) -> Result<Value, String> {
         ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
     serde_json::to_value(package.inspect().map_err(|err| err.to_string())?)
         .map_err(|err| err.to_string())
+}
+
+fn project_workbench(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(package.workbench().map_err(|err| err.to_string())?)
+        .map_err(|err| err.to_string())
+}
+
+fn project_generate(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    let provider = optional_string(params, "provider").unwrap_or_else(|| "fixture".to_string());
+    let dry_run = params
+        .get("dry_run")
+        .or_else(|| params.get("dryRun"))
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let result = package
+        .generate(ProjectGenerateRequestV1 {
+            artifact_id: required_string(params, "artifact")?,
+            provider,
+            prompt: required_string(params, "prompt")?,
+            dry_run,
+        })
+        .map_err(|err| err.to_string())?;
+    serde_json::to_value(result).map_err(|err| err.to_string())
 }
 
 fn artifact_register(params: &Value) -> Result<Value, String> {

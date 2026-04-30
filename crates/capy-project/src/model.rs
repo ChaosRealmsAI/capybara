@@ -7,6 +7,8 @@ pub const DESIGN_LANGUAGE_SCHEMA_VERSION: &str = "capy.design-language.v1";
 pub const CONTEXT_SCHEMA_VERSION: &str = "capy.context.v1";
 pub const PATCH_SCHEMA_VERSION: &str = "capy.patch.v1";
 pub const PATCH_RUN_SCHEMA_VERSION: &str = "capy.patch-run.v1";
+pub const WORKBENCH_SCHEMA_VERSION: &str = "capy.project-workbench.v1";
+pub const GENERATE_RUN_SCHEMA_VERSION: &str = "capy.project-generate-run.v1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -19,6 +21,7 @@ pub enum ArtifactKind {
     Audio,
     Video,
     PosterJson,
+    PptJson,
     CompositionJson,
     Other,
 }
@@ -34,6 +37,7 @@ impl ArtifactKind {
             Self::Audio => "audio",
             Self::Video => "video",
             Self::PosterJson => "poster-json",
+            Self::PptJson => "ppt-json",
             Self::CompositionJson => "composition-json",
             Self::Other => "other",
         }
@@ -53,6 +57,7 @@ impl std::str::FromStr for ArtifactKind {
             "audio" => Ok(Self::Audio),
             "video" => Ok(Self::Video),
             "poster-json" | "poster_json" => Ok(Self::PosterJson),
+            "ppt-json" | "ppt_json" | "deck-json" | "deck_json" => Ok(Self::PptJson),
             "composition-json" | "composition_json" => Ok(Self::CompositionJson),
             "other" => Ok(Self::Other),
             other => Err(format!("invalid artifact kind: {other}")),
@@ -201,4 +206,88 @@ pub struct PatchApplyResultV1 {
     pub run_path: String,
     #[serde(default)]
     pub changed_files: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkbenchPreviewV1 {
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkbenchCardV1 {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+    #[serde(default)]
+    pub source_refs: Vec<String>,
+    #[serde(default)]
+    pub output_refs: Vec<String>,
+    #[serde(default)]
+    pub design_language_refs: Vec<String>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    pub preview: WorkbenchPreviewV1,
+    #[serde(default)]
+    pub next_actions: Vec<String>,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectWorkbenchV1 {
+    pub schema_version: String,
+    pub project_id: String,
+    pub project_name: String,
+    #[serde(default)]
+    pub cards: Vec<ProjectWorkbenchCardV1>,
+    pub generated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectGenerateRequestV1 {
+    pub artifact_id: String,
+    pub provider: String,
+    pub prompt: String,
+    pub dry_run: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectGenerateRunV1 {
+    pub schema_version: String,
+    pub id: String,
+    pub project_id: String,
+    pub artifact_id: String,
+    pub provider: String,
+    pub prompt: String,
+    pub status: String,
+    pub trace_id: String,
+    pub dry_run: bool,
+    #[serde(default)]
+    pub command_preview: Vec<String>,
+    #[serde(default)]
+    pub changed_artifact_refs: Vec<String>,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub generated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectGenerateResultV1 {
+    pub run: ProjectGenerateRunV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact: Option<ArtifactRefV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview_source: Option<String>,
 }

@@ -291,28 +291,39 @@ impl ProjectPackage {
         &self.root
     }
 
-    fn project_manifest(&self) -> ProjectPackageResult<ProjectManifestV1> {
+    pub(crate) fn project_manifest(&self) -> ProjectPackageResult<ProjectManifestV1> {
         read_json(&self.project_manifest_path(), "read project manifest")
     }
 
-    fn design_language(&self) -> ProjectPackageResult<DesignLanguageManifestV1> {
+    pub(crate) fn design_language(&self) -> ProjectPackageResult<DesignLanguageManifestV1> {
         read_json(
             &self.design_language_path(),
             "read design language manifest",
         )
     }
 
-    fn artifacts(&self) -> ProjectPackageResult<ArtifactRegistryV1> {
+    pub(crate) fn artifacts(&self) -> ProjectPackageResult<ArtifactRegistryV1> {
         read_json(&self.artifacts_path(), "read artifact registry")
     }
 
-    fn touch_project_manifest(&self) -> ProjectPackageResult<()> {
+    pub(crate) fn write_artifacts(
+        &self,
+        registry: &ArtifactRegistryV1,
+    ) -> ProjectPackageResult<()> {
+        self.write_json(&self.artifacts_path(), registry)
+    }
+
+    pub(crate) fn touch_project_manifest(&self) -> ProjectPackageResult<()> {
         let mut manifest = self.project_manifest()?;
         manifest.updated_at = now_ms();
         self.write_json(&self.project_manifest_path(), &manifest)
     }
 
-    fn write_json<T: Serialize>(&self, path: &Path, value: &T) -> ProjectPackageResult<()> {
+    pub(crate) fn write_json<T: Serialize>(
+        &self,
+        path: &Path,
+        value: &T,
+    ) -> ProjectPackageResult<()> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|source| ProjectPackageError::Io {
                 context: format!("create {}", parent.display()),
@@ -362,7 +373,7 @@ impl ProjectPackage {
         self.capy_dir().join("project.json")
     }
 
-    fn artifacts_path(&self) -> PathBuf {
+    pub(crate) fn artifacts_path(&self) -> PathBuf {
         self.capy_dir().join("artifacts.json")
     }
 

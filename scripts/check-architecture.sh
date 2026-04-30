@@ -334,13 +334,14 @@ if [[ -n "$frontend_write_matches" ]]; then
   fail "frontend must not write .capy project truth directly; route writes through capy-project"
 fi
 
-provider_matches="$(
-  rg -n 'openai|anthropic|claude|codex|gpt|sora|veo|provider' crates/capy-project crates/capy-cli/src/project.rs crates/capy-cli/src/project_context.rs crates/capy-cli/src/project_patch.rs \
-    | rg -v 'Project Context|context package|design-language' || true
+provider_api_matches="$(
+  rg -n -i 'openai|anthropic|api[_-]?key|bearer|authorization|https://api\\.|api\\.openai|api\\.anthropic|reqwest|ureq|curl' \
+    crates/capy-project crates/capy-cli/src/project.rs crates/capy-cli/src/project_context.rs crates/capy-cli/src/project_patch.rs \
+    || true
 )"
-if [[ -n "$provider_matches" ]]; then
-  echo "$provider_matches" >&2
-  fail "v0.27 project/context/patch commands must not call real AI providers"
+if [[ -n "$provider_api_matches" ]]; then
+  echo "$provider_api_matches" >&2
+  fail "project/context/patch commands must not call real provider APIs; v0.31 only allows CLI provider planning and fixture writes"
 fi
 
 active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"

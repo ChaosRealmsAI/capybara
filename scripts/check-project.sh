@@ -106,6 +106,13 @@ mkdir -p target
 cp -R fixtures/project/html-context target/capy-project-html-context
 "$CAPY_BIN" project inspect \
   --project target/capy-project-html-context >/dev/null
+project_workbench="$("$CAPY_BIN" project workbench \
+  --project target/capy-project-html-context)"
+if ! jq -e '.schema_version == "capy.project-workbench.v1" and (.cards | length) == 6 and any(.cards[]; .kind == "export_center")' \
+  <<<"$project_workbench" >/dev/null; then
+  echo "project check failed: project workbench must expose six cards including export center" >&2
+  exit 1
+fi
 "$CAPY_BIN" context build \
   --project target/capy-project-html-context \
   --artifact art_00000000000000000000000000000001 \
@@ -124,11 +131,36 @@ if grep -q 'Project Context Locked' target/capy-project-html-context/web/index.h
   echo "project check failed: patch dry-run must not mutate HTML source" >&2
   exit 1
 fi
+generate_dry_run="$("$CAPY_BIN" project generate \
+  --project target/capy-project-html-context \
+  --artifact art_00000000000000000000000000000001 \
+  --provider fixture \
+  --prompt "Make launch copy clearer" \
+  --dry-run)"
+if ! jq -e '.run.schema_version == "capy.project-generate-run.v1" and .run.status == "planned" and .run.dry_run == true' \
+  <<<"$generate_dry_run" >/dev/null; then
+  echo "project check failed: project generate dry-run must return planned generate run" >&2
+  exit 1
+fi
+if grep -q 'Capybara CLI draft' target/capy-project-html-context/web/index.html; then
+  echo "project check failed: project generate dry-run must not mutate HTML source" >&2
+  exit 1
+fi
 "$CAPY_BIN" patch apply \
   --project target/capy-project-html-context \
   --patch fixtures/project/html-context/patches/headline.json >/dev/null
 if ! grep -q 'Project Context Locked' target/capy-project-html-context/web/index.html; then
   echo "project check failed: patch apply must mutate HTML source" >&2
+  exit 1
+fi
+"$CAPY_BIN" project generate \
+  --project target/capy-project-html-context \
+  --artifact art_00000000000000000000000000000001 \
+  --provider fixture \
+  --prompt "Make launch copy clearer" \
+  --write >/dev/null
+if ! grep -q 'Capybara CLI draft' target/capy-project-html-context/web/index.html; then
+  echo "project check failed: project generate --write must mutate HTML source" >&2
   exit 1
 fi
 

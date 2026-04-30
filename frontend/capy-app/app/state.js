@@ -62,8 +62,11 @@ export const state = {
     path: null,
     status: "idle",
     inspection: null,
+    workbench: null,
     selectedArtifactId: null,
+    selectedCardId: null,
     previewSource: "",
+    generation: null,
     error: null
   },
   poster: {

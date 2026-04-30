@@ -3,12 +3,14 @@ pub const OP_ARTIFACT_REGISTER: &str = "artifact-register";
 pub const OP_ARTIFACT_READ: &str = "artifact-read";
 pub const OP_CONTEXT_BUILD: &str = "context-build";
 pub const OP_PATCH_APPLY: &str = "patch-apply";
+pub const OP_PROJECT_WORKBENCH: &str = "project-workbench";
+pub const OP_PROJECT_GENERATE: &str = "project-generate";
 
 #[cfg(test)]
 mod tests {
     use super::{
         OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY,
-        OP_PROJECT_INSPECT,
+        OP_PROJECT_GENERATE, OP_PROJECT_INSPECT, OP_PROJECT_WORKBENCH,
     };
 
     #[test]
@@ -18,5 +20,7 @@ mod tests {
         assert_eq!(OP_ARTIFACT_READ, "artifact-read");
         assert_eq!(OP_CONTEXT_BUILD, "context-build");
         assert_eq!(OP_PATCH_APPLY, "patch-apply");
+        assert_eq!(OP_PROJECT_WORKBENCH, "project-workbench");
+        assert_eq!(OP_PROJECT_GENERATE, "project-generate");
     }
 }

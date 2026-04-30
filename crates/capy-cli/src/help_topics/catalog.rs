@@ -43,8 +43,8 @@ pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
     },
     HelpTopic {
         name: "project",
-        aliases: &["project-package", "capy-project"],
-        summary: "Create and inspect file-backed Capybara project packages.",
+        aliases: &["project-package", "capy-project", "project-workbench"],
+        summary: "Create, inspect, view, and generate file-backed Capybara projects.",
         body: PROJECT_HELP,
     },
     HelpTopic {

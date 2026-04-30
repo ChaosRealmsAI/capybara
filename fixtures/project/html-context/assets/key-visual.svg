@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Capybara key visual fixture">
+  <rect width="640" height="420" rx="32" fill="#fff8f0"/>
+  <circle cx="480" cy="94" r="72" fill="#c4b5fd" opacity="0.72"/>
+  <circle cx="142" cy="306" r="108" fill="#f7c66b" opacity="0.56"/>
+  <rect x="92" y="96" width="456" height="228" rx="28" fill="#ffffff" opacity="0.74" stroke="#8a6fae" stroke-opacity="0.32"/>
+  <text x="128" y="184" font-family="PingFang SC, sans-serif" font-size="44" fill="#2f2437">Project Launch</text>
+  <text x="128" y="238" font-family="PingFang SC, sans-serif" font-size="22" fill="#8a6fae">key visual source</text>
+</svg>

@@ -3,6 +3,9 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
     projectPackagePanelEl,
     projectPackageTitleEl,
     projectPackageMetaEl,
+    projectWorkbenchEl,
+    projectWorkbenchCardsEl,
+    projectSelectedSummaryEl,
     projectArtifactListEl,
     projectPreviewFrameEl,
   } = dom;
@@ -19,17 +22,14 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
     renderProjectPackage();
     try {
       const inspection = await rpc("project-inspect", { project: projectPath });
+      const workbench = await rpc("project-workbench", { project: projectPath });
       state.projectPackage.inspection = inspection;
-      const firstHtml = firstHtmlArtifact(inspection);
-      state.projectPackage.selectedArtifactId = firstHtml?.id || null;
+      state.projectPackage.workbench = workbench;
+      const firstCard = firstSelectableCard(workbench);
+      state.projectPackage.selectedCardId = firstCard?.id || null;
+      state.projectPackage.selectedArtifactId = firstCard?.id?.startsWith("art_") ? firstCard.id : null;
       state.projectPackage.previewSource = "";
-      if (firstHtml) {
-        const read = await rpc("artifact-read", {
-          project: projectPath,
-          artifact: firstHtml.id
-        });
-        state.projectPackage.previewSource = read.source || "";
-      }
+      await refreshSelectedPreview();
       state.projectPackage.status = "ready";
       renderProjectPackage();
       return { loaded: true, inspection };
@@ -53,6 +53,36 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
     });
   }
 
+  async function generateSelectedArtifact(options = {}) {
+    const artifact = selectedArtifact();
+    if (!artifact || !state.projectPackage.path) {
+      throw new Error("No selected project artifact");
+    }
+    const prompt = options.prompt || `Revise ${artifact.title || artifact.id} using project design language.`;
+    state.projectPackage.status = "generating";
+    renderProjectPackage();
+    try {
+      const result = await rpc("project-generate", {
+        project: state.projectPackage.path,
+        artifact: artifact.id,
+        provider: options.provider || "fixture",
+        prompt,
+        dry_run: options.dryRun === true ? true : false
+      });
+      state.projectPackage.generation = result;
+      if (result.preview_source) state.projectPackage.previewSource = result.preview_source;
+      state.projectPackage.workbench = await rpc("project-workbench", { project: state.projectPackage.path });
+      state.projectPackage.status = "ready";
+      renderProjectPackage();
+      return result;
+    } catch (error) {
+      state.projectPackage.status = "error";
+      state.projectPackage.error = stringifyError(error);
+      renderProjectPackage();
+      throw error;
+    }
+  }
+
   function selectedArtifact() {
     const artifacts = state.projectPackage.inspection?.artifacts?.artifacts || [];
     return artifacts.find((artifact) => artifact.id === state.projectPackage.selectedArtifactId) || null;
@@ -63,7 +93,8 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
     const packageState = state.projectPackage;
     const inspection = packageState.inspection;
     const artifacts = inspection?.artifacts?.artifacts || [];
-    const isVisible = packageState.status !== "idle" && (inspection || packageState.status === "loading" || packageState.status === "error");
+    const isVisible = packageState.status !== "idle" && (inspection || packageState.status === "loading" || packageState.status === "error" || packageState.workbench);
+    renderWorkbench();
     projectPackagePanelEl.hidden = !isVisible;
     if (!isVisible) return;
     projectPackagePanelEl.dataset.status = packageState.status;
@@ -72,12 +103,83 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
     }
     if (projectPackageMetaEl) {
       if (packageState.status === "loading") projectPackageMetaEl.textContent = "loading";
+      else if (packageState.status === "generating") projectPackageMetaEl.textContent = "CLI generating";
       else if (packageState.status === "error") projectPackageMetaEl.textContent = packageState.error || "error";
-      else projectPackageMetaEl.textContent = `${artifacts.length} artifacts`;
+      else projectPackageMetaEl.textContent = selectedArtifactSummary(state) || `${artifacts.length} artifacts`;
     }
     renderArtifactList(artifacts);
     if (projectPreviewFrameEl) {
-      projectPreviewFrameEl.srcdoc = packageState.previewSource || "<!doctype html><p>No HTML artifact</p>";
+      projectPreviewFrameEl.srcdoc = previewFrameSource(selectedArtifact(), packageState.previewSource);
+    }
+  }
+
+  function renderWorkbench() {
+    if (!projectWorkbenchEl || !projectWorkbenchCardsEl) return;
+    const workbench = state.projectPackage.workbench;
+    const cards = workbench?.cards || [];
+    const visible = state.projectPackage.status !== "idle" && cards.length > 0;
+    projectWorkbenchEl.hidden = !visible;
+    if (!visible) return;
+    projectWorkbenchEl.dataset.status = state.projectPackage.status;
+    if (projectSelectedSummaryEl) {
+      projectSelectedSummaryEl.textContent = selectedCardSummary(state) || `${cards.length} cards`;
+    }
+    projectWorkbenchCardsEl.replaceChildren(...cards.map((card) => cardButton(card)));
+  }
+
+  function cardButton(card) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "project-workbench-card";
+    button.dataset.projectCardId = card.id;
+    button.dataset.projectCardKind = card.kind;
+    button.dataset.status = card.status;
+    button.dataset.selected = card.id === state.projectPackage.selectedCardId ? "true" : "false";
+    button.innerHTML = `
+      <span class="project-card-kind">${escapeText(card.kind)}</span>
+      <strong>${escapeText(card.title || card.kind)}</strong>
+      <small>${escapeText(card.source_path || card.preview?.text || "项目汇总")}</small>
+      <em>${escapeText(card.status || "ready")}</em>
+    `;
+    button.addEventListener("click", () => selectCard(card));
+    if (card.id?.startsWith("art_")) {
+      const action = document.createElement("span");
+      action.className = "project-card-action";
+      action.textContent = "CLI 生成";
+      action.addEventListener("click", (event) => {
+        event.stopPropagation();
+        generateSelectedAfter(card).catch(() => {});
+      });
+      button.append(action);
+    }
+    return button;
+  }
+
+  async function generateSelectedAfter(card) {
+    selectCard(card);
+    await generateSelectedArtifact({
+      prompt: `Update ${card.title || card.kind} from the selected project card.`
+    });
+  }
+
+  function selectCard(card) {
+    state.projectPackage.selectedCardId = card.id;
+    state.projectPackage.selectedArtifactId = card.id?.startsWith("art_") ? card.id : null;
+    refreshSelectedPreview().finally(() => renderProjectPackage());
+  }
+
+  async function refreshSelectedPreview() {
+    const artifact = selectedArtifact();
+    if (!artifact || !state.projectPackage.path) {
+      state.projectPackage.previewSource = "";
+      return;
+    }
+    if (artifact.kind === "html" || artifact.kind === "image" || artifact.kind === "markdown" || artifact.kind?.endsWith("-json") || artifact.kind === "composition-json") {
+      const read = await rpc("artifact-read", {
+        project: state.projectPackage.path,
+        artifact: artifact.id
+      });
+      state.projectPackage.previewSource = read.source || "";
     }
   }
 
@@ -95,14 +197,9 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
         <small>${escapeText(artifact.kind || "artifact")} · ${escapeText(artifact.source_path || "")}</small>
       `;
       button.addEventListener("click", async () => {
+        state.projectPackage.selectedCardId = artifact.id;
         state.projectPackage.selectedArtifactId = artifact.id;
-        if (artifact.kind === "html" && state.projectPackage.path) {
-          const read = await rpc("artifact-read", {
-            project: state.projectPackage.path,
-            artifact: artifact.id
-          });
-          state.projectPackage.previewSource = read.source || "";
-        }
+        await refreshSelectedPreview();
         renderProjectPackage();
       });
       projectArtifactListEl.append(button);
@@ -112,14 +209,18 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
   return {
     loadProjectPackage,
     buildSelectedContext,
+    generateSelectedArtifact,
     selectedArtifact,
     renderProjectPackage,
   };
 }
 
-function firstHtmlArtifact(inspection) {
-  const artifacts = inspection?.artifacts?.artifacts || [];
-  return artifacts.find((artifact) => artifact.kind === "html") || artifacts[0] || null;
+function firstSelectableCard(workbench) {
+  const cards = workbench?.cards || [];
+  return cards.find((card) => card.kind === "web" && card.id?.startsWith("art_"))
+    || cards.find((card) => card.id?.startsWith("art_"))
+    || cards[0]
+    || null;
 }
 
 function escapeText(value) {
@@ -128,4 +229,22 @@ function escapeText(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function selectedCardSummary(rootState) {
+  const packageState = rootState.projectPackage;
+  const card = packageState?.workbench?.cards?.find((item) => item.id === packageState.selectedCardId);
+  return card ? `${card.title} · ${card.status}` : "";
+}
+
+function selectedArtifactSummary(rootState) {
+  const packageState = rootState.projectPackage;
+  const artifact = packageState?.inspection?.artifacts?.artifacts?.find((item) => item.id === packageState.selectedArtifactId);
+  return artifact ? `${artifact.kind} · ${artifact.source_path}` : "";
+}
+
+function previewFrameSource(artifact, source) {
+  if (!source) return "<!doctype html><p>No artifact preview</p>";
+  if (artifact?.kind === "html" || source.trimStart().startsWith("<svg")) return source;
+  return `<!doctype html><pre style="white-space:pre-wrap;font:12px ui-monospace,monospace;padding:16px;color:#2f2437">${escapeText(source)}</pre>`;
 }

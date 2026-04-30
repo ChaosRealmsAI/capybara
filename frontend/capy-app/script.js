@@ -208,6 +208,7 @@ installWindowFacade({
     openTimelineInspector: (...args) => timelineApi.openTimelineInspector(...args),
     loadProjectPackage: (...args) => projectPackageApi.loadProjectPackage(...args),
     buildSelectedProjectContext: (...args) => projectPackageApi.buildSelectedContext(...args),
+    generateSelectedProjectArtifact: (...args) => projectPackageApi.generateSelectedArtifact(...args),
     switchWorkspaceTab: (...args) => videoEditorApi.switchWorkspace(...args),
     openVideoComposition: (...args) => videoEditorApi.openComposition(...args),
     renderVideoEditor: (...args) => videoEditorApi.renderVideoEditor(...args),

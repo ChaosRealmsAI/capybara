@@ -1,0 +1,18 @@
+{
+  "schema_version": "capy.poster.document.v1",
+  "id": "poster_fixture_launch",
+  "title": "Launch Poster Fixture",
+  "canvas": { "width": 1080, "height": 1350 },
+  "pages": [
+    {
+      "id": "poster-page-1",
+      "title": "Launch",
+      "layers": [
+        { "id": "bg", "kind": "shape", "shape": "rect", "x": 0, "y": 0, "w": 1080, "h": 1350, "fill": "#fff8f0" },
+        { "id": "headline", "kind": "text", "text": "Project Launch", "x": 96, "y": 168, "fontSize": 96, "fill": "#2f2437" },
+        { "id": "copy", "kind": "text", "text": "One project, every asset, real evidence.", "x": 100, "y": 310, "fontSize": 38, "fill": "#8a6fae" }
+      ]
+    }
+  ],
+  "assets": {}
+}

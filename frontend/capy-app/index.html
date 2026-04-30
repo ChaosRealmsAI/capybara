@@ -38,6 +38,17 @@
         <div id="poster-overlay-layer" class="poster-overlay-layer" data-component="poster-overlay-layer"></div>
         <div id="node-label-layer" class="node-label-layer" data-component="node-label-layer" data-capy-component-kind=""></div>
 
+        <section class="project-workbench" id="project-workbench" data-component="project-workbench" hidden>
+          <header class="project-workbench-head">
+            <div>
+              <span class="context-eyebrow">PROJECT LOBBY</span>
+              <h2>项目工作台</h2>
+            </div>
+            <span id="project-selected-summary" class="project-selected-summary">等待项目</span>
+          </header>
+          <div class="project-workbench-cards" id="project-workbench-cards"></div>
+        </section>
+
         <div class="canvas-toolbar" data-component="canvas-toolbar">
           <button class="seg region-toggle" id="region-mode" type="button" aria-pressed="false">Region</button>
           <span class="seg-info" id="canvas-status">Canvas loading</span>
@@ -46,7 +57,7 @@
         <section class="project-package-panel" id="project-package-panel" data-component="project-package" hidden>
           <header class="project-package-head">
             <div>
-              <span class="context-eyebrow">PROJECT</span>
+              <span class="context-eyebrow">SELECTED CONTEXT</span>
               <h2 id="project-package-title">Project package</h2>
             </div>
             <span class="project-package-meta" id="project-package-meta">waiting</span>

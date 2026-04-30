@@ -1,0 +1,23 @@
+{
+  "schema_version": "capy.poster.document.v1",
+  "id": "deck_fixture_launch",
+  "title": "Launch Deck Fixture",
+  "canvas": { "width": 1600, "height": 900 },
+  "pages": [
+    {
+      "id": "slide-1",
+      "title": "Problem",
+      "layers": [
+        { "id": "headline", "kind": "text", "text": "One project should hold every output", "x": 96, "y": 126, "fontSize": 64, "fill": "#2f2437" }
+      ]
+    },
+    {
+      "id": "slide-2",
+      "title": "Flow",
+      "layers": [
+        { "id": "headline", "kind": "text", "text": "Select card, generate source, verify", "x": 96, "y": 126, "fontSize": 64, "fill": "#8a6fae" }
+      ]
+    }
+  ],
+  "assets": {}
+}
