@@ -330,7 +330,7 @@ rg -q 'ProjectPackage' crates/capy-project/src/lib.rs crates/capy-project/src/pa
 rg -q 'replace_exact_text' crates/capy-project/src/patch.rs || fail "v0.27 patch runner must use exact-text source patching"
 rg -q 'capy.context.v1' crates/capy-project/src/model.rs || fail "context package schema must be explicit"
 rg -q 'project-inspect' crates/capy-shell/src crates/capy-contracts/src/project.rs || fail "shell must expose project-inspect IPC"
-
+scripts/check-project-design-language.sh
 frontend_write_matches="$(rg -n 'writeFile|(^|[^[:alnum:]_])fs\.|\.capy/' frontend || true)"
 if [[ -n "$frontend_write_matches" ]]; then
   echo "$frontend_write_matches" >&2

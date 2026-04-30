@@ -17,6 +17,7 @@ impl ProjectPackage {
         validate_request(&request)?;
         let manifest = self.project_manifest()?;
         let artifact = self.artifact(&request.artifact_id)?;
+        let design_language_summary = self.design_language_summary()?;
         let command_preview = command_preview(&request.provider, self.root(), &artifact, &request);
         let generated_at = now_ms();
         let mut run = ProjectGenerateRunV1 {
@@ -33,6 +34,8 @@ impl ProjectPackage {
             },
             trace_id: new_id("trace"),
             dry_run: request.dry_run,
+            design_language_ref: Some(design_language_summary.design_language_ref.clone()),
+            design_language_summary: Some(design_language_summary.clone()),
             command_preview,
             changed_artifact_refs: Vec::new(),
             evidence_refs: Vec::new(),
@@ -44,6 +47,8 @@ impl ProjectPackage {
         if request.dry_run || request.provider != "fixture" {
             run.output = Some(json!({
                 "mode": "plan",
+                "design_language_ref": design_language_summary.design_language_ref,
+                "design_language_summary": design_language_summary,
                 "message": "No source file was changed. Use --write with provider fixture for no-spend writes, or run command_preview for a live CLI provider."
             }));
             return Ok(ProjectGenerateResultV1 {

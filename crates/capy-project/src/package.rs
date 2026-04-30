@@ -7,6 +7,7 @@ use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::design_language::selected_design_assets;
 use crate::model::{
     ARTIFACT_REGISTRY_SCHEMA_VERSION, ArtifactKind, ArtifactRefV1, ArtifactRegistryV1,
     CONTEXT_SCHEMA_VERSION, ContextBuildRequest, ContextPackageV1, DESIGN_LANGUAGE_SCHEMA_VERSION,
@@ -95,10 +96,18 @@ impl ProjectPackage {
             )?;
         }
         if !package.design_language_path().exists() {
+            let now = now_ms();
             package.write_json(
                 &package.design_language_path(),
                 &DesignLanguageManifestV1 {
                     schema_version: DESIGN_LANGUAGE_SCHEMA_VERSION.to_string(),
+                    id: "dlpkg_default".to_string(),
+                    name: "Project Design Language".to_string(),
+                    version: "0.1.0".to_string(),
+                    summary:
+                        "Project-level tokens, rules, references, and examples for AI generation."
+                            .to_string(),
+                    updated_at: now,
                     assets: Vec::new(),
                 },
             )?;
@@ -130,9 +139,12 @@ impl ProjectPackage {
     }
 
     pub fn inspect(&self) -> ProjectPackageResult<ProjectInspectionV1> {
+        let design_language = self.design_language()?;
+        let design_language_summary = self.design_language_summary_for(&design_language);
         Ok(ProjectInspectionV1 {
             manifest: self.project_manifest()?,
-            design_language: self.design_language()?,
+            design_language,
+            design_language_summary,
             artifacts: self.artifacts()?,
         })
     }
@@ -140,6 +152,7 @@ impl ProjectPackage {
     pub fn add_design_asset(
         &self,
         kind: String,
+        role: Option<String>,
         path: impl AsRef<Path>,
         title: String,
         description: Option<String>,
@@ -148,6 +161,7 @@ impl ProjectPackage {
         let asset = DesignLanguageAssetV1 {
             id: new_id("dl"),
             kind,
+            role,
             path: self.relative_existing_path(path.as_ref())?,
             title,
             description,
@@ -204,20 +218,8 @@ impl ProjectPackage {
                     request.artifact_id
                 ))
             })?;
-        let design_refs = if artifact.design_language_refs.is_empty() {
-            design_language.assets
-        } else {
-            let wanted: BTreeSet<&str> = artifact
-                .design_language_refs
-                .iter()
-                .map(String::as_str)
-                .collect();
-            design_language
-                .assets
-                .into_iter()
-                .filter(|asset| wanted.contains(asset.id.as_str()))
-                .collect()
-        };
+        let design_language_summary = self.design_language_summary_for(&design_language);
+        let design_refs = selected_design_assets(&design_language, &artifact.design_language_refs);
         Ok(ContextPackageV1 {
             schema_version: CONTEXT_SCHEMA_VERSION.to_string(),
             context_id: new_id("ctx"),
@@ -228,6 +230,8 @@ impl ProjectPackage {
             selector: request.selector,
             canvas_node: request.canvas_node,
             artifact,
+            design_language_ref: design_language_summary.design_language_ref.clone(),
+            design_language_summary,
             design_language_refs: design_refs,
             verification_requirements: vec![
                 "Run a visible preview check after patching.".to_string(),

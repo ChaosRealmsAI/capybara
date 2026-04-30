@@ -11,6 +11,20 @@ pub const WORKBENCH_SCHEMA_VERSION: &str = "capy.project-workbench.v1";
 pub const GENERATE_RUN_SCHEMA_VERSION: &str = "capy.project-generate-run.v1";
 pub const PROJECT_AI_PROMPT_SCHEMA_VERSION: &str = "capy.project-ai-prompt.v1";
 pub const PROJECT_AI_RESPONSE_SCHEMA_VERSION: &str = "capy.project-ai-response.v1";
+pub const DESIGN_LANGUAGE_VALIDATION_SCHEMA_VERSION: &str = "capy.design-language.validation.v1";
+pub const DESIGN_LANGUAGE_INSPECTION_SCHEMA_VERSION: &str = "capy.design-language.inspection.v1";
+
+fn default_design_language_id() -> String {
+    "dlpkg_default".to_string()
+}
+
+fn default_design_language_name() -> String {
+    "Project Design Language".to_string()
+}
+
+fn default_design_language_version() -> String {
+    "0.1.0".to_string()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -80,6 +94,16 @@ pub struct ProjectManifestV1 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignLanguageManifestV1 {
     pub schema_version: String,
+    #[serde(default = "default_design_language_id")]
+    pub id: String,
+    #[serde(default = "default_design_language_name")]
+    pub name: String,
+    #[serde(default = "default_design_language_version")]
+    pub version: String,
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub updated_at: u64,
     #[serde(default)]
     pub assets: Vec<DesignLanguageAssetV1>,
 }
@@ -88,10 +112,68 @@ pub struct DesignLanguageManifestV1 {
 pub struct DesignLanguageAssetV1 {
     pub id: String,
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
     pub path: String,
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignLanguageSummaryV1 {
+    pub name: String,
+    pub version: String,
+    pub summary: String,
+    pub design_language_ref: String,
+    pub asset_count: usize,
+    pub token_count: usize,
+    pub reference_image_count: usize,
+    pub rule_count: usize,
+    pub example_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignLanguageAssetStatusV1 {
+    pub id: String,
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    pub path: String,
+    pub title: String,
+    pub exists: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignLanguageValidationV1 {
+    pub schema_version: String,
+    pub ok: bool,
+    pub project_id: String,
+    pub project_name: String,
+    pub design_language_ref: String,
+    pub summary: DesignLanguageSummaryV1,
+    #[serde(default)]
+    pub assets: Vec<DesignLanguageAssetStatusV1>,
+    #[serde(default)]
+    pub errors: Vec<String>,
+    pub generated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignLanguageInspectionV1 {
+    pub schema_version: String,
+    pub project_id: String,
+    pub project_name: String,
+    pub design_language_ref: String,
+    pub summary: DesignLanguageSummaryV1,
+    pub manifest: DesignLanguageManifestV1,
+    #[serde(default)]
+    pub assets: Vec<DesignLanguageAssetStatusV1>,
+    pub generated_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,6 +208,7 @@ pub struct ArtifactRefV1 {
 pub struct ProjectInspectionV1 {
     pub manifest: ProjectManifestV1,
     pub design_language: DesignLanguageManifestV1,
+    pub design_language_summary: DesignLanguageSummaryV1,
     pub artifacts: ArtifactRegistryV1,
 }
 
@@ -149,6 +232,8 @@ pub struct ContextPackageV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub canvas_node: Option<String>,
     pub artifact: ArtifactRefV1,
+    pub design_language_ref: String,
+    pub design_language_summary: DesignLanguageSummaryV1,
     #[serde(default)]
     pub design_language_refs: Vec<DesignLanguageAssetV1>,
     #[serde(default)]
@@ -246,6 +331,7 @@ pub struct ProjectWorkbenchV1 {
     pub schema_version: String,
     pub project_id: String,
     pub project_name: String,
+    pub design_language_summary: DesignLanguageSummaryV1,
     #[serde(default)]
     pub cards: Vec<ProjectWorkbenchCardV1>,
     pub generated_at: u64,
@@ -270,6 +356,10 @@ pub struct ProjectGenerateRunV1 {
     pub status: String,
     pub trace_id: String,
     pub dry_run: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub design_language_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub design_language_summary: Option<DesignLanguageSummaryV1>,
     #[serde(default)]
     pub command_preview: Vec<String>,
     #[serde(default)]
@@ -302,6 +392,8 @@ pub struct ProjectAiPromptV1 {
     pub artifact_id: String,
     pub source_path: String,
     pub provider: String,
+    pub design_language_ref: String,
+    pub design_language_summary: DesignLanguageSummaryV1,
     pub prompt: String,
     pub output_schema: Value,
     pub generated_at: u64,

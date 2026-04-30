@@ -1,9 +1,15 @@
 {
   "schema_version": "capy.design-language.v1",
+  "id": "dlpkg_html_context",
+  "name": "HTML Context Warm Prism",
+  "version": "2026.04.30",
+  "summary": "Warm Prism launch language for project HTML, poster, deck, and video outputs.",
+  "updated_at": 1767000000000,
   "assets": [
     {
       "id": "dl_00000000000000000000000000000001",
       "kind": "css",
+      "role": "tokens",
       "path": "design/tokens.css",
       "title": "Warm Prism tokens",
       "description": "Fixture tokens used by the HTML artifact context package."
@@ -11,9 +17,18 @@
     {
       "id": "dl_00000000000000000000000000000002",
       "kind": "markdown",
+      "role": "brand-rule",
       "path": "design/language.md",
       "title": "Design language note",
       "description": "Short AI-readable design constraints."
+    },
+    {
+      "id": "dl_00000000000000000000000000000003",
+      "kind": "image",
+      "role": "reference-image",
+      "path": "assets/key-visual.svg",
+      "title": "Key visual reference",
+      "description": "Local reference image for composition, palette, and visual mood."
     }
   ]
 }

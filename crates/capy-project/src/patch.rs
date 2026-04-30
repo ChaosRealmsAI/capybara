@@ -211,6 +211,7 @@ mod package_tests {
         fs::write(temp.path().join("index.html"), "<h1>Hello</h1>")?;
         let design = project.add_design_asset(
             "css".to_string(),
+            Some("tokens".to_string()),
             "tokens.css",
             "Tokens".to_string(),
             None,

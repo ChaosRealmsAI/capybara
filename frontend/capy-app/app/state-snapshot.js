@@ -14,6 +14,9 @@ export function createStateSnapshot({ state, normalizeValue, posterDocumentsStat
         previewSource: state.projectPackage.previewSource,
         artifactCount: state.projectPackage.inspection?.artifacts?.artifacts?.length || 0,
         cardCount: state.projectPackage.workbench?.cards?.length || 0,
+        designLanguageSummary: state.projectPackage.inspection?.design_language_summary
+          || state.projectPackage.workbench?.design_language_summary
+          || null,
         generation: state.projectPackage.generation,
         error: state.projectPackage.error
       },
