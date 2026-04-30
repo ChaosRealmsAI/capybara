@@ -1,0 +1,121 @@
+import { semanticStateSource } from "./verify-video-clip-semantics-evals.mjs";
+
+export function proposalLoadEval(projectPath, compositionPath = "") {
+  return `new Promise(async resolve => {
+    ${proposalStateSource()}
+    const wait = ms => new Promise(done => setTimeout(done, ms));
+    await waitForWorkbench(wait);
+    await loadProjectVideoQueue(wait, ${JSON.stringify(projectPath)});
+    await openVideoWorkspace(wait, ${JSON.stringify(compositionPath)}, "camera-a");
+    await waitForQueue(wait, 2);
+    await waitForSemantics(wait, 2);
+    resolve(await proposalState("loaded"));
+  })`;
+}
+
+export function proposalSaveFeedbackEval(text) {
+  return `new Promise(async resolve => {
+    ${proposalStateSource()}
+    const wait = ms => new Promise(done => setTimeout(done, ms));
+    const card = document.querySelector(".video-queue-card");
+    const input = card?.querySelector("[data-video-feedback-text]");
+    if (input) {
+      input.value = ${JSON.stringify(text)};
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    card?.querySelector("[data-video-feedback-save]")?.click();
+    await waitForFeedback(wait, ${JSON.stringify(text)});
+    resolve(await proposalState("feedback-saved"));
+  })`;
+}
+
+export function proposalGenerateEval() {
+  return `new Promise(async resolve => {
+    ${proposalStateSource()}
+    const wait = ms => new Promise(done => setTimeout(done, ms));
+    document.querySelector("#video-suggestion-generate")?.click();
+    await waitForFeedbackSuggestion(wait, 2);
+    document.querySelector("[data-video-generate-proposal]")?.click();
+    await waitForProposal(wait, "proposed");
+    resolve(await proposalState("proposal-generated"));
+  })`;
+}
+
+export function proposalRejectEval() {
+  return `new Promise(async resolve => {
+    ${proposalStateSource()}
+    const wait = ms => new Promise(done => setTimeout(done, ms));
+    document.querySelector("[data-video-proposal-decision='reject']")?.click();
+    await waitForProposal(wait, "rejected");
+    resolve(await proposalState("proposal-rejected"));
+  })`;
+}
+
+export function proposalAcceptEval() {
+  return `new Promise(async resolve => {
+    ${proposalStateSource()}
+    const wait = ms => new Promise(done => setTimeout(done, ms));
+    document.querySelector("[data-video-generate-proposal]")?.click();
+    await waitForProposal(wait, "proposed");
+    document.querySelector("[data-video-proposal-decision='accept']")?.click();
+    await waitForProposal(wait, "accepted");
+    await waitForAcceptedQueue(wait, 2);
+    resolve(await proposalState("proposal-accepted"));
+  })`;
+}
+
+function proposalStateSource() {
+  return `${semanticStateSource()}
+  async function waitForFeedback(wait, text) {
+    for (let i = 0; i < 160; i += 1) {
+      const state = window.capyWorkbench.stateSnapshot();
+      const items = state.video.clipFeedback?.items || [];
+      const domText = document.querySelector("#video-queue")?.innerText || "";
+      if (items.some(item => item.feedback === text) && domText.includes("用户反馈")) return;
+      await wait(100);
+    }
+  }
+  async function waitForFeedbackSuggestion(wait, count) {
+    for (let i = 0; i < 160; i += 1) {
+      const state = window.capyWorkbench.stateSnapshot();
+      const items = state.video.clipSuggestion?.items || [];
+      const domText = document.querySelector("#video-suggestion")?.innerText || "";
+      if (state.video.clipSuggestionStatus === "ready" && items.length >= count && items.some(item => item.feedback_reason) && domText.includes("反馈调整")) return;
+      await wait(100);
+    }
+  }
+  async function waitForProposal(wait, status) {
+    for (let i = 0; i < 180; i += 1) {
+      const state = window.capyWorkbench.stateSnapshot();
+      const proposal = state.video.clipSuggestionProposal;
+      const domText = document.querySelector("#video-suggestion")?.innerText || "";
+      if (proposal?.status === status && domText.includes("修改提案")) return;
+      await wait(100);
+    }
+  }
+  async function waitForAcceptedQueue(wait, count) {
+    for (let i = 0; i < 180; i += 1) {
+      const state = window.capyWorkbench.stateSnapshot();
+      const queue = state.video.clipQueue || [];
+      if (queue.length >= count && queue[0]?.id === "queue-initial-camera-b" && state.video.clipQueuePersistStatus === "saved") return;
+      await wait(100);
+    }
+  }
+  async function proposalState(stage) {
+    const base = await semanticState(stage);
+    const state = window.capyWorkbench?.stateSnapshot ? window.capyWorkbench.stateSnapshot() : {};
+    const proposal = state.video?.clipSuggestionProposal || null;
+    const proposalEl = document.querySelector(".video-proposal-diff")?.getBoundingClientRect();
+    return {
+      ...base,
+      proposal,
+      proposalStatus: state.video?.clipSuggestionProposalStatus || "",
+      proposalError: state.video?.clipSuggestionProposalError || null,
+      domProposalText: document.querySelector(".video-proposal-diff")?.innerText || "",
+      layout: {
+        ...base.layout,
+        proposal: { w: Math.round(proposalEl?.width || 0), h: Math.round(proposalEl?.height || 0) }
+      }
+    };
+  }`;
+}

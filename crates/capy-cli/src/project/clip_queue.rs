@@ -9,9 +9,9 @@ use serde_json::Value;
 #[command(after_help = "AI quick start:
   Use when: AI or desktop verification needs to inspect, seed, or locally suggest the project-level linear video clip queue.
   Required params: every command needs --project <dir>; write also needs --manifest <queue.json>.
-  Outputs: inspect/write return capy.project-video-clip-queue.v1; analyze/semantics return capy.project-video-clip-semantics.v1; feedback/feedbacks return capy.project-video-clip-feedback.v1; suggest returns capy.project-video-clip-suggestion.v1 with semantic and feedback reasons when available.
-  Pitfalls: this is a linear edit queue, not a multi-track NLE; analyze, feedback, and suggest are no-spend deterministic local flows and must not call paid providers; suggest is read-only and does not mutate the queue; all paths must live inside the project root.
-  Next step: run analyze, save feedback when needed, then suggest, then adopt through desktop UI or write a queue manifest; verify with semantics/feedbacks/inspect and a real export.")]
+  Outputs: inspect/write return capy.project-video-clip-queue.v1; analyze/semantics return capy.project-video-clip-semantics.v1; feedback/feedbacks return capy.project-video-clip-feedback.v1; suggest returns capy.project-video-clip-suggestion.v1; proposal returns capy.project-video-clip-proposal.v1; proposal-decision returns capy.project-video-clip-proposal-decision-result.v1.
+  Pitfalls: this is a linear edit queue, not a multi-track NLE; analyze, feedback, suggest, and proposal are no-spend deterministic local flows and must not call paid providers; suggest and proposal are read-only with respect to the queue; only proposal-decision --decision accept mutates the queue.
+  Next step: run analyze, save feedback, run suggest/proposal, inspect proposal-current, then accept or reject with proposal-decision and verify with inspect.")]
 pub(crate) struct ProjectClipQueueArgs {
     #[command(subcommand)]
     command: ProjectClipQueueCommand,
@@ -78,6 +78,41 @@ enum ProjectClipQueueCommand {
   Verify: run project clip-queue analyze first, optionally save feedback, confirm semantic_reason/feedback_reason in suggestions, inspect before and after adoption, then export the adopted queue."
     )]
     Suggest(ProjectClipQueuePathArgs),
+    #[command(
+        about = "Generate a PM-readable proposal diff without mutating the queue",
+        after_help = "AI quick start:
+  Use when: PM needs to preview how feedback-aware suggestions would change the clip queue before accepting.
+  Required params: --project <dir>.
+  Output: capy.project-video-clip-proposal.v1 JSON written to .capy/video-clip-proposal.json. It includes before_queue, after_queue, changes[], feedback_reason, semantic_reason, applicable, and apply_status.
+  State effects: writes only the proposal manifest and touches project metadata; it does not modify .capy/video-clip-queue.json.
+  Do not: treat proposal generation as adoption, call providers, or add NLE features.
+  Verify: run project clip-queue inspect before and after proposal and confirm queue ids are unchanged; then use proposal-decision accept|reject."
+    )]
+    Proposal(ProjectClipQueuePathArgs),
+    #[command(
+        name = "proposal-current",
+        about = "Inspect the latest persisted proposal diff",
+        after_help = "AI quick start:
+  Use when: AI needs to inspect the current PM proposal diff and decision state after generation, accept, or reject.
+  Required params: --project <dir>.
+  Output: capy.project-video-clip-proposal.v1 JSON from .capy/video-clip-proposal.json.
+  State effects: read-only.
+  Do not: assume this mutates queue; it only reports the latest proposal status.
+  Verify: changes[] should include before_sequence, after_sequence, reason_summary, applicable, and apply_status."
+    )]
+    ProposalCurrent(ProjectClipQueuePathArgs),
+    #[command(
+        name = "proposal-decision",
+        about = "Accept or reject a proposal diff",
+        after_help = "AI quick start:
+  Use when: PM has reviewed a proposal diff and explicitly chooses whether to apply it.
+  Required params: --project <dir>, --proposal <proposal-id>, --decision accept|reject. Optional --reason records the PM decision reason.
+  Output: capy.project-video-clip-proposal-decision-result.v1 JSON with proposal and queue_manifest when accepted.
+  State effects: reject records decision and leaves .capy/video-clip-queue.json unchanged; accept writes after_queue to .capy/video-clip-queue.json through Project Core.
+  Do not: accept without a PM decision, auto-apply on proposal generation, call providers, or edit queue outside Project Core.
+  Verify: inspect queue before/reject/accept and confirm reject preserves ids while accept matches proposal.after_queue."
+    )]
+    ProposalDecision(ProjectClipQueueDecisionArgs),
 }
 
 #[derive(Debug, Args)]
@@ -102,6 +137,18 @@ struct ProjectClipQueueFeedbackArgs {
     queue_item: String,
     #[arg(long)]
     text: String,
+}
+
+#[derive(Debug, Args)]
+struct ProjectClipQueueDecisionArgs {
+    #[arg(long)]
+    project: PathBuf,
+    #[arg(long)]
+    proposal: String,
+    #[arg(long)]
+    decision: String,
+    #[arg(long, default_value = "")]
+    reason: String,
 }
 
 pub(crate) fn handle_clip_queue(args: ProjectClipQueueArgs) -> Result<Value, serde_json::Error> {
@@ -149,6 +196,26 @@ pub(crate) fn handle_clip_queue(args: ProjectClipQueueArgs) -> Result<Value, ser
             serde_json::to_value(
                 package
                     .suggest_video_clip_queue()
+                    .map_err(string_json_error)?,
+            )
+        }
+        ProjectClipQueueCommand::Proposal(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .generate_video_clip_proposal()
+                    .map_err(string_json_error)?,
+            )
+        }
+        ProjectClipQueueCommand::ProposalCurrent(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(package.video_clip_proposal().map_err(string_json_error)?)
+        }
+        ProjectClipQueueCommand::ProposalDecision(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .decide_video_clip_proposal(&args.proposal, &args.decision, &args.reason)
                     .map_err(string_json_error)?,
             )
         }

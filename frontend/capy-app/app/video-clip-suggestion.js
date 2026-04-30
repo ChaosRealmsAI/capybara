@@ -33,7 +33,8 @@ export function createVideoClipSuggestionController(ctx) {
       return;
     }
     dom.videoSuggestionEl.hidden = false;
-    const adopted = status === "adopted";
+    const proposal = state.video.clipSuggestionProposal;
+    const proposalStatus = state.video.clipSuggestionProposalStatus || proposal?.status || "idle";
     const rows = (suggestion.items || []).map((item) => `
       <li>
         <strong>${String(item.sequence).padStart(2, "0")} · ${escapeHtml(item.source_video?.filename || item.scene || item.clip_id)}</strong>
@@ -52,16 +53,21 @@ export function createVideoClipSuggestionController(ctx) {
           <span>AI 剪辑建议</span>
           <strong>${escapeHtml(suggestion.suggestion_id || "suggestion")}</strong>
         </div>
-        <button class="tool-button primary" type="button" data-video-adopt-suggestion>${adopted ? "已采用" : "采用方案"}</button>
+        <button class="tool-button primary" type="button" data-video-generate-proposal>${proposalStatus === "planning" ? "生成中" : "生成修改提案"}</button>
       </header>
       <p>${escapeHtml(suggestion.rationale || "本地 deterministic planner 基于项目素材和队列生成。")}</p>
       <ol class="video-suggestion-list">${rows}</ol>
+      ${renderProposalDiff(proposal, proposalStatus)}
     `;
-    const adopt = dom.videoSuggestionEl.querySelector("[data-video-adopt-suggestion]");
-    if (adopt) {
-      adopt.disabled = adopted;
-      adopt.addEventListener("click", () => adoptSuggestion());
+    const generateProposal = dom.videoSuggestionEl.querySelector("[data-video-generate-proposal]");
+    if (generateProposal) {
+      generateProposal.disabled = proposalStatus === "planning";
+      generateProposal.addEventListener("click", () => generateProposalDiff());
     }
+    dom.videoSuggestionEl.querySelector("[data-video-proposal-decision=\"accept\"]")
+      ?.addEventListener("click", () => decideProposal("accept"));
+    dom.videoSuggestionEl.querySelector("[data-video-proposal-decision=\"reject\"]")
+      ?.addEventListener("click", () => decideProposal("reject"));
   }
 
   async function generate() {
@@ -80,6 +86,9 @@ export function createVideoClipSuggestionController(ctx) {
       state.video.clipSuggestion = suggestion;
       state.video.clipSuggestionStatus = "ready";
       state.video.clipSuggestionError = null;
+      state.video.clipSuggestionProposal = null;
+      state.video.clipSuggestionProposalStatus = "idle";
+      state.video.clipSuggestionProposalError = null;
       renderDelivery();
     } catch (error) {
       state.video.clipSuggestionStatus = "error";
@@ -88,58 +97,105 @@ export function createVideoClipSuggestionController(ctx) {
     }
   }
 
-  async function adoptSuggestion() {
+  async function generateProposalDiff() {
     const project = projectPath?.();
-    const suggestion = state.video.clipSuggestion;
-    if (!project || !rpc || !suggestion) return;
-    const items = (suggestion.items || []).map((item) => suggestionQueueItem(item, suggestion));
-    state.video.clipQueuePersistStatus = "saving";
-    state.video.clipQueuePersistError = null;
+    if (!project || !rpc || !state.video.clipSuggestion) return;
+    state.video.clipSuggestionProposalStatus = "planning";
+    state.video.clipSuggestionProposalError = null;
     renderDelivery();
     try {
-      const manifest = await rpc("project-video-clip-queue-set", { project, items, reason: "adopt-ai-suggestion" });
-      state.video.clipQueueManifest = manifest;
-      state.video.clipQueue = queueFromManifest(manifest, project);
-      state.video.clipQueuePersistStatus = "saved";
-      state.video.clipQueuePersistError = null;
-      state.video.clipSuggestion = { ...suggestion, status: "adopted", adopted_at: Date.now() };
-      state.video.clipSuggestionStatus = "adopted";
-      state.video.clipProposal = null;
-      state.video.proposalStatus = "idle";
-      renderVideoEditor();
+      const proposal = await rpc("project-video-clip-proposal-generate", { project });
+      state.video.clipSuggestionProposal = proposal;
+      state.video.clipSuggestionProposalStatus = proposal.status || "proposed";
+      state.video.clipSuggestionProposalError = null;
+      renderDelivery();
     } catch (error) {
-      state.video.clipQueuePersistStatus = "error";
-      state.video.clipQueuePersistError = stringifyError ? stringifyError(error) : String(error);
-      state.video.clipSuggestionStatus = "error";
-      state.video.clipSuggestionError = state.video.clipQueuePersistError;
-      renderVideoEditor();
+      state.video.clipSuggestionProposalStatus = "error";
+      state.video.clipSuggestionProposalError = stringifyError ? stringifyError(error) : String(error);
+      renderDelivery();
     }
   }
 
-  return { render, generate };
+  async function decideProposal(decision) {
+    const project = projectPath?.();
+    const proposal = state.video.clipSuggestionProposal;
+    if (!project || !rpc || !proposal?.proposal_id) return;
+    state.video.clipSuggestionProposalStatus = decision === "accept" ? "accepting" : "rejecting";
+    state.video.clipSuggestionProposalError = null;
+    renderDelivery();
+    try {
+      const result = await rpc("project-video-clip-proposal-decide", {
+        project,
+        proposal: proposal.proposal_id,
+        decision,
+        reason: decision === "accept" ? "PM accepted proposal diff in desktop UI" : "PM rejected proposal diff in desktop UI"
+      });
+      state.video.clipSuggestionProposal = result.proposal || proposal;
+      state.video.clipSuggestionProposalStatus = result.proposal?.status || (decision === "accept" ? "accepted" : "rejected");
+      if (result.queue_manifest) {
+        state.video.clipQueueManifest = result.queue_manifest;
+        state.video.clipQueue = queueFromManifest(result.queue_manifest, project);
+        state.video.clipQueuePersistStatus = "saved";
+        state.video.clipQueuePersistError = null;
+        state.video.clipProposal = null;
+        state.video.proposalStatus = "idle";
+      }
+      renderVideoEditor();
+    } catch (error) {
+      state.video.clipSuggestionProposalStatus = "error";
+      state.video.clipSuggestionProposalError = stringifyError ? stringifyError(error) : String(error);
+      renderDelivery();
+    }
+  }
+
+  return { render, generate, generateProposalDiff, decideProposal };
 }
 
-function suggestionQueueItem(item, suggestion) {
-  const start = Math.round(Number(item.start_ms || 0));
-  const end = Math.round(Number(item.end_ms || 0));
-  return {
-    id: item.id || `queue-${suggestion.suggestion_id}-${item.sequence}`,
-    sequence: item.sequence,
-    composition_path: item.composition_path,
-    render_source_path: item.render_source_path || "",
-    clip_id: item.clip_id || "source",
-    track_id: item.track_id || "",
-    scene: item.scene || item.clip_id || "AI 建议片段",
-    start_ms: start,
-    end_ms: end,
-    duration_ms: Math.max(1, Math.round(Number(item.duration_ms || end - start))),
-    source_video: item.source_video || null,
-    suggestion_id: suggestion.suggestion_id || item.suggestion_id || "",
-    suggestion_reason: item.reason || "",
-    semantic_ref: item.semantic_ref || "",
-    semantic_summary: item.semantic_summary || "",
-    semantic_tags: item.semantic_tags || [],
-    semantic_reason: item.semantic_reason || "",
-    updated_at: Date.now()
-  };
+function renderProposalDiff(proposal, status) {
+  if (status === "planning") return `<div class="video-proposal-diff"><p>正在生成剪辑修改提案...</p></div>`;
+  if (status === "error") return `<div class="video-proposal-diff"><p>修改提案生成失败。</p></div>`;
+  if (!proposal) return "";
+  const decided = ["accepted", "rejected"].includes(proposal.status);
+  const rows = (proposal.changes || []).map((change) => `
+    <li data-video-proposal-change="${escapeAttr(change.id || "")}">
+      <strong>${escapeHtml(change.action_label_zh || change.action || "调整")} · ${escapeHtml(change.scene || "片段")}</strong>
+      <span>Before ${positionLabel(change.before_sequence)} → After ${positionLabel(change.after_sequence)} · ${change.applicable ? "可应用" : "不可直接应用"} · ${escapeHtml(change.apply_status || "pending")}</span>
+      <small>${escapeHtml(change.reason_summary || "")}</small>
+      ${change.feedback_text ? `<em>用户反馈：${escapeHtml(change.feedback_text)}</em>` : ""}
+      ${change.semantic_reason ? `<em>语义理由：${escapeHtml(change.semantic_reason)}</em>` : ""}
+    </li>
+  `).join("");
+  return `
+    <section class="video-proposal-diff" data-video-proposal-id="${escapeAttr(proposal.proposal_id || "")}" data-video-proposal-status="${escapeAttr(proposal.status || status || "")}">
+      <header class="video-proposal-diff-head">
+        <div>
+          <span>修改提案</span>
+          <strong>${escapeHtml(proposal.proposal_id || "proposal")}</strong>
+        </div>
+        <div class="video-proposal-diff-actions">
+          <button class="tool-button secondary" type="button" data-video-proposal-decision="reject" ${decided ? "disabled" : ""}>拒绝提案</button>
+          <button class="tool-button primary" type="button" data-video-proposal-decision="accept" ${decided ? "disabled" : ""}>接受提案</button>
+        </div>
+      </header>
+      <p>${escapeHtml(proposal.rationale || "本地 proposal diff 等待 PM 决策。")}</p>
+      <p>${escapeHtml(proposal.safety_note || "生成提案不会自动修改 queue。")}</p>
+      <ol class="video-proposal-diff-list">${rows}</ol>
+    </section>
+  `;
+}
+
+function positionLabel(value) {
+  return value ? `#${value}` : "无";
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll("'", "&#39;");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }

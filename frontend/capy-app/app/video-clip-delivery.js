@@ -51,6 +51,8 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.clipQueuePersistStatus = "loaded";
     state.video.clipQueuePersistError = null;
     state.video.clipProposal = null;
+    state.video.clipSuggestionProposal = null;
+    state.video.clipSuggestionProposalStatus = "idle";
     state.video.proposalStatus = "idle";
     renderVideoEditor();
   }
@@ -170,6 +172,8 @@ export function createVideoClipDeliveryController(ctx) {
     }));
     state.video.clipQueue = renumberQueue(queue);
     state.video.clipProposal = null;
+    state.video.clipSuggestionProposal = null;
+    state.video.clipSuggestionProposalStatus = "idle";
     state.video.proposalStatus = "idle";
     persistQueue("add");
     renderVideoEditor();
@@ -184,6 +188,8 @@ export function createVideoClipDeliveryController(ctx) {
     queue.splice(next, 0, item);
     state.video.clipQueue = renumberQueue(queue);
     state.video.clipProposal = null;
+    state.video.clipSuggestionProposal = null;
+    state.video.clipSuggestionProposalStatus = "idle";
     state.video.proposalStatus = "idle";
     persistQueue("move");
     renderVideoEditor();
@@ -191,6 +197,8 @@ export function createVideoClipDeliveryController(ctx) {
   function removeQueueItem(id) {
     state.video.clipQueue = renumberQueue(normalizedQueue(state).filter((item) => item.id !== id));
     state.video.clipProposal = null;
+    state.video.clipSuggestionProposal = null;
+    state.video.clipSuggestionProposalStatus = "idle";
     state.video.proposalStatus = "idle";
     persistQueue("remove");
     renderVideoEditor();
