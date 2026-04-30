@@ -5,6 +5,9 @@ use serde_json::{Value, json};
 
 use crate::model::ArtifactKind;
 use crate::package::{ProjectPackage, ProjectPackageResult, now_ms};
+use crate::video_clip_feedback::{
+    ProjectVideoClipFeedbackItemV1, ProjectVideoClipFeedbackManifestV1, queue_item_clip_key,
+};
 use crate::video_clip_queue::{ProjectVideoClipQueueItemV1, VIDEO_CLIP_QUEUE_SCHEMA_VERSION};
 use crate::video_clip_semantics::{
     ProjectVideoClipSemanticItemV1, ProjectVideoClipSemanticsManifestV1, clip_semantic_key,
@@ -53,6 +56,16 @@ pub struct ProjectVideoClipSuggestionItemV1 {
     pub semantic_tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub semantic_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback_text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback_effect: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback_reason: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +87,8 @@ impl ProjectPackage {
         let videos = self.video_candidates()?;
         let semantics_manifest = self.video_clip_semantics().ok();
         let semantics = semantic_map(semantics_manifest.as_ref());
+        let feedback_manifest = self.video_clip_feedback().ok();
+        let feedback = feedback_map(feedback_manifest.as_ref());
         let basis = json!({
             "schema_version": VIDEO_CLIP_QUEUE_SCHEMA_VERSION,
             "project_id": project.id,
@@ -91,24 +106,31 @@ impl ProjectPackage {
                 "end_ms": item.end_ms,
                 "scene": item.scene
             })).collect::<Vec<_>>()
+            ,
+            "feedback": feedback_manifest.as_ref().map(|manifest| manifest.items.iter().map(|item| json!({
+                "clip_key": item.clip_key,
+                "queue_item_id": item.queue_item_id,
+                "feedback": item.feedback,
+                "effect": item.recommendation_effect
+            })).collect::<Vec<_>>()).unwrap_or_default()
         });
         let suggestion_id = format!(
             "sug-fnv1a64-{:016x}",
             fnv1a64(serde_json::to_string(&basis).unwrap_or_default().as_bytes())
         );
         let mut items = Vec::new();
-        for item in queue.items.iter().take(4) {
-            let semantic = semantics.get(&clip_semantic_key(
-                &item.composition_path,
-                &item.clip_id,
-                item.start_ms,
-                item.end_ms,
-            ));
+        let mut queued_items = queue.items.iter().take(4).collect::<Vec<_>>();
+        queued_items.sort_by_key(|item| feedback_sort_key(item, &feedback));
+        for item in queued_items {
+            let key = queue_item_clip_key(item);
+            let semantic = semantics.get(&key);
+            let feedback_item = feedback.get(&key);
             items.push(suggestion_from_queue_item(
                 item,
                 &suggestion_id,
                 items.len() + 1,
                 semantic.copied(),
+                feedback_item.copied(),
             ));
         }
         for video in &videos {
@@ -149,6 +171,12 @@ impl ProjectPackage {
             existing_queue_count: queue.items.len(),
             rationale: if queue.items.is_empty() {
                 "基于项目视频素材自动选择短片段，先形成可采用的线性剪辑队列。".to_string()
+            } else if feedback
+                .values()
+                .any(|item| !item.feedback.trim().is_empty())
+            {
+                "保留原始 queue 作为 PM 已认可上下文，同时引用片段反馈调整本次只读建议排序；不会自动改写 queue。"
+                    .to_string()
             } else {
                 "保留已持久化队列的顺序作为 PM 已认可上下文，并补充项目中尚未覆盖的视频素材。"
                     .to_string()
@@ -206,6 +234,7 @@ fn suggestion_from_queue_item(
     suggestion_id: &str,
     index: usize,
     semantic: Option<&ProjectVideoClipSemanticItemV1>,
+    feedback: Option<&ProjectVideoClipFeedbackItemV1>,
 ) -> ProjectVideoClipSuggestionItemV1 {
     let duration_ms = item
         .duration_ms
@@ -233,8 +262,14 @@ fn suggestion_from_queue_item(
         semantic_summary: None,
         semantic_tags: Vec::new(),
         semantic_reason: None,
+        feedback_ref: None,
+        feedback_text: None,
+        feedback_kind: None,
+        feedback_effect: None,
+        feedback_reason: None,
     };
     apply_semantic_reason(&mut suggestion, semantic);
+    apply_feedback_reason(&mut suggestion, feedback);
     suggestion
 }
 
@@ -288,6 +323,11 @@ fn suggestion_from_video(
         semantic_summary: None,
         semantic_tags: Vec::new(),
         semantic_reason: None,
+        feedback_ref: None,
+        feedback_text: None,
+        feedback_kind: None,
+        feedback_effect: None,
+        feedback_reason: None,
     };
     apply_semantic_reason(&mut suggestion, semantic.copied());
     suggestion
@@ -310,6 +350,36 @@ fn apply_semantic_reason(
     ));
 }
 
+fn apply_feedback_reason(
+    suggestion: &mut ProjectVideoClipSuggestionItemV1,
+    feedback: Option<&ProjectVideoClipFeedbackItemV1>,
+) {
+    let Some(feedback) = feedback else {
+        return;
+    };
+    let feedback_text = feedback.feedback.trim();
+    if feedback_text.is_empty() {
+        return;
+    }
+    let reason = if feedback.recommendation_effect == "deprioritize_opening" {
+        format!("用户反馈：{feedback_text}。建议不把该片段作为开场首位，仍等待 PM 手动采用。")
+    } else if feedback.recommendation_effect == "prefer_opening" {
+        format!("用户反馈：{feedback_text}。建议优先保留该片段作为开场候选，仍等待 PM 手动采用。")
+    } else {
+        format!("用户反馈：{feedback_text}。本地建议已把该反馈作为片段取舍上下文。")
+    };
+    suggestion.reason = if suggestion.reason.trim().is_empty() {
+        reason.clone()
+    } else {
+        format!("{} {}", suggestion.reason, reason)
+    };
+    suggestion.feedback_ref = Some(feedback.id.clone());
+    suggestion.feedback_text = Some(feedback_text.to_string());
+    suggestion.feedback_kind = Some(feedback.feedback_kind.clone());
+    suggestion.feedback_effect = Some(feedback.recommendation_effect.clone());
+    suggestion.feedback_reason = Some(reason);
+}
+
 fn semantic_map(
     manifest: Option<&ProjectVideoClipSemanticsManifestV1>,
 ) -> BTreeMap<String, &ProjectVideoClipSemanticItemV1> {
@@ -322,6 +392,35 @@ fn semantic_map(
     map
 }
 
+fn feedback_map(
+    manifest: Option<&ProjectVideoClipFeedbackManifestV1>,
+) -> BTreeMap<String, &ProjectVideoClipFeedbackItemV1> {
+    let mut map = BTreeMap::new();
+    if let Some(manifest) = manifest {
+        for item in &manifest.items {
+            map.insert(item.clip_key.clone(), item);
+        }
+    }
+    map
+}
+
+fn feedback_sort_key(
+    item: &ProjectVideoClipQueueItemV1,
+    feedback: &BTreeMap<String, &ProjectVideoClipFeedbackItemV1>,
+) -> (u8, u64) {
+    let penalty = feedback
+        .get(&queue_item_clip_key(item))
+        .map(|item| {
+            if item.recommendation_effect == "deprioritize_opening" {
+                1
+            } else {
+                0
+            }
+        })
+        .unwrap_or(0);
+    (penalty, item.sequence)
+}
+
 fn fnv1a64(bytes: &[u8]) -> u64 {
     let mut hash = 0xcbf29ce484222325_u64;
     for byte in bytes {
@@ -329,127 +428,4 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
         hash = hash.wrapping_mul(0x100000001b3);
     }
     hash
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{ProjectPackage, ProjectVideoClipQueueItemV1};
-    use std::error::Error;
-    use std::fs;
-
-    #[test]
-    fn video_clip_suggestion_uses_project_videos_and_existing_queue() -> Result<(), Box<dyn Error>>
-    {
-        let dir = tempfile::tempdir()?;
-        let project = dir.path().join("demo");
-        let package = ProjectPackage::init(&project, Some("Suggestion Project".to_string()))?;
-        let composition_a = write_video_artifact(&package, "art_a", "camera-a.webm", 4_000)?;
-        let composition_b = write_video_artifact(&package, "art_b", "camera-b.webm", 5_000)?;
-        package.write_video_clip_queue(vec![
-            ProjectVideoClipQueueItemV1 {
-                id: "queue-a".to_string(),
-                sequence: 9,
-                composition_path: composition_a.clone(),
-                render_source_path: String::new(),
-                clip_id: "source".to_string(),
-                track_id: "video".to_string(),
-                scene: "Camera A existing opener".to_string(),
-                start_ms: 500,
-                end_ms: 1_700,
-                duration_ms: 1_200,
-                source_video: Some(json!({ "filename": "camera-a.webm" })),
-                suggestion_id: None,
-                suggestion_reason: None,
-                semantic_ref: None,
-                semantic_summary: None,
-                semantic_tags: Vec::new(),
-                semantic_reason: None,
-                updated_at: 0,
-            },
-            ProjectVideoClipQueueItemV1 {
-                id: "queue-b".to_string(),
-                sequence: 10,
-                composition_path: composition_b.clone(),
-                render_source_path: String::new(),
-                clip_id: "source".to_string(),
-                track_id: "video".to_string(),
-                scene: "Camera B existing closeup".to_string(),
-                start_ms: 1_000,
-                end_ms: 3_000,
-                duration_ms: 2_000,
-                source_video: Some(json!({ "filename": "camera-b.webm" })),
-                suggestion_id: None,
-                suggestion_reason: None,
-                semantic_ref: None,
-                semantic_summary: None,
-                semantic_tags: Vec::new(),
-                semantic_reason: None,
-                updated_at: 0,
-            },
-        ])?;
-        package.analyze_video_clip_semantics()?;
-
-        let suggestion = package.suggest_video_clip_queue()?;
-        assert_eq!(
-            suggestion.schema_version,
-            VIDEO_CLIP_SUGGESTION_SCHEMA_VERSION
-        );
-        assert_eq!(suggestion.source_video_count, 2);
-        assert_eq!(suggestion.existing_queue_count, 2);
-        assert_eq!(suggestion.items.len(), 2);
-        assert!(suggestion.items.iter().all(|item| !item.reason.is_empty()));
-        assert!(suggestion.items.iter().all(|item| {
-            item.semantic_reason
-                .as_deref()
-                .unwrap_or("")
-                .contains("摘要")
-        }));
-        assert_eq!(suggestion.items[0].scene, "Camera A existing opener");
-        assert_eq!(suggestion.items[1].scene, "Camera B existing closeup");
-        assert!(suggestion.suggestion_id.starts_with("sug-fnv1a64-"));
-        Ok(())
-    }
-
-    fn write_video_artifact(
-        package: &ProjectPackage,
-        artifact_id: &str,
-        filename: &str,
-        duration_ms: u64,
-    ) -> Result<String, Box<dyn Error>> {
-        let root = package.root();
-        let media = root.join("media");
-        fs::create_dir_all(&media)?;
-        fs::write(media.join(filename), "fixture")?;
-        let composition_path =
-            format!(".capy/video-compositions/{artifact_id}/compositions/main.json");
-        let composition_abs = root.join(&composition_path);
-        fs::create_dir_all(composition_abs.parent().ok_or("composition parent")?)?;
-        fs::write(&composition_abs, "{}\n")?;
-        let mut registry = package.artifacts()?;
-        registry.artifacts.push(crate::ArtifactRefV1 {
-            id: artifact_id.to_string(),
-            kind: crate::ArtifactKind::Video,
-            title: filename.to_string(),
-            source_path: format!("media/{filename}"),
-            source_refs: Vec::new(),
-            output_refs: vec![composition_path.clone()],
-            design_language_refs: Vec::new(),
-            asset_refs: Vec::new(),
-            provenance: Some(json!({
-                "video_import": {
-                    "filename": filename,
-                    "duration_ms": duration_ms,
-                    "width": 640,
-                    "height": 360,
-                    "byte_size": 7,
-                    "composition_path": composition_path
-                }
-            })),
-            evidence_refs: Vec::new(),
-            updated_at: 0,
-        });
-        package.write_artifacts(&registry)?;
-        Ok(composition_path)
-    }
 }

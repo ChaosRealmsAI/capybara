@@ -1,4 +1,4 @@
-export function renderQueue({ state, dom, moveQueueItem, removeQueueItem, formatTime, escapeHtml }) {
+export function renderQueue({ state, dom, moveQueueItem, removeQueueItem, saveFeedback, feedbackForItem, formatTime, escapeHtml }) {
   const queue = normalizedQueue(state);
   const total = queueTotalDuration(queue);
   if (dom.videoQueueSummaryEl) {
@@ -17,6 +17,8 @@ export function renderQueue({ state, dom, moveQueueItem, removeQueueItem, format
     total: queue.length,
     moveQueueItem,
     removeQueueItem,
+    saveFeedback,
+    feedbackForItem,
     formatTime,
     escapeHtml
   })));
@@ -124,8 +126,9 @@ export function queueTotalDuration(queue) {
   return queue.reduce((total, item) => total + Math.max(1, Number(item.duration_ms || 0)), 0);
 }
 
-function queueCard({ item, total, moveQueueItem, removeQueueItem, formatTime, escapeHtml }) {
+function queueCard({ item, total, moveQueueItem, removeQueueItem, saveFeedback, feedbackForItem, formatTime, escapeHtml }) {
   const card = document.createElement("article");
+  const feedback = feedbackForItem ? feedbackForItem(item) : null;
   card.className = "video-queue-card";
   card.dataset.queueItemId = item.id;
   card.dataset.sequence = String(item.sequence);
@@ -135,6 +138,7 @@ function queueCard({ item, total, moveQueueItem, removeQueueItem, formatTime, es
       <strong>${escapeHtml(item.source_video?.filename || item.scene || item.clip_id)}</strong>
       <span>${escapeHtml(item.scene || item.clip_id)} · ${formatTime(item.start_ms)} - ${formatTime(item.end_ms)} · ${formatTime(item.duration_ms)}</span>
       ${item.semantic_summary ? `<small>${escapeHtml(item.semantic_summary)}</small>` : ""}
+      ${feedback?.feedback ? `<small class="video-feedback-saved">用户反馈：${escapeHtml(feedback.feedback)}</small>` : ""}
       ${item.suggestion_reason ? `<em>${escapeHtml(item.suggestion_reason)}</em>` : ""}
       ${item.semantic_reason ? `<em>${escapeHtml(item.semantic_reason)}</em>` : ""}
     </div>
@@ -143,11 +147,20 @@ function queueCard({ item, total, moveQueueItem, removeQueueItem, formatTime, es
       <button class="tool-button secondary" type="button" data-video-queue-move="1" ${item.sequence >= total ? "disabled" : ""}>下移</button>
       <button class="tool-button secondary" type="button" data-video-queue-remove>移除</button>
     </div>
+    <label class="video-feedback-field">
+      <span>片段反馈</span>
+      <textarea data-video-feedback-text rows="2" placeholder="例如：这段不适合开场">${escapeHtml(feedback?.feedback || "")}</textarea>
+    </label>
+    <button class="tool-button secondary video-feedback-save" type="button" data-video-feedback-save>保存反馈</button>
   `;
   card.querySelectorAll("[data-video-queue-move]").forEach((button) => {
     button.addEventListener("click", () => moveQueueItem(item.id, Number(button.dataset.videoQueueMove || 0)));
   });
   card.querySelector("[data-video-queue-remove]")?.addEventListener("click", () => removeQueueItem(item.id));
+  card.querySelector("[data-video-feedback-save]")?.addEventListener("click", () => {
+    const text = card.querySelector("[data-video-feedback-text]")?.value || "";
+    saveFeedback && saveFeedback(item, text);
+  });
   return card;
 }
 

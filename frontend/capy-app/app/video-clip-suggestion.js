@@ -40,8 +40,10 @@ export function createVideoClipSuggestionController(ctx) {
         <span>${formatTime(item.start_ms)} - ${formatTime(item.end_ms)} · ${formatTime(item.duration_ms)}</span>
         ${item.semantic_summary ? `<small>摘要：${escapeHtml(item.semantic_summary)}</small>` : ""}
         ${item.semantic_tags?.length ? `<small>标签：${item.semantic_tags.map(escapeHtml).join(" · ")}</small>` : ""}
+        ${item.feedback_text ? `<small>用户反馈：${escapeHtml(item.feedback_text)}</small>` : ""}
         <em>${escapeHtml(item.reason || "本地 planner 建议")}</em>
         ${item.semantic_reason ? `<em>语义理由：${escapeHtml(item.semantic_reason)}</em>` : ""}
+        ${item.feedback_reason ? `<em>反馈调整：${escapeHtml(item.feedback_reason)}</em>` : ""}
       </li>
     `).join("");
     dom.videoSuggestionEl.innerHTML = `

@@ -13,9 +13,12 @@ mod patch;
 mod review;
 mod selection_context;
 mod surface_nodes;
+mod video_clip_feedback;
 mod video_clip_queue;
 mod video_clip_semantics;
 mod video_clip_suggestion;
+#[cfg(test)]
+mod video_clip_suggestion_tests;
 mod video_import;
 mod workbench;
 
@@ -38,6 +41,10 @@ pub use model::{
 };
 pub use package::{CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageResult};
 pub use selection_context::{SelectionBoundsV1, SelectionContextV1};
+pub use video_clip_feedback::{
+    ProjectVideoClipFeedbackItemV1, ProjectVideoClipFeedbackManifestV1,
+    VIDEO_CLIP_FEEDBACK_SCHEMA_VERSION,
+};
 pub use video_clip_queue::{
     ProjectVideoClipQueueItemV1, ProjectVideoClipQueueManifestV1, VIDEO_CLIP_QUEUE_SCHEMA_VERSION,
 };

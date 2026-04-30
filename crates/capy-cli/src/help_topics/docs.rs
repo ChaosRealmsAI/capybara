@@ -39,18 +39,21 @@ Recommended commands:
 10. `target/debug/capy project clip-queue write --project <dir> --manifest queue.json`
 11. `target/debug/capy project clip-queue analyze --project <dir>`
 12. `target/debug/capy project clip-queue semantics --project <dir>`
-13. `target/debug/capy project clip-queue suggest --project <dir>`
-14. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Make this clearer" --review`
-15. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Tighten this headline" --selector '[data-capy-section="hero-title"]' --review`
-16. `target/debug/capy project campaign plan --project <dir> --brief "Launch one coherent campaign"`
-17. `target/debug/capy project campaign generate --project <dir> --brief "Launch one coherent campaign"`
-18. `target/debug/capy project run show --project <dir> <run_id>`
-19. `target/debug/capy project run accept --project <dir> <run_id>`
-20. For real AI prompt evidence, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --sdk-response <fixture.json> --review --save-prompt <prompt.json>`
+13. `target/debug/capy project clip-queue feedback --project <dir> --queue-item <id> --text "这段不适合开场"`
+14. `target/debug/capy project clip-queue feedbacks --project <dir>`
+15. `target/debug/capy project clip-queue suggest --project <dir>`
+16. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Make this clearer" --review`
+17. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Tighten this headline" --selector '[data-capy-section="hero-title"]' --review`
+18. `target/debug/capy project campaign plan --project <dir> --brief "Launch one coherent campaign"`
+19. `target/debug/capy project campaign generate --project <dir> --brief "Launch one coherent campaign"`
+20. `target/debug/capy project run show --project <dir> <run_id>`
+21. `target/debug/capy project run accept --project <dir> <run_id>`
+22. For real AI prompt evidence, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --sdk-response <fixture.json> --review --save-prompt <prompt.json>`
 Video import output: `capy.project-video-import.v1` with `artifact`, `metadata{filename,duration_ms,width,height,fps,byte_size}`, `poster_frame_path`, and `composition_path`; it uses local `ffprobe` and `ffmpeg`, never cloud rendering.
 Clip queue output: `capy.project-video-clip-queue.v1` with ordered linear `items[]`; it persists a project editing manifest and is not a multi-track timeline.
 Clip queue semantics output: `capy.project-video-clip-semantics.v1` with per-clip `summary_zh`, `tags`, `rhythm`, `use_case`, and `recommendation`; `analyze` writes it and `semantics` reads it.
-Clip queue suggestion output: `capy.project-video-clip-suggestion.v1` with `suggestion_id`, `rationale`, and ordered `items[]` that include source video, time range, duration, reason, and semantic reasons when analysis exists. It is deterministic and no-spend; adopting it still writes through Project Core queue APIs.
+Clip queue feedback output: `capy.project-video-clip-feedback.v1` with `queue_item_id`, `clip_key`, `feedback`, `feedback_kind`, and `recommendation_effect`; `feedback` writes it and `feedbacks` reads it.
+Clip queue suggestion output: `capy.project-video-clip-suggestion.v1` with `suggestion_id`, `rationale`, and ordered `items[]` that include source video, time range, duration, reason, semantic reasons when analysis exists, and feedback reasons when feedback exists. It is deterministic and no-spend; generating suggestions remains read-only, and adopting it still writes through Project Core queue APIs.
 Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact; let models edit `.capy` metadata directly; use clip-queue for transitions/subtitles/audio mixing/multi-track edits; accept stale proposals after the source hash changed; run live `codex` or `claude` provider commands when no-spend fixture mode is enough; claim a design language affects AI before validate/inspect and generate run records show the same `design_language_ref`; use import-video for cloud or paid-provider video generation.
 Next step: review `run.review.diff_summary`, then accept, reject, retry, or undo through `capy project run`; or open the desktop workbench for visible card evidence.
 "#;

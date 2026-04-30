@@ -1,4 +1,5 @@
 import { normalizedQueue, queueFromManifest, queueExportRange, queueItemFromRange, queueManifestItem, queueTotalDuration, renumberQueue, renderQueue } from "./video-clip-queue.js";
+import { createVideoClipFeedbackController } from "./video-clip-feedback.js";
 import { createVideoClipSemanticsController } from "./video-clip-semantics.js";
 import { createVideoClipSuggestionController } from "./video-clip-suggestion.js";
 export function createVideoClipDeliveryController(ctx) {
@@ -15,6 +16,7 @@ export function createVideoClipDeliveryController(ctx) {
     formatTime,
     escapeHtml
   });
+  const clipFeedback = createVideoClipFeedbackController({ state, rpc, projectPath, stringifyError, renderVideoEditor });
   const clipSuggestion = createVideoClipSuggestionController({
     state,
     dom,
@@ -56,11 +58,15 @@ export function createVideoClipDeliveryController(ctx) {
     clipSemantics.applyManifest(manifest);
     renderVideoEditor();
   }
+  function applyProjectFeedbackManifest(manifest) {
+    clipFeedback.applyManifest(manifest);
+    renderVideoEditor();
+  }
   function render() {
     const range = state.video.selectedRange;
     syncRangeInputs(range);
     renderRangeSummary(range);
-    renderQueue({ state, dom, moveQueueItem, removeQueueItem, formatTime, escapeHtml });
+    renderQueue({ state, dom, moveQueueItem, removeQueueItem, saveFeedback: clipFeedback.saveFeedback, feedbackForItem: clipFeedback.feedbackForItem, formatTime, escapeHtml });
     clipSemantics.render();
     clipSuggestion.render();
     renderProposal();
@@ -342,6 +348,7 @@ export function createVideoClipDeliveryController(ctx) {
     applyOpenResult,
     applyProjectQueueManifest,
     applyProjectSemanticsManifest,
+    applyProjectFeedbackManifest,
     render,
     selectClipRange,
     selectRangeFromTrack,

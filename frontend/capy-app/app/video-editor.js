@@ -136,12 +136,14 @@ export function createVideoEditor(ctx) {
       return null;
     }
     try {
-      const [manifest, semantics] = await Promise.all([
+      const [manifest, semantics, feedback] = await Promise.all([
         rpc("project-video-clip-queue-get", { project: projectPath }),
-        rpc("project-video-clip-semantics-get", { project: projectPath })
+        rpc("project-video-clip-semantics-get", { project: projectPath }),
+        rpc("project-video-clip-feedback-get", { project: projectPath })
       ]);
       clipDelivery.applyProjectQueueManifest(manifest, projectPath);
       clipDelivery.applyProjectSemanticsManifest(semantics);
+      clipDelivery.applyProjectFeedbackManifest(feedback);
       return manifest;
     } catch (error) {
       state.video.clipQueue = [];
@@ -151,6 +153,9 @@ export function createVideoEditor(ctx) {
       state.video.clipSemantics = null;
       state.video.clipSemanticsStatus = "error";
       state.video.clipSemanticsError = stringifyError(error);
+      state.video.clipFeedback = null;
+      state.video.clipFeedbackStatus = "error";
+      state.video.clipFeedbackError = stringifyError(error);
       renderVideoEditor();
       return null;
     }

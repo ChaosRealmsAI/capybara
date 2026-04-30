@@ -9,7 +9,8 @@ use capy_contracts::project::{
     OP_PROJECT_CAMPAIGN_GENERATE, OP_PROJECT_CAMPAIGN_PLAN, OP_PROJECT_CAMPAIGN_SHOW,
     OP_PROJECT_GENERATE, OP_PROJECT_INSPECT, OP_PROJECT_RUN_ACCEPT, OP_PROJECT_RUN_LIST,
     OP_PROJECT_RUN_REJECT, OP_PROJECT_RUN_RETRY, OP_PROJECT_RUN_SHOW, OP_PROJECT_RUN_UNDO,
-    OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES, OP_PROJECT_VIDEO_CLIP_QUEUE_GET,
+    OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES, OP_PROJECT_VIDEO_CLIP_FEEDBACK_GET,
+    OP_PROJECT_VIDEO_CLIP_FEEDBACK_SET, OP_PROJECT_VIDEO_CLIP_QUEUE_GET,
     OP_PROJECT_VIDEO_CLIP_QUEUE_SET, OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST,
     OP_PROJECT_VIDEO_CLIP_SEMANTICS_ANALYZE, OP_PROJECT_VIDEO_CLIP_SEMANTICS_GET,
     OP_PROJECT_WORKBENCH,
@@ -37,6 +38,8 @@ pub(crate) fn handles(op: &str) -> bool {
             | OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST
             | OP_PROJECT_VIDEO_CLIP_SEMANTICS_GET
             | OP_PROJECT_VIDEO_CLIP_SEMANTICS_ANALYZE
+            | OP_PROJECT_VIDEO_CLIP_FEEDBACK_GET
+            | OP_PROJECT_VIDEO_CLIP_FEEDBACK_SET
             | OP_PROJECT_GENERATE
             | OP_PROJECT_RUN_LIST
             | OP_PROJECT_RUN_SHOW
@@ -70,6 +73,12 @@ pub(crate) fn response(request: IpcRequest) -> IpcResponse {
         }
         OP_PROJECT_VIDEO_CLIP_SEMANTICS_ANALYZE => {
             crate::project_ipc_clip_queue::semantics_analyze(&request.params)
+        }
+        OP_PROJECT_VIDEO_CLIP_FEEDBACK_GET => {
+            crate::project_ipc_clip_queue::feedback_get(&request.params)
+        }
+        OP_PROJECT_VIDEO_CLIP_FEEDBACK_SET => {
+            crate::project_ipc_clip_queue::feedback_set(&request.params)
         }
         OP_PROJECT_GENERATE => project_generate(&request.params),
         OP_PROJECT_RUN_LIST => project_run_list(&request.params),

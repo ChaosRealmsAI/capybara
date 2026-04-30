@@ -53,7 +53,7 @@ export function semanticsRestoreEval(projectPath, compositionPath = "") {
   })`;
 }
 
-function semanticStateSource() {
+export function semanticStateSource() {
   return `async function waitForWorkbench(wait) {
     for (let i = 0; i < 120; i += 1) {
       if (window.capyWorkbench?.loadProjectVideoQueue && window.capyWorkbench?.stateSnapshot) return;
@@ -222,6 +222,9 @@ function semanticStateSource() {
       semantics: state.video?.clipSemantics || null,
       semanticsStatus: state.video?.clipSemanticsStatus || "",
       semanticsError: state.video?.clipSemanticsError || null,
+      feedback: state.video?.clipFeedback || null,
+      feedbackStatus: state.video?.clipFeedbackStatus || "",
+      feedbackError: state.video?.clipFeedbackError || null,
       suggestion: state.video?.clipSuggestion || null,
       suggestionStatus: state.video?.clipSuggestionStatus || "",
       domSemanticsText: document.querySelector("#video-semantics")?.innerText || "",

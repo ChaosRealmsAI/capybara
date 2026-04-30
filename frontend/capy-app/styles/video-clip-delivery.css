@@ -152,6 +152,41 @@
   font-size: 11px;
 }
 
+.video-feedback-field {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+  color: #7a6f66;
+  font: 10px/1.2 var(--f-mono);
+  text-transform: uppercase;
+}
+
+.video-feedback-field textarea {
+  width: 100%;
+  min-height: 46px;
+  resize: vertical;
+  padding: 7px 8px;
+  border: 1px solid rgba(85, 69, 57, 0.16);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #2a211a;
+  font: 12px/1.35 var(--f-ui);
+  text-transform: none;
+}
+
+.video-feedback-save {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.video-feedback-saved {
+  color: #9f2538;
+  font-weight: 700;
+}
+
 .video-proposal {
   min-width: 0;
   color: #62564c;
