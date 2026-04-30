@@ -126,9 +126,10 @@ fn success(
     CompileReport::success(CompileSuccess {
         trace_id,
         composition_path,
+        duration_ms: render_source_duration_ms(&render_source_path)
+            .unwrap_or_else(|| started.elapsed().as_millis()),
         render_source_path,
         render_source_schema: RENDER_SOURCE_SCHEMA.to_string(),
-        duration_ms: started.elapsed().as_millis(),
         track_count,
         compile_mode,
         warnings: Vec::new(),
@@ -177,10 +178,19 @@ fn artifact_for_path(composition_path: &Path) -> CompositionArtifact {
         .filter(|stem| !stem.trim().is_empty())
         .unwrap_or("composition")
         .to_string();
-    let project_root = composition_path
+    let composition_dir = composition_path
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
+    let project_root =
+        if composition_dir.file_name().and_then(|name| name.to_str()) == Some("compositions") {
+            composition_dir
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or(composition_dir)
+        } else {
+            composition_dir
+        };
     let project_slug = project_root
         .file_name()
         .and_then(|name| name.to_str())
@@ -204,6 +214,16 @@ fn render_source_track_count(path: &Path) -> Option<usize> {
         .get("tracks")
         .and_then(serde_json::Value::as_array)
         .map(Vec::len)
+}
+
+fn render_source_duration_ms(path: &Path) -> Option<u128> {
+    let raw = fs::read_to_string(path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    value
+        .get("duration_ms")
+        .and_then(serde_json::Value::as_u64)
+        .or_else(|| value.get("duration").and_then(serde_json::Value::as_u64))
+        .map(u128::from)
 }
 
 fn read_composition(path: &Path) -> Result<CompositionDocument, CompileError> {

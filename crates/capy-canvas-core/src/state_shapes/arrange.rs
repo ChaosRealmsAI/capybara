@@ -3,46 +3,46 @@ use crate::state::AppState;
 impl AppState {
     pub fn align_left(&mut self) {
         if let Some(target) = self.selected_axis_min(|s| s.x) {
-            self.apply_selected_axis(target, |s, value| s.x = value);
+            self.apply_selected_axis(target, |s, value| s.move_to(value, s.y));
         }
     }
 
     pub fn align_center_h(&mut self) {
         if let Some(target) = self.selected_axis_center(|s| s.x, |s| s.w) {
-            self.apply_selected_axis(target, |s, value| s.x = value - s.w / 2.0);
+            self.apply_selected_axis(target, |s, value| s.move_to(value - s.w / 2.0, s.y));
         }
     }
 
     pub fn align_right(&mut self) {
         if let Some(target) = self.selected_axis_max(|s| s.x + s.w) {
-            self.apply_selected_axis(target, |s, value| s.x = value - s.w);
+            self.apply_selected_axis(target, |s, value| s.move_to(value - s.w, s.y));
         }
     }
 
     pub fn align_top(&mut self) {
         if let Some(target) = self.selected_axis_min(|s| s.y) {
-            self.apply_selected_axis(target, |s, value| s.y = value);
+            self.apply_selected_axis(target, |s, value| s.move_to(s.x, value));
         }
     }
 
     pub fn align_center_v(&mut self) {
         if let Some(target) = self.selected_axis_center(|s| s.y, |s| s.h) {
-            self.apply_selected_axis(target, |s, value| s.y = value - s.h / 2.0);
+            self.apply_selected_axis(target, |s, value| s.move_to(s.x, value - s.h / 2.0));
         }
     }
 
     pub fn align_bottom(&mut self) {
         if let Some(target) = self.selected_axis_max(|s| s.y + s.h) {
-            self.apply_selected_axis(target, |s, value| s.y = value - s.h);
+            self.apply_selected_axis(target, |s, value| s.move_to(s.x, value - s.h));
         }
     }
 
     pub fn distribute_h(&mut self) {
-        self.distribute_selected(|s| (s.x, s.w), |s, value| s.x = value);
+        self.distribute_selected(|s| (s.x, s.w), |s, value| s.move_to(value, s.y));
     }
 
     pub fn distribute_v(&mut self) {
-        self.distribute_selected(|s| (s.y, s.h), |s, value| s.y = value);
+        self.distribute_selected(|s| (s.y, s.h), |s, value| s.move_to(s.x, value));
     }
 
     fn selected_axis_min(&self, value_of: impl Fn(&crate::shape::Shape) -> f64) -> Option<f64> {

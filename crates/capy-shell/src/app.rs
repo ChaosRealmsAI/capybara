@@ -20,6 +20,7 @@ mod ipc_handlers;
 mod probes;
 pub mod timeline;
 mod timeline_detail;
+mod timeline_editor;
 mod timeline_host;
 mod timeline_preview;
 mod timeline_state;
@@ -64,6 +65,10 @@ pub enum ShellEvent {
         request: IpcRequest,
         ack: oneshot::Sender<IpcResponse>,
     },
+    TimelineCompositionOpen {
+        request: IpcRequest,
+        ack: oneshot::Sender<IpcResponse>,
+    },
     AgentRuntimeEvent {
         event: AgentRuntimeEvent,
     },
@@ -85,6 +90,7 @@ pub struct ShellState {
     windows: Mutex<Vec<WindowStatus>>,
     canvas_nodes: Mutex<BTreeSet<u64>>,
     timeline_nodes: Mutex<BTreeMap<u64, timeline::AttachedCanvasNode>>,
+    timeline_editor_jobs: Mutex<BTreeMap<String, timeline_state::ExportJob>>,
     timeline_preview: timeline_preview::TimelinePreviewServer,
 }
 
@@ -94,6 +100,7 @@ impl Default for ShellState {
             windows: Mutex::new(Vec::new()),
             canvas_nodes: Mutex::new(BTreeSet::from([0])),
             timeline_nodes: Mutex::new(BTreeMap::new()),
+            timeline_editor_jobs: Mutex::new(BTreeMap::new()),
             timeline_preview: timeline_preview::TimelinePreviewServer::start(),
         }
     }
@@ -104,6 +111,7 @@ impl ShellState {
         request.params.get("query").and_then(Value::as_str) == Some("windows")
             || request.params.get("key").and_then(Value::as_str) == Some("app.ready")
             || request.params.get("key").and_then(Value::as_str) == Some("timeline.attachments")
+            || request.params.get("key").and_then(Value::as_str) == Some("timeline.editorJobs")
     }
 
     pub fn state_query(&self, request: IpcRequest) -> IpcResponse {
@@ -130,6 +138,15 @@ impl ShellState {
                 };
                 json!(nodes.clone())
             }
+            "timeline.editorJobs" => {
+                let Ok(jobs) = self.timeline_editor_jobs.lock() else {
+                    return error_response(
+                        &request.req_id,
+                        "timeline editor job state lock failed",
+                    );
+                };
+                json!(jobs.values().cloned().collect::<Vec<_>>())
+            }
             _ => Value::Null,
         };
         ok_response(&request, json!({ "key": key, "value": value }))
@@ -145,6 +162,18 @@ impl ShellState {
 
     pub fn timeline_export_cancel_query(&self, request: IpcRequest) -> IpcResponse {
         timeline::export_cancel_response(request.req_id.clone(), self, request.params)
+    }
+
+    pub fn timeline_composition_state_query(&self, request: IpcRequest) -> IpcResponse {
+        timeline_editor::state_response(request.req_id.clone(), self, request.params)
+    }
+
+    pub fn timeline_composition_patch_query(&self, request: IpcRequest) -> IpcResponse {
+        timeline_editor::patch_response(request.req_id.clone(), self, request.params)
+    }
+
+    pub fn timeline_export_start_query(&self, request: IpcRequest) -> IpcResponse {
+        timeline_editor::export_start_response(request.req_id.clone(), self, request.params)
     }
 
     pub(crate) fn has_canvas_node(&self, id: u64) -> bool {
@@ -208,11 +237,67 @@ impl ShellState {
             .register(canvas_node_id, composition_path)
     }
 
+    pub(crate) fn register_timeline_composition_preview(
+        &self,
+        composition_path: &Path,
+    ) -> Result<String, String> {
+        self.timeline_preview
+            .register(stable_preview_id(composition_path), composition_path)
+    }
+
+    pub(crate) fn upsert_timeline_editor_job(
+        &self,
+        job: timeline_state::ExportJob,
+    ) -> Result<(), String> {
+        let mut jobs = self
+            .timeline_editor_jobs
+            .lock()
+            .map_err(|_| "timeline editor job state lock failed".to_string())?;
+        jobs.insert(job.job_id.clone(), job);
+        Ok(())
+    }
+
+    pub(crate) fn timeline_editor_job(
+        &self,
+        job_id: &str,
+    ) -> Result<Option<timeline_state::ExportJob>, String> {
+        let jobs = self
+            .timeline_editor_jobs
+            .lock()
+            .map_err(|_| "timeline editor job state lock failed".to_string())?;
+        Ok(jobs.get(job_id).cloned())
+    }
+
+    pub(crate) fn cancel_timeline_editor_job(
+        &self,
+        job_id: &str,
+    ) -> Result<Option<timeline_state::ExportJob>, String> {
+        let mut jobs = self
+            .timeline_editor_jobs
+            .lock()
+            .map_err(|_| "timeline editor job state lock failed".to_string())?;
+        let Some(job) = jobs.get_mut(job_id) else {
+            return Ok(None);
+        };
+        job.status = timeline_state::ExportJobStatus::Cancelled;
+        job.progress = job.progress.min(99);
+        Ok(Some(job.clone()))
+    }
+
     fn sync_from_manager(&self, manager: &WindowManager) {
         if let Ok(mut windows) = self.windows.lock() {
             *windows = manager.list();
         }
     }
+}
+
+fn stable_preview_id(path: &Path) -> u64 {
+    let mut hash = 14_695_981_039_346_656_037_u64;
+    for byte in path.display().to_string().bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(1_099_511_628_211);
+    }
+    hash
 }
 
 pub fn run() {
@@ -308,11 +393,10 @@ pub fn run() {
                     ipc_handlers::devtools_eval(&manager, request, ack);
                 }
                 ShellEvent::Screenshot { request, ack } => {
-                    ipc_handlers::screenshot(&manager, request, ack);
+                    ipc_handlers::screenshot(&mut manager, request, ack);
                 }
                 ShellEvent::CaptureWindow { request, ack } => {
-                    let response = ipc_handlers::capture_window(&mut manager, request);
-                    let _send_result = ack.send(response);
+                    ipc_handlers::capture_window(&mut manager, request, ack);
                 }
                 ShellEvent::ConversationRequest { request, ack } => {
                     let response = conversation::response(Arc::clone(&store), &proxy, request);
@@ -324,6 +408,10 @@ pub fn run() {
                 }
                 ShellEvent::TimelineOpen { request, ack } => {
                     let response = timeline_host::open(&manager, &state, request);
+                    let _send_result = ack.send(response);
+                }
+                ShellEvent::TimelineCompositionOpen { request, ack } => {
+                    let response = timeline_host::composition_open(&manager, &state, request);
                     let _send_result = ack.send(response);
                 }
                 ShellEvent::AgentRuntimeEvent { event } => {

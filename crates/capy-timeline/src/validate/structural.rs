@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -9,7 +8,9 @@ use crate::compose::{
     CAPY_COMPOSITION_SCHEMA_VERSION, CompositionDocument, POSTER_COMPONENT_ID,
     SCROLL_CHAPTER_COMPONENT_ID,
 };
+use crate::validate::clip_first::validate_clip_first_structure;
 use crate::validate::report::{ValidationError, ValidationReport, ValidationWarning};
+use std::collections::BTreeSet;
 
 const REGISTERED_COMPONENTS: &[&str] = &[POSTER_COMPONENT_ID, SCROLL_CHAPTER_COMPONENT_ID];
 
@@ -49,6 +50,12 @@ pub fn validate_structure(path: &Path) -> ValidationReport {
             return report;
         }
     };
+
+    if raw.get("clips").and_then(Value::as_array).is_some() {
+        validate_clip_first_structure(&raw, path.parent(), &mut report);
+        report.refresh_ok();
+        return report;
+    }
 
     let composition: CompositionDocument = match serde_json::from_value(raw.clone()) {
         Ok(composition) => composition,
@@ -137,7 +144,11 @@ fn validate_tracks(composition: &CompositionDocument, report: &mut ValidationRep
     }
 }
 
-fn validate_assets(raw: &Value, composition_dir: Option<&Path>, report: &mut ValidationReport) {
+pub(super) fn validate_assets(
+    raw: &Value,
+    composition_dir: Option<&Path>,
+    report: &mut ValidationReport,
+) {
     let Some(assets) = raw.get("assets").and_then(Value::as_array) else {
         return;
     };

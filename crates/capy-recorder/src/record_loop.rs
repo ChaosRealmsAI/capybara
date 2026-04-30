@@ -27,7 +27,9 @@ use capy_shell_mac::{DesktopShell, MacHeadlessShell, ShellConfig, ShellError};
 
 use crate::events::{emit, Event};
 use crate::frame_pool::FramePool;
-use crate::pipeline::{ColorSpec, OutputStats, PipelineError, RecordOpts, RecordPipeline, VideoCodec};
+use crate::pipeline::{
+    ColorSpec, OutputStats, PipelineError, RecordOpts, RecordPipeline, VideoCodec,
+};
 use pipeline::ActivePipeline;
 pub(crate) use readiness::verify_frame_ready;
 use readiness::{
@@ -258,24 +260,28 @@ pub async fn run(cfg: RecordConfig) -> Result<OutputStats, RecordError> {
         == Some(true);
     // 3. Construct encoder/writer pipeline.
     let mut pipeline = match cfg.codec {
-        VideoCodec::H264 => ActivePipeline::H264(crate::pipeline::h264::PipelineH264_1080p::new(RecordOpts {
-            width: cfg.width,
-            height: cfg.height,
-            fps: cfg.fps,
-            bitrate_bps: cfg.bitrate_bps,
-            codec: cfg.codec,
-            output: cfg.output.clone(),
-            color: ColorSpec::BT709_SDR_8bit,
-        })?),
-        VideoCodec::HevcMain8 => ActivePipeline::Hevc(crate::pipeline::hevc::PipelineHevcMain::new(RecordOpts {
-            width: cfg.width,
-            height: cfg.height,
-            fps: cfg.fps,
-            bitrate_bps: cfg.bitrate_bps,
-            codec: cfg.codec,
-            output: cfg.output.clone(),
-            color: ColorSpec::BT709_SDR_8bit,
-        })?),
+        VideoCodec::H264 => ActivePipeline::H264(crate::pipeline::h264::PipelineH264_1080p::new(
+            RecordOpts {
+                width: cfg.width,
+                height: cfg.height,
+                fps: cfg.fps,
+                bitrate_bps: cfg.bitrate_bps,
+                codec: cfg.codec,
+                output: cfg.output.clone(),
+                color: ColorSpec::BT709_SDR_8bit,
+            },
+        )?),
+        VideoCodec::HevcMain8 => {
+            ActivePipeline::Hevc(crate::pipeline::hevc::PipelineHevcMain::new(RecordOpts {
+                width: cfg.width,
+                height: cfg.height,
+                fps: cfg.fps,
+                bitrate_bps: cfg.bitrate_bps,
+                codec: cfg.codec,
+                output: cfg.output.clone(),
+                color: ColorSpec::BT709_SDR_8bit,
+            })?)
+        }
     };
 
     let mut pool = FramePool::new(FRAME_POOL_CAPACITY);

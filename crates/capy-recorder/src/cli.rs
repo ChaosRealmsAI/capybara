@@ -169,6 +169,10 @@ pub enum Command {
         #[arg(long = "expect-fps", default_value_t = 60)]
         expect_fps: u32,
 
+        /// Expected codec fourcc/family · e.g. avc1, hvc1, h264, hevc.
+        #[arg(long = "expect-codec", default_value = "avc1")]
+        expect_codec: String,
+
         /// Expected bitrate in bps · tolerance ± 15% · skipped if absent.
         #[arg(long = "expect-bitrate")]
         expect_bitrate: Option<u32>,

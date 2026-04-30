@@ -68,6 +68,7 @@ pub fn verify(
     path: &Path,
     expect_fps: u32,
     expect_bitrate: Option<u32>,
+    expect_codec: &str,
 ) -> Result<(Mp4Verdict, Vec<Assertion>), VerifyError> {
     let mut file = File::open(path).map_err(|e| VerifyError::Io(format!("{e}")))?;
     let file_size = file
@@ -102,7 +103,10 @@ pub fn verify(
         sample_count: info.sample_count,
     };
 
-    Ok((verdict.clone(), assertions(verdict, expect_fps, expect_bitrate)))
+    Ok((
+        verdict.clone(),
+        assertions(verdict, expect_fps, expect_bitrate, expect_codec),
+    ))
 }
 
 fn duration_ms(duration_units: u64, movie_timescale: u32) -> u64 {
@@ -133,6 +137,7 @@ fn assertions(
     verdict: Mp4Verdict,
     expect_fps: u32,
     expect_bitrate: Option<u32>,
+    expect_codec: &str,
 ) -> Vec<Assertion> {
     let mut asserts = Vec::with_capacity(6);
     asserts.push(Assertion {
@@ -153,13 +158,32 @@ fn assertions(
     ));
     asserts.push(fps_assertion(verdict.frame_rate, expect_fps));
     asserts.push(bitrate_assertion(verdict.bit_rate, expect_bitrate));
-    asserts.push(Assertion {
-        name: "codec_avc1".into(),
-        expected: "avc1 (H.264)".into(),
-        actual: verdict.codec.clone(),
-        pass: verdict.codec == "avc1" || verdict.codec.to_uppercase().contains("H.264"),
-    });
+    asserts.push(codec_assertion(&verdict.codec, expect_codec));
     asserts
+}
+
+fn codec_assertion(actual: &str, expected: &str) -> Assertion {
+    let normalized_expected = expected.trim().to_ascii_lowercase();
+    let normalized_actual = actual.trim().to_ascii_lowercase();
+    let pass = match normalized_expected.as_str() {
+        "" | "any" | "*" => true,
+        "avc1" | "h264" | "h.264" => {
+            normalized_actual == "avc1" || normalized_actual.contains("h.264")
+        }
+        "hvc1" | "hev1" | "hevc" | "h265" | "h.265" => {
+            matches!(normalized_actual.as_str(), "hvc1" | "hev1")
+                || normalized_actual.contains("hevc")
+                || normalized_actual.contains("h.265")
+        }
+        other => normalized_actual == other || normalized_actual.contains(other),
+    };
+
+    Assertion {
+        name: "codec".into(),
+        expected: normalized_expected,
+        actual: actual.to_string(),
+        pass,
+    }
 }
 
 fn contains_assertion(name: &str, expected: &str, actual: &str) -> Assertion {

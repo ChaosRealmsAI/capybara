@@ -34,6 +34,9 @@ gemini-test/
 spec/
 /tmp/
 
+# Local external source clones used for reference only.
+reference-repos/github/
+
 # Worktrees
 .worktrees/
 

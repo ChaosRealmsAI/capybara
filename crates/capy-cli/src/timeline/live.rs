@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
 use capy_contracts::timeline::{
-    OP_TIMELINE_ATTACH, OP_TIMELINE_EXPORT_CANCEL, OP_TIMELINE_EXPORT_STATUS, OP_TIMELINE_OPEN,
-    OP_TIMELINE_STATE,
+    OP_TIMELINE_ATTACH, OP_TIMELINE_COMPOSITION_OPEN, OP_TIMELINE_EXPORT_CANCEL,
+    OP_TIMELINE_EXPORT_STATUS, OP_TIMELINE_OPEN, OP_TIMELINE_STATE,
 };
 
 use crate::ipc_client;
@@ -180,12 +180,31 @@ fn timeline_job_ipc(op: &str, job_id: &str, stage: &str, shell_hint: &str) -> Re
 
 pub(super) fn open(args: TimelineOpenArgs) -> Result<(), String> {
     let socket = args.socket.unwrap_or_else(ipc_client::socket_path);
-    let request = ipc_client::request(
-        OP_TIMELINE_OPEN,
-        json!({
-            "canvas_node_id": args.canvas_node
-        }),
-    );
+    let (request, canvas_node) = if let Some(composition) = args.composition {
+        let composition_path = absolute_path(composition)?;
+        (
+            ipc_client::request(
+                OP_TIMELINE_COMPOSITION_OPEN,
+                json!({
+                    "composition_path": composition_path.display().to_string()
+                }),
+            ),
+            None,
+        )
+    } else {
+        let canvas_node = args.canvas_node.ok_or_else(|| {
+            "missing --canvas-node or --composition for capy timeline open".to_string()
+        })?;
+        (
+            ipc_client::request(
+                OP_TIMELINE_OPEN,
+                json!({
+                    "canvas_node_id": canvas_node
+                }),
+            ),
+            Some(canvas_node),
+        )
+    };
     match ipc_client::send_to(request, socket.clone()) {
         Ok(response) if response.ok => {
             let mut report = response.data.unwrap_or(Value::Null);
@@ -194,7 +213,7 @@ pub(super) fn open(args: TimelineOpenArgs) -> Result<(), String> {
         }
         Ok(response) => {
             let report = open_failure(
-                args.canvas_node,
+                canvas_node.unwrap_or(0),
                 &socket,
                 response
                     .error
@@ -220,7 +239,7 @@ pub(super) fn open(args: TimelineOpenArgs) -> Result<(), String> {
         }
         Err(error) => {
             let report = open_failure(
-                args.canvas_node,
+                canvas_node.unwrap_or(0),
                 &socket,
                 "SHELL_UNAVAILABLE",
                 error,

@@ -1,0 +1,228 @@
+{
+  "anchors": {},
+  "assets": [],
+  "components": {
+    "html.capy-4k-editor": "export function mount(root) {\n  root.textContent = \"\";\n  root.style.position = \"absolute\";\n  root.style.inset = \"0\";\n  root.style.display = \"block\";\n  root.style.overflow = \"hidden\";\n}\n\nexport function update(root, ctx) {\n  const params = ctx && ctx.params ? ctx.params : {};\n  const progress = clamp01(Number(ctx && ctx.progress ? ctx.progress : 0));\n  const accent = accentColor(params.accent);\n  const soft = accentSoft(params.accent);\n  const playhead = Math.round(8 + progress * 78);\n  root.innerHTML = `\n    <section style=\"\n      position: relative;\n      width: 100%;\n      height: 100%;\n      overflow: hidden;\n      color: #1c1917;\n      font-family: 'PingFang SC', 'Source Han Sans CN', -apple-system, BlinkMacSystemFont, sans-serif;\n      background: linear-gradient(135deg, #fdba74 0%, #fef3c7 48%, #c4b5fd 100%);\n    \">\n      <div style=\"\n        position: absolute;\n        inset: 110px 128px;\n        display: grid;\n        grid-template-columns: 520px 1fr 560px;\n        grid-template-rows: 170px 1fr 260px;\n        gap: 44px;\n      \">\n        <header style=\"\n          grid-column: 1 / -1;\n          display: flex;\n          align-items: center;\n          justify-content: space-between;\n          padding: 0 54px;\n          border-radius: 56px;\n          border: 2px solid rgba(255, 250, 240, .72);\n          background: rgba(255, 250, 240, .68);\n          box-shadow: 0 28px 78px rgba(28, 25, 23, .14);\n          backdrop-filter: blur(26px);\n        \">\n          <div style=\"display: flex; align-items: center; gap: 30px;\">\n            <span style=\"\n              width: 88px;\n              height: 88px;\n              display: grid;\n              place-items: center;\n              border-radius: 28px;\n              background: #1c1917;\n              color: #fffaf0;\n              font-size: 42px;\n              font-weight: 900;\n            \">C</span>\n            <div>\n              <p style=\"margin: 0; color: #78716c; font-size: 26px; line-height: 1.1;\">Capybara</p>\n              <strong style=\"display: block; margin-top: 10px; font-size: 48px; line-height: 1;\">视频剪辑工作台</strong>\n            </div>\n          </div>\n          <div style=\"display: flex; align-items: center; gap: 18px;\">\n            ${tab(\"画布\", false)}\n            ${tab(\"视频剪辑\", true, accent)}\n            ${statusPill(escapeHtml(params.status || \"Ready\"), soft)}\n          </div>\n        </header>\n\n        <aside style=\"${panelStyle()} padding: 42px;\">\n          <p style=\"${eyebrowStyle()}\">Clips</p>\n          ${clipRow(\"01\", \"打开 JSON\", params.clip === \"打开 JSON\", \"#a78bfa\")}\n          ${clipRow(\"02\", \"在线预览\", params.clip === \"在线预览\", \"#fdba74\")}\n          ${clipRow(\"03\", \"轨道检查\", params.clip === \"轨道检查\", \"#84cc16\")}\n          ${clipRow(\"04\", \"严格录制\", params.clip === \"严格录制\", \"#a78bfa\")}\n          ${clipRow(\"05\", \"4K 导出\", params.clip === \"4K 导出\", \"#fdba74\")}\n          ${clipRow(\"06\", \"证据留档\", params.clip === \"证据留档\", \"#84cc16\")}\n        </aside>\n\n        <main style=\"\n          position: relative;\n          overflow: hidden;\n          border-radius: 68px;\n          background: #1c1917;\n          box-shadow: 0 46px 140px rgba(28, 25, 23, .30);\n        \">\n          <div style=\"\n            position: absolute;\n            inset: 58px;\n            border-radius: 54px;\n            border: 2px solid rgba(255, 250, 240, .82);\n            background:\n              linear-gradient(135deg, rgba(255, 250, 240, .96), rgba(254, 243, 199, .90)),\n              ${soft};\n            padding: 148px 156px;\n            display: flex;\n            flex-direction: column;\n            justify-content: center;\n          \">\n            <p style=\"\n              margin: 0 0 46px;\n              color: #78716c;\n              font-size: 54px;\n              font-weight: 900;\n              letter-spacing: 0;\n            \">${escapeHtml(params.eyebrow || \"CAPYBARA TIMELINE\")}</p>\n            <h1 style=\"\n              margin: 0;\n              max-width: 1740px;\n              color: #1c1917;\n              font-size: 176px;\n              line-height: 1.02;\n              letter-spacing: 0;\n              font-weight: 900;\n            \">${escapeHtml(params.title || \"视频剪辑从 JSON 打开\")}</h1>\n            <p style=\"\n              margin: 64px 0 0;\n              max-width: 1620px;\n              color: #57534e;\n              font-size: 64px;\n              line-height: 1.34;\n            \">${escapeHtml(params.subtitle || \"\")}</p>\n            <div style=\"display: flex; align-items: center; gap: 24px; margin-top: 86px;\">\n              ${solidPill(escapeHtml(params.metric || \"4K · 30fps\"), accent)}\n              ${outlinePill(\"Recorder only\")}\n              ${outlinePill(\"PM 可见证据\")}\n            </div>\n          </div>\n        </main>\n\n        <aside style=\"${panelStyle()} padding: 42px;\">\n          <p style=\"${eyebrowStyle()}\">Inspector</p>\n          ${fieldRow(\"component\", \"html.capy-4k-editor\")}\n          ${fieldRow(\"resolution\", \"3840 × 2160\")}\n          ${fieldRow(\"fps\", \"30\")}\n          ${fieldRow(\"duration\", \"30s\")}\n          <p style=\"\n            margin: 34px 0 0;\n            color: #78716c;\n            font-size: 30px;\n            line-height: 1.46;\n          \">同一份 render_source 负责在线预览、字段检查和 recorder 导出。</p>\n        </aside>\n\n        <footer style=\"\n          grid-column: 1 / -1;\n          display: grid;\n          grid-template-columns: 430px 1fr 360px;\n          gap: 42px;\n          align-items: center;\n          padding: 44px;\n          border-radius: 60px;\n          border: 2px solid rgba(255, 250, 240, .72);\n          background: rgba(255, 250, 240, .72);\n          box-shadow: 0 28px 82px rgba(28, 25, 23, .14);\n          backdrop-filter: blur(26px);\n        \">\n          <div>\n            <p style=\"margin: 0; color: #78716c; font-size: 28px;\">Timeline</p>\n            <strong style=\"display: block; margin-top: 14px; font-size: 54px;\">00:00 - 00:30</strong>\n          </div>\n          <div style=\"position: relative; height: 118px; border-radius: 36px; background: rgba(28, 25, 23, .08); overflow: hidden;\">\n            ${timelineBlock(3, 14, \"#a78bfa\")}\n            ${timelineBlock(18, 14, \"#fdba74\")}\n            ${timelineBlock(33, 14, \"#84cc16\")}\n            ${timelineBlock(48, 14, \"#a78bfa\")}\n            ${timelineBlock(63, 14, \"#fdba74\")}\n            ${timelineBlock(78, 14, \"#84cc16\")}\n            <span style=\"position: absolute; left: ${playhead}%; top: 10px; width: 8px; height: 98px; border-radius: 99px; background: #fffaf0; box-shadow: 0 0 0 4px rgba(28, 25, 23, .22);\"></span>\n          </div>\n          <div style=\"display: flex; justify-content: flex-end; gap: 18px;\">\n            ${button(\"录制\", false)}\n            ${button(\"导出\", true)}\n          </div>\n        </footer>\n      </div>\n    </section>\n  `;\n}\n\nexport function destroy(root) {\n  root.textContent = \"\";\n}\n\nfunction panelStyle() {\n  return `\n    border-radius: 56px;\n    border: 2px solid rgba(255, 250, 240, .72);\n    background: rgba(255, 250, 240, .64);\n    box-shadow: 0 28px 80px rgba(28, 25, 23, .12);\n    backdrop-filter: blur(24px);\n  `;\n}\n\nfunction eyebrowStyle() {\n  return \"margin: 0 0 28px; color: #78716c; font-size: 28px; font-weight: 800;\";\n}\n\nfunction tab(label, active, color = \"#a78bfa\") {\n  return `<span style=\"\n    display: inline-flex;\n    align-items: center;\n    height: 74px;\n    padding: 0 36px;\n    border-radius: 999px;\n    background: ${active ? color : \"rgba(28, 25, 23, .06)\"};\n    color: ${active ? \"#1c1917\" : \"#78716c\"};\n    font-size: 32px;\n    font-weight: 900;\n  \">${label}</span>`;\n}\n\nfunction statusPill(label, background) {\n  return `<span style=\"\n    display: inline-flex;\n    align-items: center;\n    height: 74px;\n    padding: 0 36px;\n    border-radius: 999px;\n    background: ${background};\n    color: #57534e;\n    font-size: 30px;\n    font-weight: 800;\n  \">${label}</span>`;\n}\n\nfunction clipRow(index, label, active, color) {\n  return `<div style=\"\n    display: flex;\n    align-items: center;\n    gap: 24px;\n    margin-bottom: 20px;\n    padding: 26px;\n    border-radius: 38px;\n    background: ${active ? \"rgba(255, 250, 240, .90)\" : \"rgba(28, 25, 23, .05)\"};\n    box-shadow: ${active ? \"0 18px 44px rgba(28, 25, 23, .12)\" : \"none\"};\n  \">\n    <span style=\"\n      width: 76px;\n      height: 76px;\n      display: grid;\n      place-items: center;\n      border-radius: 24px;\n      background: ${active ? color : \"rgba(28, 25, 23, .10)\"};\n      color: #1c1917;\n      font-size: 32px;\n      font-weight: 900;\n    \">${index}</span>\n    <strong style=\"font-size: 36px; line-height: 1.12;\">${label}</strong>\n  </div>`;\n}\n\nfunction fieldRow(label, value) {\n  return `<div style=\"padding: 28px 0; border-bottom: 2px solid rgba(120, 113, 108, .14);\">\n    <p style=\"margin: 0 0 12px; color: #78716c; font-size: 26px;\">${label}</p>\n    <strong style=\"display: block; font-size: 38px; line-height: 1.15;\">${value}</strong>\n  </div>`;\n}\n\nfunction solidPill(label, color) {\n  return `<span style=\"display: inline-flex; align-items: center; height: 86px; padding: 0 34px; border-radius: 999px; background: ${color}; color: #1c1917; font-size: 38px; font-weight: 900;\">${label}</span>`;\n}\n\nfunction outlinePill(label) {\n  return `<span style=\"display: inline-flex; align-items: center; height: 86px; padding: 0 34px; border-radius: 999px; border: 2px solid rgba(120, 113, 108, .24); background: rgba(255, 250, 240, .66); color: #57534e; font-size: 38px; font-weight: 800;\">${label}</span>`;\n}\n\nfunction timelineBlock(left, width, color) {\n  return `<span style=\"position: absolute; left: ${left}%; top: 24px; width: ${width}%; height: 70px; border-radius: 26px; background: ${color}; box-shadow: 0 16px 42px ${color}55;\"></span>`;\n}\n\nfunction button(label, primary) {\n  return `<span style=\"\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    height: 88px;\n    min-width: 146px;\n    border-radius: 999px;\n    background: ${primary ? \"#1c1917\" : \"rgba(28, 25, 23, .08)\"};\n    color: ${primary ? \"#fffaf0\" : \"#1c1917\"};\n    font-size: 38px;\n    font-weight: 900;\n  \">${label}</span>`;\n}\n\nfunction accentColor(name) {\n  if (name === \"mint\") return \"#84cc16\";\n  if (name === \"peach\") return \"#fdba74\";\n  return \"#a78bfa\";\n}\n\nfunction accentSoft(name) {\n  if (name === \"mint\") return \"rgba(132, 204, 22, .18)\";\n  if (name === \"peach\") return \"rgba(253, 186, 116, .20)\";\n  return \"rgba(167, 139, 250, .20)\";\n}\n\nfunction clamp01(value) {\n  if (!Number.isFinite(value)) return 0;\n  return Math.max(0, Math.min(1, value));\n}\n\nfunction escapeHtml(value) {\n  return String(value)\n    .replaceAll(\"&\", \"&amp;\")\n    .replaceAll(\"<\", \"&lt;\")\n    .replaceAll(\">\", \"&gt;\")\n    .replaceAll('\"', \"&quot;\");\n}\n"
+  },
+  "duration": 30000,
+  "duration_ms": 30000,
+  "meta": {
+    "authoring": "clip-first",
+    "composition": "capybara-video-editing-4k-30s",
+    "duration_ms": 30000,
+    "export": {
+      "fps": 30,
+      "parallel": 2,
+      "resolution": "4k"
+    },
+    "name": "Capybara 4K 视频剪辑导出",
+    "project": "video-editing-4k",
+    "render_source_schema": "capy.timeline.render_source.v1",
+    "version": "v3"
+  },
+  "schema_version": "capy.timeline.render_source.v1",
+  "theme": {
+    "background": "#000",
+    "css": "",
+    "id": "capybara-warm-prism"
+  },
+  "tracks": [
+    {
+      "clips": [
+        {
+          "begin": 0,
+          "begin_ms": 0,
+          "end": 5000,
+          "end_ms": 5000,
+          "id": "open.stage.frame",
+          "params": {
+            "component": "html.capy-4k-editor",
+            "params": {
+              "accent": "lavender",
+              "clip": "打开 JSON",
+              "eyebrow": "CAPYBARA TIMELINE",
+              "metric": "4K · 30fps",
+              "status": "JSON 已载入",
+              "subtitle": "composition.json 成为预览、轨道、检查器和导出的同一份真相源",
+              "title": "视频剪辑从 JSON 打开"
+            },
+            "style": {},
+            "track": {
+              "clip": "open",
+              "id": "open.stage",
+              "kind": "component"
+            }
+          }
+        }
+      ],
+      "id": "open.stage",
+      "kind": "component",
+      "z": 0
+    },
+    {
+      "clips": [
+        {
+          "begin": 5000,
+          "begin_ms": 5000,
+          "end": 10000,
+          "end_ms": 10000,
+          "id": "preview.stage.frame",
+          "params": {
+            "component": "html.capy-4k-editor",
+            "params": {
+              "accent": "peach",
+              "clip": "在线预览",
+              "eyebrow": "ONLINE PREVIEW",
+              "metric": "6 clips · 30s",
+              "status": "DOM preview ready",
+              "subtitle": "画面在 Capybara 工作台里渲染，AI 能读状态，人能直接判断结果",
+              "title": "预览就是实际组件画面"
+            },
+            "style": {},
+            "track": {
+              "clip": "preview",
+              "id": "preview.stage",
+              "kind": "component"
+            }
+          }
+        }
+      ],
+      "id": "preview.stage",
+      "kind": "component",
+      "z": 0
+    },
+    {
+      "clips": [
+        {
+          "begin": 10000,
+          "begin_ms": 10000,
+          "end": 15000,
+          "end_ms": 15000,
+          "id": "tracks.stage.frame",
+          "params": {
+            "component": "html.capy-4k-editor",
+            "params": {
+              "accent": "mint",
+              "clip": "轨道检查",
+              "eyebrow": "TRACK INSPECTOR",
+              "metric": "component track",
+              "status": "Inspector synced",
+              "subtitle": "左侧看 clips，中间看画面，右侧看字段，底部看时间线",
+              "title": "Clip、Track、字段都可检查"
+            },
+            "style": {},
+            "track": {
+              "clip": "tracks",
+              "id": "tracks.stage",
+              "kind": "component"
+            }
+          }
+        }
+      ],
+      "id": "tracks.stage",
+      "kind": "component",
+      "z": 0
+    },
+    {
+      "clips": [
+        {
+          "begin": 15000,
+          "begin_ms": 15000,
+          "end": 20000,
+          "end_ms": 20000,
+          "id": "record.stage.frame",
+          "params": {
+            "component": "html.capy-4k-editor",
+            "params": {
+              "accent": "lavender",
+              "clip": "严格录制",
+              "eyebrow": "STRICT RECORDER",
+              "metric": "recorder only",
+              "status": "Fallback disabled",
+              "subtitle": "这版不接受 embedded fallback，MP4 必须来自 CEF recorder 真实逐帧录制",
+              "title": "导出必须走 Recorder"
+            },
+            "style": {},
+            "track": {
+              "clip": "record",
+              "id": "record.stage",
+              "kind": "component"
+            }
+          }
+        }
+      ],
+      "id": "record.stage",
+      "kind": "component",
+      "z": 0
+    },
+    {
+      "clips": [
+        {
+          "begin": 20000,
+          "begin_ms": 20000,
+          "end": 25000,
+          "end_ms": 25000,
+          "id": "export.stage.frame",
+          "params": {
+            "component": "html.capy-4k-editor",
+            "params": {
+              "accent": "peach",
+              "clip": "4K 导出",
+              "eyebrow": "4K EXPORT",
+              "metric": "3840×2160",
+              "status": "4K export running",
+              "subtitle": "3840×2160、30fps、约 900 帧，保留 Capybara 产品设计语言",
+              "title": "30 秒 4K MP4 成片"
+            },
+            "style": {},
+            "track": {
+              "clip": "export",
+              "id": "export.stage",
+              "kind": "component"
+            }
+          }
+        }
+      ],
+      "id": "export.stage",
+      "kind": "component",
+      "z": 0
+    },
+    {
+      "clips": [
+        {
+          "begin": 25000,
+          "begin_ms": 25000,
+          "end": 30000,
+          "end_ms": 30000,
+          "id": "evidence.stage.frame",
+          "params": {
+            "component": "html.capy-4k-editor",
+            "params": {
+              "accent": "mint",
+              "clip": "证据留档",
+              "eyebrow": "EVIDENCE",
+              "metric": "MP4 + JSON",
+              "status": "Evidence complete",
+              "subtitle": "下一位 AI 不读聊天记录，也能从 evidence 复现导出路径",
+              "title": "视频、首帧、日志一起交付"
+            },
+            "style": {},
+            "track": {
+              "clip": "evidence",
+              "id": "evidence.stage",
+              "kind": "component"
+            }
+          }
+        }
+      ],
+      "id": "evidence.stage",
+      "kind": "component",
+      "z": 0
+    }
+  ],
+  "viewport": {
+    "h": 2160,
+    "ratio": "16:9",
+    "w": 3840
+  }
+}

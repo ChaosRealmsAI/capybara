@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
@@ -7,12 +6,12 @@ use tokio::sync::oneshot;
 
 use capy_contracts::canvas::OP_CANVAS_NODES_REGISTER;
 use capy_contracts::timeline::{
-    OP_TIMELINE_ATTACH, OP_TIMELINE_EXPORT_CANCEL, OP_TIMELINE_EXPORT_STATUS, OP_TIMELINE_OPEN,
-    OP_TIMELINE_STATE, OP_TIMELINE_STATE_DETAIL,
+    OP_TIMELINE_ATTACH, OP_TIMELINE_COMPOSITION_OPEN, OP_TIMELINE_COMPOSITION_PATCH,
+    OP_TIMELINE_COMPOSITION_STATE, OP_TIMELINE_EXPORT_CANCEL, OP_TIMELINE_EXPORT_START,
+    OP_TIMELINE_EXPORT_STATUS, OP_TIMELINE_OPEN, OP_TIMELINE_STATE, OP_TIMELINE_STATE_DETAIL,
 };
 
 use crate::agent::AgentRuntimeEvent;
-use crate::capture;
 use crate::ipc::{IpcRequest, IpcResponse, error_response, ok_response};
 use crate::store::Store;
 
@@ -135,7 +134,7 @@ pub(super) fn state_query(
 }
 
 pub(super) fn screenshot(
-    manager: &WindowManager,
+    manager: &mut WindowManager,
     request: IpcRequest,
     ack: oneshot::Sender<IpcResponse>,
 ) {
@@ -150,7 +149,10 @@ pub(super) fn screenshot(
             .to_string();
         let out = required_string(&request.params, "out")?;
         let window = optional_string(&request.params, "window");
-        let (window_id, webview) = manager.webview_for_target(window.as_deref())?;
+        let (window_id, _) = manager.webview_for_target(window.as_deref())?;
+        manager.focus(&window_id)?;
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        let (_, webview) = manager.webview_for_target(Some(&window_id))?;
         let script = probes::screenshot_probe_script(&region);
         let callback_req_id = req_id.clone();
         let window_id = window_id.to_string();
@@ -169,26 +171,35 @@ pub(super) fn screenshot(
     }
 }
 
-pub(super) fn capture_window(manager: &mut WindowManager, request: IpcRequest) -> IpcResponse {
+pub(super) fn capture_window(
+    manager: &mut WindowManager,
+    request: IpcRequest,
+    ack: oneshot::Sender<IpcResponse>,
+) {
+    let req_id = request.req_id.clone();
+    let shared_ack = shared_ack(ack);
     let result = (|| {
         let out = required_string(&request.params, "out")?;
         let window = optional_string(&request.params, "window");
-        let (window_id, window_number) =
-            manager.native_window_number_for_target(window.as_deref())?;
+        let (window_id, _) = manager.webview_for_target(window.as_deref())?;
         manager.focus(&window_id)?;
         std::thread::sleep(std::time::Duration::from_millis(120));
-        let capture = capture::capture_window_by_number(window_number, Path::new(&out))?;
-        Ok(json!({
-            "out": capture.out.display().to_string(),
-            "bytes": capture.bytes,
-            "width": capture.width,
-            "height": capture.height,
-            "window_id": window_id,
-            "window_number": window_number
-        }))
+        let (_, webview) = manager.webview_for_target(Some(&window_id))?;
+        let script = probes::screenshot_probe_script("full");
+        let callback_req_id = req_id.clone();
+        let callback_ack = Arc::clone(&shared_ack);
+        webview
+            .evaluate_script_with_callback(&script, move |raw| {
+                let response =
+                    probes::screenshot_response(&callback_req_id, &window_id, "full", &out, &raw);
+                send_shared_response(&callback_ack, response);
+            })
+            .map_err(|err| format!("capture evaluate failed: {err}"))
     })();
 
-    response_from_result(request.req_id, result)
+    if let Err(error) = result {
+        send_shared_response(&shared_ack, error_response(&req_id, error));
+    }
 }
 
 pub(super) fn handle_js_ipc(
@@ -259,6 +270,14 @@ pub(super) fn handle_js_ipc(
         state.timeline_state_query(request)
     } else if op == OP_TIMELINE_STATE_DETAIL {
         timeline_detail::state_detail_response(request.req_id.clone(), &state, request.params)
+    } else if op == OP_TIMELINE_COMPOSITION_OPEN {
+        timeline_host::composition_open(manager, &state, request)
+    } else if op == OP_TIMELINE_COMPOSITION_STATE {
+        state.timeline_composition_state_query(request)
+    } else if op == OP_TIMELINE_COMPOSITION_PATCH {
+        state.timeline_composition_patch_query(request)
+    } else if op == OP_TIMELINE_EXPORT_START {
+        state.timeline_export_start_query(request)
     } else if op == OP_TIMELINE_EXPORT_STATUS {
         state.timeline_export_status_query(request)
     } else if op == OP_TIMELINE_EXPORT_CANCEL {

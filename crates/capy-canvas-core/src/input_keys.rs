@@ -227,8 +227,9 @@ pub(crate) fn handle_char_key(state: &mut AppState, s: &str, cmd: bool, shift: b
                 return true;
             }
             "e" => {
-                state.export_requested = true;
-                state.show_toast("Exporting PNG...", 2000);
+                let svg = state.export_svg();
+                state.pending_svg_export = Some(svg);
+                state.show_toast("Exporting SVG...", 2000);
                 return true;
             }
             "1" => {

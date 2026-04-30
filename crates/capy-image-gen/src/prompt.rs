@@ -9,7 +9,10 @@ pub const REQUIRED_PROMPT_SECTIONS: &[&str] = &[
 ];
 
 const CUTOUT_REQUIREMENTS: &[(&str, &[&[&str]])] = &[
-    ("neutral matte #E0E0E0 background", &[&["#e0e0e0"]]),
+    (
+        "neutral matte gray background (#E0E0E0 default, #E8E8E8 for dark subjects, #B8BEC3 for light subjects)",
+        &[&["#e0e0e0"], &["#e8e8e8"], &["#b8bec3"]],
+    ),
     (
         "single isolated foreground subject",
         &[&["single"], &["one"]],
@@ -25,6 +28,7 @@ const CUTOUT_REQUIREMENTS: &[(&str, &[&[&str]])] = &[
             &["clear edges"],
             &["edge separation"],
             &["separated edges"],
+            &["strong separation"],
         ],
     ),
     (
@@ -70,11 +74,7 @@ pub fn missing_cutout_prompt_requirements(prompt: &str) -> Vec<&'static str> {
             let ok = alternatives
                 .iter()
                 .any(|terms| terms.iter().all(|term| lower.contains(term)));
-            if ok {
-                None
-            } else {
-                Some(*label)
-            }
+            if ok { None } else { Some(*label) }
         })
         .collect()
 }

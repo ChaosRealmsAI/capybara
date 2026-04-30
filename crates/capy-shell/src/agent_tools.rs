@@ -19,7 +19,7 @@ pub(crate) fn codex_developer_instructions(
     existing: Option<String>,
     config: &Value,
 ) -> Option<String> {
-    combine_tool_contract(existing, config)
+    combine_codex_contracts(existing, config)
 }
 
 fn combine_tool_contract(existing: Option<String>, config: &Value) -> Option<String> {
@@ -32,6 +32,40 @@ fn combine_tool_contract(existing: Option<String>, config: &Value) -> Option<Str
         (None, Some(contract)) => Some(contract.to_string()),
         (None, None) => None,
     }
+}
+
+fn combine_codex_contracts(existing: Option<String>, config: &Value) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(existing) = existing {
+        parts.push(existing.trim_end().to_string());
+    }
+    if config_bool(config, "capyProjectInstructions") {
+        parts.push(capy_codex_communication_contract().to_string());
+    }
+    if config_bool(config, "capyCanvasTools") {
+        parts.push(capy_canvas_tool_contract().to_string());
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("\n\n"))
+    }
+}
+
+fn capy_codex_communication_contract() -> &'static str {
+    r#"Capybara desktop communication contract.
+
+You are replying inside Capybara's right-side Planner chat. The user is a PM/founder and usually wants concise Chinese communication, direct status, and readable deliverables.
+
+Reply format:
+- Use Markdown for structure: short headings, bullets, numbered steps, code fences, and concise tables when helpful.
+- Keep raw logs short. Summarize first, then include only the important lines.
+- For any non-trivial status report, plan, comparison, diagnosis, or handoff, include one fenced `html` block after the Markdown summary.
+- The fenced `html` block is a chat preview card, not a web app. Write only a semantic body fragment: sections, headings, paragraphs, lists, tables, stats, and badges.
+- The Capybara app injects the visual CSS. Do not include `<style>`, inline `style=""`, scripts, external assets, network calls, forms, tracking, iframes, images, or SVG.
+- Keep the HTML compact enough for the right-side chat: one card/table/timeline is usually better than a long document.
+- Prefer these built-in classes when useful: `capy-card`, `capy-section`, `capy-kicker`, `capy-title`, `capy-subtitle`, `capy-grid`, `capy-stat`, `capy-table`, `capy-timeline`, `capy-step`, `capy-badges`, `capy-badge`, `capy-note`, `capy-risk`, `capy-callout`, `is-good`, `is-warn`, `is-bad`, `is-muted`.
+- Preserve paths, commands, model names, and technical identifiers literally."#
 }
 
 fn capy_canvas_tool_contract() -> &'static str {

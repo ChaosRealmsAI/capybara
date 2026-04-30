@@ -15,11 +15,11 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use clap::Parser;
 use capy_recorder::cli::{parse_bitrate, to_config, Cli};
 use capy_recorder::events::{emit, Event};
 use capy_recorder::orchestrator;
 use capy_recorder::VideoCodec;
+use clap::Parser;
 use std::fs::File;
 use std::io::Write as _;
 use std::path::PathBuf;

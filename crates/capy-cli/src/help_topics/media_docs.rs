@@ -100,12 +100,14 @@ Next step: for live canvas preview, read `capy timeline help live`.
 pub(super) const TIMELINE_LIVE_HELP: &str = r#"
 Topic: capy timeline live
 
-Use when: a Timeline composition should attach to and preview from a live canvas node.
-Required parameters: `attach --canvas-node <id> --composition <composition.json>`; `open --canvas-node <id>`.
+Use when: a Timeline composition should attach to a live canvas node, or a clip-first composition JSON should open in the desktop video editor.
+Required parameters: `attach --canvas-node <id> --composition <composition.json>` for canvas preview; `open --composition <composition.json>` for the video editor tab.
 Recommended commands:
 1. `target/debug/capy timeline attach --canvas-node <id> --composition <composition.json>`
 2. `target/debug/capy timeline state --canvas-node <id>`
 3. `target/debug/capy timeline open --canvas-node <id>`
-Do not: attach to guessed ids; open before preview-ready.
-Next step: capture desktop or preview URL as evidence.
+4. `target/debug/capy timeline open --composition fixtures/timeline/video-editing/compositions/main.json`
+5. `target/debug/capy timeline export --composition fixtures/timeline/video-editing-4k/compositions/main.json --kind mp4 --resolution 4k --fps 30 --parallel 2 --profile final --strict-recorder --out spec/versions/v0.25-video-editing-tab/evidence/assets/video-editing-4k-30s.mp4`
+Do not: attach to guessed ids; open before preview-ready; pass a track-only JSON when the editor expects full composition JSON; accept embedded fallback for PM-facing 4K proof.
+Next step: capture the desktop editor tab, preview iframe, and export status as evidence.
 "#;

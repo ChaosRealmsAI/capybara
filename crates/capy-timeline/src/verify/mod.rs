@@ -42,6 +42,10 @@ pub fn verify_export(req: VerifyExportRequest) -> VerifyReport {
         kind: ExportKind::Mp4,
         out: None,
         fps: 30,
+        profile: "draft".to_string(),
+        resolution: None,
+        parallel: None,
+        strict_recorder: false,
     });
 
     let title = composition_title(&composition_path);

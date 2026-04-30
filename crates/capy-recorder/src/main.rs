@@ -7,7 +7,7 @@
 use std::process::ExitCode;
 
 use capy_recorder::cli::{self, Command};
-use capy_recorder::events::{Event, emit};
+use capy_recorder::events::{emit, Event};
 use capy_recorder::orchestrator;
 use capy_recorder::record_loop::RecordError;
 use capy_recorder::verify_mp4;
@@ -15,7 +15,7 @@ use capy_recorder::verify_mp4;
 mod source_export;
 
 use source_export::{
-    SourceExportArgs, dispatch_snapshot_source, dispatch_source_export, dispatch_validate_source,
+    dispatch_snapshot_source, dispatch_source_export, dispatch_validate_source, SourceExportArgs,
 };
 
 #[tokio::main(flavor = "current_thread")]
@@ -69,9 +69,10 @@ async fn main() -> ExitCode {
         Some(Command::Verify {
             file,
             expect_fps,
+            expect_codec,
             expect_bitrate,
             json: _json,
-        }) => dispatch_verify(file, expect_fps, expect_bitrate),
+        }) => dispatch_verify(file, expect_fps, &expect_codec, expect_bitrate),
         None => dispatch_record(parsed).await,
     }
 }
@@ -167,9 +168,10 @@ async fn dispatch_snapshot(
 fn dispatch_verify(
     file: std::path::PathBuf,
     expect_fps: u32,
+    expect_codec: &str,
     expect_bitrate: Option<u32>,
 ) -> ExitCode {
-    match verify_mp4::verify(&file, expect_fps, expect_bitrate) {
+    match verify_mp4::verify(&file, expect_fps, expect_bitrate, expect_codec) {
         Ok((verdict, asserts)) => {
             let all_pass = asserts.iter().all(|a| a.pass);
             let status = if all_pass { "PASS" } else { "FAIL" };
@@ -183,6 +185,8 @@ fn dispatch_verify(
                 status: status.into(),
                 moov_front: verdict.moov_front,
                 codec: verdict.codec.clone(),
+                width: verdict.width,
+                height: verdict.height,
                 frame_rate: verdict.frame_rate,
                 bit_rate: verdict.bit_rate,
                 color_primaries: verdict.color_primaries.clone(),

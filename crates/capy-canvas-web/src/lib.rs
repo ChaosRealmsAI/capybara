@@ -9,8 +9,11 @@ mod web {
     mod exports;
     mod idb_store;
     mod io;
+    mod vector_style;
+    mod viewport;
 
     pub use self::exports::*;
+    pub use self::viewport::*;
     use std::cell::RefCell;
     use std::num::NonZeroUsize;
     use std::sync::{Arc, Mutex};
@@ -81,7 +84,7 @@ mod web {
     impl WebApp {
         fn new(canvas_id: String) -> Self {
             let mut state = AppState::new();
-            state.tool = Tool::Rect;
+            state.tool = Tool::Select;
             let state_arc = Arc::new(Mutex::new(state));
             let ready_arc: Arc<Mutex<Option<Ready>>> = Arc::new(Mutex::new(None));
 
@@ -294,10 +297,26 @@ mod web {
                     ..
                 } => {
                     let pressed = btn_state == ElementState::Pressed;
+                    let shift = self.modifiers.state().shift_key();
                     let changed = match self.state.lock() {
                         Ok(mut state) => {
-                            input::handle_mouse_button(&mut state, button, pressed, false)
+                            input::handle_mouse_button(&mut state, button, pressed, shift)
                         }
+                        Err(_) => false,
+                    };
+                    if changed {
+                        self.request_redraw();
+                    }
+                }
+                WindowEvent::MouseWheel { delta, .. } => {
+                    let mods = self.modifiers.state();
+                    let changed = match self.state.lock() {
+                        Ok(mut state) => input::handle_scroll(
+                            &mut state,
+                            delta,
+                            mods.super_key() || mods.control_key(),
+                            mods.shift_key(),
+                        ),
                         Err(_) => false,
                     };
                     if changed {

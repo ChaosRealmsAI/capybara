@@ -28,7 +28,7 @@ const PYTHON_PACKAGES: [&str; 5] = [
   Use `capy cutout --help` as the index and `capy cutout help <topic>` for full workflows.
   Common commands: `capy cutout doctor`, `capy cutout init`, `capy cutout run ...`, `capy cutout batch ...`.
   Required params: run needs --input and --output; batch needs --manifest and --out-dir.
-  Pitfalls: first run needs a local Focus runtime/model cache; generate source images with `capy image generate --cutout-ready`.
+  Pitfalls: first run needs a local Focus runtime/model cache; source images should use neutral gray with clear subject/background separation, and QA previews are required for PM-visible assets.
   Help topics: `capy cutout help agent`, `capy cutout help manifest`."
 )]
 pub struct CutoutCliArgs {

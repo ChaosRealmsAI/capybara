@@ -23,6 +23,7 @@
       <nav class="workspace-tabs" aria-label="Workspace tabs">
         <button class="workspace-tab active" type="button" data-workspace-tab="canvas" aria-selected="true">画布</button>
         <button class="workspace-tab" type="button" data-workspace-tab="video" aria-selected="false">视频剪辑</button>
+        <button class="workspace-tab" type="button" data-workspace-tab="poster" aria-selected="false">海报</button>
       </nav>
       <div class="top-actions">
         <button class="icon-action" type="button" id="cmdk-trigger" aria-label="Command palette">⌘K</button>
@@ -38,31 +39,40 @@
         <div id="node-label-layer" class="node-label-layer" data-component="node-label-layer" data-capy-component-kind=""></div>
 
         <div class="canvas-toolbar" data-component="canvas-toolbar">
-          <button class="seg active" type="button" data-canvas-tool="select">Select</button>
           <button class="seg region-toggle" id="region-mode" type="button" aria-pressed="false">Region</button>
           <span class="seg-info" id="canvas-status">Canvas loading</span>
         </div>
 
-        <div class="canvas-bottom" data-component="canvas-tool-bar" aria-label="Canvas tools">
-          <button class="bt active" type="button" data-canvas-tool="select" aria-label="Select" title="Select"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 5-4.5 1.5L7 13z"/></svg></button>
+        <div class="canvas-bottom canvas-tool-island" data-component="canvas-tool-bar" aria-label="Canvas tools" role="toolbar">
+          <div class="tool-group" data-tool-group="navigation">
+            <button class="bt active" type="button" data-canvas-tool="select" aria-label="Select" aria-pressed="true" title="Select"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 5-4.5 1.5L7 13z"/></svg></button>
+          </div>
           <span class="bt-sep" aria-hidden="true"></span>
-          <button class="bt" type="button" data-canvas-tool="rect" aria-label="Rectangle" title="Rectangle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3.5" width="11" height="9" rx="1.5"/></svg></button>
-          <button class="bt" type="button" data-canvas-tool="ellipse" aria-label="Ellipse" title="Ellipse"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/></svg></button>
-          <button class="bt" type="button" data-canvas-tool="triangle" aria-label="Triangle" title="Triangle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3l5.5 9.5h-11z"/></svg></button>
-          <button class="bt" type="button" data-canvas-tool="diamond" aria-label="Diamond" title="Diamond"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z"/></svg></button>
+          <div class="tool-group" data-tool-group="shapes">
+            <button class="bt" type="button" data-canvas-tool="rect" aria-label="Rectangle" aria-pressed="false" title="Rectangle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3.5" width="11" height="9" rx="1.5"/></svg></button>
+            <button class="bt" type="button" data-canvas-tool="ellipse" aria-label="Ellipse" aria-pressed="false" title="Ellipse"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/></svg></button>
+            <button class="bt" type="button" data-canvas-tool="triangle" aria-label="Triangle" aria-pressed="false" title="Triangle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3l5.5 9.5h-11z"/></svg></button>
+            <button class="bt" type="button" data-canvas-tool="diamond" aria-label="Diamond" aria-pressed="false" title="Diamond"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z"/></svg></button>
+          </div>
           <span class="bt-sep" aria-hidden="true"></span>
-          <button class="bt" type="button" data-canvas-tool="line" aria-label="Line" title="Line"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13L13 3"/></svg></button>
-          <button class="bt" type="button" data-canvas-tool="arrow" aria-label="Arrow" title="Arrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13L13 3M9 3h4v4"/></svg></button>
-          <button class="bt" type="button" data-canvas-tool="freehand" aria-label="Pen" title="Pen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 14l3-1 8-8-2-2-8 8z"/></svg></button>
-          <button class="bt" type="button" data-canvas-tool="highlighter" aria-label="Highlighter" title="Highlighter"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 11l7-7 2 2-7 7H3z"/><path d="M2 14h7"/></svg></button>
+          <div class="tool-group" data-tool-group="lines">
+            <button class="bt" type="button" data-canvas-tool="line" aria-label="Line" aria-pressed="false" title="Line"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13L13 3"/></svg></button>
+            <button class="bt" type="button" data-canvas-tool="arrow" aria-label="Arrow" aria-pressed="false" title="Arrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13L13 3M9 3h4v4"/></svg></button>
+            <button class="bt" type="button" data-canvas-tool="freehand" aria-label="Pen" aria-pressed="false" title="Pen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 14l3-1 8-8-2-2-8 8z"/></svg></button>
+            <button class="bt" type="button" data-canvas-tool="highlighter" aria-label="Highlighter" aria-pressed="false" title="Highlighter"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 11l7-7 2 2-7 7H3z"/><path d="M2 14h7"/></svg></button>
+          </div>
           <span class="bt-sep" aria-hidden="true"></span>
-          <button class="bt" type="button" data-canvas-tool="eraser" aria-label="Eraser" title="Eraser"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 10l6-6 3 3-6 6H4z"/><path d="M2 14h10"/></svg></button>
-          <button class="bt" type="button" data-canvas-tool="lasso" aria-label="Lasso" title="Lasso"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 8c0-3 10-3 10 0s-10 3-10 0z"/><path d="M9 10c1 1 2 2 3 3"/></svg></button>
+          <div class="tool-group" data-tool-group="edit">
+            <button class="bt" type="button" data-canvas-tool="eraser" aria-label="Eraser" aria-pressed="false" title="Eraser"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 10l6-6 3 3-6 6H4z"/><path d="M2 14h10"/></svg></button>
+            <button class="bt" type="button" data-canvas-tool="lasso" aria-label="Lasso" aria-pressed="false" title="Lasso"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 8c0-3 10-3 10 0s-10 3-10 0z"/><path d="M9 10c1 1 2 2 3 3"/></svg></button>
+          </div>
           <span class="bt-sep" aria-hidden="true"></span>
-          <button class="color-swatch active" type="button" data-canvas-color data-stroke="#8a6fae" data-fill="#fef3c7" data-fill-style="hachure" aria-label="Warm sketch color" title="Warm sketch color" style="--swatch-stroke:#8a6fae;--swatch-fill:#fef3c7"></button>
-          <button class="color-swatch" type="button" data-canvas-color data-stroke="#d94f5c" data-fill="#fde2e7" data-fill-style="hachure" aria-label="Coral sketch color" title="Coral sketch color" style="--swatch-stroke:#d94f5c;--swatch-fill:#fde2e7"></button>
-          <button class="color-swatch" type="button" data-canvas-color data-stroke="#3da065" data-fill="#e8f7d3" data-fill-style="hachure" aria-label="Mint sketch color" title="Mint sketch color" style="--swatch-stroke:#3da065;--swatch-fill:#e8f7d3"></button>
-          <button class="color-swatch" type="button" data-canvas-color data-stroke="#5b8abf" data-fill="#dbeafe" data-fill-style="hachure" aria-label="Blue sketch color" title="Blue sketch color" style="--swatch-stroke:#5b8abf;--swatch-fill:#dbeafe"></button>
+          <div class="tool-group color-group" data-tool-group="style">
+            <button class="color-swatch active" type="button" data-canvas-color data-stroke="#8a6fae" data-fill="#fef3c7" data-fill-style="hachure" aria-label="Warm sketch color" aria-pressed="true" title="Warm sketch color" style="--swatch-stroke:#8a6fae;--swatch-fill:#fef3c7"></button>
+            <button class="color-swatch" type="button" data-canvas-color data-stroke="#d94f5c" data-fill="#fde2e7" data-fill-style="hachure" aria-label="Coral sketch color" aria-pressed="false" title="Coral sketch color" style="--swatch-stroke:#d94f5c;--swatch-fill:#fde2e7"></button>
+            <button class="color-swatch" type="button" data-canvas-color data-stroke="#3da065" data-fill="#e8f7d3" data-fill-style="hachure" aria-label="Mint sketch color" aria-pressed="false" title="Mint sketch color" style="--swatch-stroke:#3da065;--swatch-fill:#e8f7d3"></button>
+            <button class="color-swatch" type="button" data-canvas-color data-stroke="#5b8abf" data-fill="#dbeafe" data-fill-style="hachure" aria-label="Blue sketch color" aria-pressed="false" title="Blue sketch color" style="--swatch-stroke:#5b8abf;--swatch-fill:#dbeafe"></button>
+          </div>
         </div>
 
         <div class="canvas-zoom-controls" data-component="canvas-zoom-controls" aria-label="Canvas zoom controls">
@@ -166,6 +176,51 @@
             <button class="tool-button secondary" type="button" id="video-field-save">保存字段</button>
           </div>
           <div class="video-export-status" id="video-export-status">未导出</div>
+        </aside>
+      </section>
+
+      <section class="poster-workspace" data-section="poster-workspace" aria-label="Poster PPT JSON workspace" hidden>
+        <header class="poster-workspace-head">
+          <div class="poster-source">
+            <span class="context-eyebrow">POSTER / PPT JSON</span>
+            <input id="poster-document-path" class="poster-path" value="/fixtures/poster/v1/single-poster.json" placeholder="/fixtures/poster/v1/single-poster.json">
+          </div>
+          <div class="poster-actions">
+            <button class="tool-button secondary" type="button" id="poster-open-single">单页示例</button>
+            <button class="tool-button secondary" type="button" id="poster-open-deck">PPT 示例</button>
+            <button class="tool-button secondary" type="button" id="poster-open-shared">共享组件</button>
+            <button class="tool-button secondary" type="button" id="poster-open">打开 JSON</button>
+            <button class="tool-button secondary" type="button" id="poster-export-pdf">PDF</button>
+            <button class="tool-button primary" type="button" id="poster-export-png">PNG</button>
+          </div>
+        </header>
+
+        <aside class="poster-sidebar">
+          <div class="poster-status" id="poster-status" data-status="idle">等待 JSON 文档</div>
+          <div class="poster-panel-label">Pages</div>
+          <div class="poster-page-list" id="poster-pages"></div>
+          <div class="poster-panel-label">Layers</div>
+          <div class="poster-layer-list" id="poster-layers"></div>
+        </aside>
+
+        <section class="poster-stage-panel">
+          <div id="poster-preview" class="poster-preview-workspace" data-component="poster-ppt-preview" aria-label="Poster PPT preview"></div>
+          <pre id="poster-source-json" class="poster-source-json" aria-label="Poster source JSON"></pre>
+        </section>
+
+        <aside class="poster-inspector-panel">
+          <header class="inspector-head">
+            <div>
+              <span class="context-eyebrow">LAYER</span>
+              <h2>属性</h2>
+            </div>
+          </header>
+          <div id="poster-inspector" class="poster-inspector"></div>
+          <div class="poster-inspector-actions">
+            <button class="tool-button secondary" type="button" id="poster-verify">验证</button>
+            <button class="tool-button primary" type="button" id="poster-field-save">保存字段</button>
+          </div>
+          <div class="poster-export-status" id="poster-export-status">未导出</div>
         </aside>
       </section>
     </section>

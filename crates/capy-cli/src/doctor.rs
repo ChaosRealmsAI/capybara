@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 #[command(after_help = "AI quick start:
   Use `capy doctor` before long AI workflows.
   Required params: none.
-  This command is no-spend: it does not start live providers, download models, or require the desktop shell.
+  Pitfalls: this command is no-spend and does not prove the desktop UI is visible; use `capy verify --profile desktop --capture-out <png>` for visible proof.
   Next topic: `capy help doctor`.")]
 pub struct DoctorArgs {}
 

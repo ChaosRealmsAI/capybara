@@ -69,10 +69,19 @@ fn artifact_for_path(composition_path: &Path) -> CompositionArtifact {
         .filter(|stem| !stem.trim().is_empty())
         .unwrap_or("composition")
         .to_string();
-    let project_root = composition_path
+    let composition_dir = composition_path
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
+    let project_root =
+        if composition_dir.file_name().and_then(|name| name.to_str()) == Some("compositions") {
+            composition_dir
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or(composition_dir)
+        } else {
+            composition_dir
+        };
     let project_slug = project_root
         .file_name()
         .and_then(|name| name.to_str())

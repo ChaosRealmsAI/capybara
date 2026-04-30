@@ -28,9 +28,9 @@ try {
   assert(existsSync(capy), `missing CLI binary: ${capy}`);
   assert(existsSync(fixture), `missing poster fixture: ${fixture}`);
 
-  report.checks.seeded = waitFor("canvas seed", () =>
+  report.checks.ready = waitFor("canvas ready", () =>
     capyJson(["canvas", "snapshot"])
-  , (data) => data?.canvas?.ready === true && data?.canvas?.nodeCount >= 4);
+  , (data) => data?.canvas?.ready === true);
 
   const before = capyJson(["canvas", "snapshot"]);
   report.checks.before = summarizeCanvas(before);

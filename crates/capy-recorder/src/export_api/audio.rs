@@ -309,7 +309,6 @@ fn resolve_ffmpeg() -> Option<PathBuf> {
     None
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;

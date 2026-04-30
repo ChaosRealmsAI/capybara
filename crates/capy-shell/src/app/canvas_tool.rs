@@ -2,9 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::ImageEncoder;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tao::event_loop::EventLoopProxy;
 use uuid::Uuid;
 

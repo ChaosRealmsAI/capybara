@@ -11,10 +11,12 @@ use vello::peniko::{
 };
 
 use crate::render::{SHAPE_FILL_ALPHA, SHAPE_FILL_SELECTED_ALPHA, color_from_hex};
+use crate::render_hachure;
 use crate::render_lines::{
-    brighten_color, build_shape_transform, build_stroke, draw_arrow, draw_freehand, draw_hachure,
+    brighten_color, build_shape_transform, build_stroke, draw_arrow, draw_freehand,
     draw_highlighter, draw_line,
 };
+use crate::render_rough;
 use crate::render_text;
 use crate::state::{AppState, FillStyle, ShapeKind};
 
@@ -68,18 +70,33 @@ pub(crate) fn draw_shape(
                 let fill_color = color_from_hex(shape.color, fill_alpha);
                 scene.fill(Fill::NonZero, shape_tf, fill_color, None, &rr);
                 if shape.fill_style == FillStyle::Hachure {
-                    draw_hachure(
+                    render_hachure::draw_rect_hachure(
                         scene,
                         shape_tf,
-                        shape.x,
-                        shape.y,
-                        shape.w,
-                        shape.h,
+                        render_hachure::RectHachure {
+                            x: shape.x,
+                            y: shape.y,
+                            w: shape.w,
+                            h: shape.h,
+                        },
                         stroke_color,
+                        shape.stroke_width,
                     );
                 }
             }
-            scene.stroke(&stroke, shape_tf, stroke_color, None, &rr);
+            render_rough::draw_rough_rect(
+                scene,
+                shape_tf,
+                render_rough::RoughRect {
+                    x: shape.x,
+                    y: shape.y,
+                    w: shape.w,
+                    h: shape.h,
+                },
+                stroke_color,
+                &stroke,
+                shape.id,
+            );
         }
         ShapeKind::Ellipse => {
             let cx = shape.x + shape.w / 2.0;
@@ -89,18 +106,33 @@ pub(crate) fn draw_shape(
                 let fill_color = color_from_hex(shape.color, fill_alpha);
                 scene.fill(Fill::NonZero, shape_tf, fill_color, None, &ellipse);
                 if shape.fill_style == FillStyle::Hachure {
-                    draw_hachure(
+                    render_hachure::draw_ellipse_hachure(
                         scene,
                         shape_tf,
-                        shape.x,
-                        shape.y,
-                        shape.w,
-                        shape.h,
+                        render_hachure::EllipseHachure {
+                            cx,
+                            cy,
+                            rx: shape.w / 2.0,
+                            ry: shape.h / 2.0,
+                        },
                         stroke_color,
+                        shape.stroke_width,
                     );
                 }
             }
-            scene.stroke(&stroke, shape_tf, stroke_color, None, &ellipse);
+            render_rough::draw_rough_ellipse(
+                scene,
+                shape_tf,
+                render_rough::RoughEllipse {
+                    cx,
+                    cy,
+                    rx: shape.w / 2.0,
+                    ry: shape.h / 2.0,
+                },
+                stroke_color,
+                &stroke,
+                shape.id,
+            );
         }
         ShapeKind::Line => {
             draw_line(scene, state, shape, shape_tf, stroke_color, &stroke);
@@ -120,18 +152,32 @@ pub(crate) fn draw_shape(
                 let fill_color = color_from_hex(shape.color, fill_alpha);
                 scene.fill(Fill::NonZero, shape_tf, fill_color, None, &path);
                 if shape.fill_style == FillStyle::Hachure {
-                    draw_hachure(
+                    render_hachure::draw_polygon_hachure(
                         scene,
                         shape_tf,
-                        shape.x,
-                        shape.y,
-                        shape.w,
-                        shape.h,
+                        &[
+                            (shape.x + shape.w / 2.0, shape.y),
+                            (shape.x, shape.y + shape.h),
+                            (shape.x + shape.w, shape.y + shape.h),
+                        ],
                         stroke_color,
+                        shape.stroke_width,
                     );
                 }
             }
-            scene.stroke(&stroke, shape_tf, stroke_color, None, &path);
+            render_rough::draw_rough_polygon(
+                scene,
+                shape_tf,
+                &[
+                    (shape.x + shape.w / 2.0, shape.y),
+                    (shape.x, shape.y + shape.h),
+                    (shape.x + shape.w, shape.y + shape.h),
+                ],
+                stroke_color,
+                &stroke,
+                shape.id,
+                true,
+            );
         }
         ShapeKind::Diamond => {
             let mut path = BezPath::new();
@@ -144,18 +190,34 @@ pub(crate) fn draw_shape(
                 let fill_color = color_from_hex(shape.color, fill_alpha);
                 scene.fill(Fill::NonZero, shape_tf, fill_color, None, &path);
                 if shape.fill_style == FillStyle::Hachure {
-                    draw_hachure(
+                    render_hachure::draw_polygon_hachure(
                         scene,
                         shape_tf,
-                        shape.x,
-                        shape.y,
-                        shape.w,
-                        shape.h,
+                        &[
+                            (shape.x + shape.w / 2.0, shape.y),
+                            (shape.x + shape.w, shape.y + shape.h / 2.0),
+                            (shape.x + shape.w / 2.0, shape.y + shape.h),
+                            (shape.x, shape.y + shape.h / 2.0),
+                        ],
                         stroke_color,
+                        shape.stroke_width,
                     );
                 }
             }
-            scene.stroke(&stroke, shape_tf, stroke_color, None, &path);
+            render_rough::draw_rough_polygon(
+                scene,
+                shape_tf,
+                &[
+                    (shape.x + shape.w / 2.0, shape.y),
+                    (shape.x + shape.w, shape.y + shape.h / 2.0),
+                    (shape.x + shape.w / 2.0, shape.y + shape.h),
+                    (shape.x, shape.y + shape.h / 2.0),
+                ],
+                stroke_color,
+                &stroke,
+                shape.id,
+                true,
+            );
         }
         ShapeKind::StickyNote => {
             render_text::draw_sticky_note(scene, state, shape, index, shape_tf);

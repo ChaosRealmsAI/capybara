@@ -295,10 +295,7 @@ pub(crate) fn resize_shape(shape: &mut Shape, handle: usize, wx: f64, wy: f64) {
         std::mem::swap(&mut y1, &mut y2);
     }
 
-    shape.x = x1;
-    shape.y = y1;
-    shape.w = (x2 - x1).max(1.0);
-    shape.h = (y2 - y1).max(1.0);
+    shape.resize_to_bounds(x1, y1, x2 - x1, y2 - y1);
 }
 
 /// Compute the appropriate cursor style based on current tool and context.

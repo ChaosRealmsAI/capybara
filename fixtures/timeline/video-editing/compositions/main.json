@@ -1,0 +1,79 @@
+{
+  "schema": "capy.timeline.composition.v2",
+  "schema_version": "capy.composition.v2",
+  "id": "video-editing-demo",
+  "name": "Capybara 视频剪辑工作台",
+  "viewport": {
+    "w": 1920,
+    "h": 1080,
+    "ratio": "16:9"
+  },
+  "theme": "default",
+  "export": {
+    "resolution": "1080p"
+  },
+  "clips": [
+    {
+      "id": "intro",
+      "name": "JSON 进入工作台",
+      "duration": "2s",
+      "tracks": [
+        {
+          "id": "stage",
+          "kind": "component",
+          "component": "html.capy-title",
+          "z": 0,
+          "items": [
+            {
+              "id": "headline",
+              "time": {
+                "start": "in",
+                "end": "out"
+              },
+              "params": {
+                "eyebrow": "CAPYBARA TIMELINE",
+                "title": "视频剪辑像画布一样打开",
+                "subtitle": "一份 composition.json，驱动预览、轨道、检查器和导出",
+                "status": "在线预览已就绪",
+                "metric": "2 clips · 4s",
+                "clip": "JSON 进入工作台",
+                "accent": "lavender"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "name": "在线预览与导出",
+      "duration": "2s",
+      "tracks": [
+        {
+          "id": "stage",
+          "kind": "component",
+          "component": "html.capy-title",
+          "z": 0,
+          "items": [
+            {
+              "id": "headline",
+              "time": {
+                "start": "in",
+                "end": "out"
+              },
+              "params": {
+                "eyebrow": "RECORDER / EXPORT",
+                "title": "预览确认后导出 MP4",
+                "subtitle": "AI 可读状态、人可见画面、导出证据走同一条链路",
+                "status": "导出入口已接入",
+                "metric": "MP4 · 1080p",
+                "clip": "在线预览与导出",
+                "accent": "mint"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

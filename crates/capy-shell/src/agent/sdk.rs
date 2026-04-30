@@ -5,8 +5,8 @@ use std::{io::BufRead, io::BufReader, io::Read, thread};
 use serde_json::{Value, json};
 use tao::event_loop::EventLoopProxy;
 
-use super::{event, record_and_emit};
 use super::tool_path::tool_launch;
+use super::{event, record_and_emit};
 use crate::app::ShellEvent;
 use crate::store::{Conversation, Provider, Store};
 
@@ -38,7 +38,10 @@ pub(super) fn run(
         .any(|message| message.role == "assistant");
     let script = sdk_script_path();
     if !script.is_file() {
-        return Err(format!("agent SDK bridge script missing: {}", script.display()));
+        return Err(format!(
+            "agent SDK bridge script missing: {}",
+            script.display()
+        ));
     }
     let launch = tool_launch("node");
     let mut command = Command::new(launch.program());

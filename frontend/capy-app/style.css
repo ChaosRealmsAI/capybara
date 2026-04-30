@@ -1,8 +1,12 @@
 @import "./styles/base.css";
 @import "./styles/topbar.css";
 @import "./styles/canvas.css";
+@import "./styles/canvas-controls.css";
 @import "./styles/timeline-inspector.css";
+@import "./styles/video-editor.css";
+@import "./styles/poster-workspace.css";
 @import "./styles/planner.css";
+@import "./styles/planner-artifacts.css";
 @import "./styles/config-dialog.css";
 @import "./styles/command-palette.css";
 @import "./styles/responsive.css";

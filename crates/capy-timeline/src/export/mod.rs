@@ -27,6 +27,10 @@ pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
         output_path,
         kind: req.kind,
         fps: req.fps,
+        profile: normalized_profile(&req.profile),
+        resolution: normalized_resolution(req.resolution.as_deref()),
+        parallel: req.parallel.unwrap_or(0),
+        strict_recorder: req.strict_recorder,
     };
 
     if !context.composition_path.is_file() {
@@ -61,18 +65,34 @@ pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
     let duration_ms = embedded::read_duration_ms(&context.render_source_path).unwrap_or(0);
     let frame_count = embedded::frame_count(duration_ms, req.fps).unwrap_or(0);
     let artifact = artifact_for_path(&context.composition_path);
-    if TimelineAdapter::default()
-        .export(
-            &artifact,
-            &context.output_path,
-            ExportOptions {
-                profile: "draft".to_string(),
-                fps: req.fps,
-            },
-        )
-        .is_ok()
-    {
-        return metrics_success(context, duration_ms, frame_count, ExportMode::Crate);
+    let recorder_result = TimelineAdapter::default().export(
+        &artifact,
+        &context.output_path,
+        ExportOptions {
+            profile: context.profile.clone(),
+            fps: req.fps,
+            resolution: requested_resolution(&context),
+            parallel: req.parallel,
+            strict_recorder: req.strict_recorder,
+        },
+    );
+    match recorder_result {
+        Ok(_) => return metrics_success(context, duration_ms, frame_count, ExportMode::Crate),
+        Err(error) if context.strict_recorder => {
+            return failure(
+                context,
+                duration_ms,
+                frame_count,
+                Some(ExportMode::Crate),
+                ExportError::new(
+                    error.body.code,
+                    "$.recorder",
+                    error.body.message,
+                    error.body.hint,
+                ),
+            );
+        }
+        Err(_) => {}
     }
 
     match embedded::export_embedded(
@@ -90,6 +110,10 @@ pub fn export_composition(req: ExportCompositionRequest) -> ExportReport {
             kind: context.kind,
             duration_ms: metrics.duration_ms,
             fps: context.fps,
+            profile: context.profile,
+            resolution: context.resolution,
+            parallel: context.parallel,
+            strict_recorder: context.strict_recorder,
             frame_count: metrics.frame_count,
             byte_size: metrics.byte_size,
             export_mode: ExportMode::Embedded,
@@ -113,6 +137,10 @@ struct ExportContext {
     output_path: PathBuf,
     kind: ExportKind,
     fps: u32,
+    profile: String,
+    resolution: String,
+    parallel: usize,
+    strict_recorder: bool,
 }
 
 fn metrics_success(
@@ -131,6 +159,10 @@ fn metrics_success(
             kind: context.kind,
             duration_ms,
             fps: context.fps,
+            profile: context.profile,
+            resolution: context.resolution,
+            parallel: context.parallel,
+            strict_recorder: context.strict_recorder,
             frame_count,
             byte_size: metadata.len(),
             export_mode,
@@ -166,6 +198,10 @@ fn failure(
         kind: context.kind,
         duration_ms,
         fps: context.fps,
+        profile: context.profile,
+        resolution: context.resolution,
+        parallel: context.parallel,
+        strict_recorder: context.strict_recorder,
         frame_count,
         export_mode,
         errors: vec![error],
@@ -187,10 +223,19 @@ fn artifact_for_path(composition_path: &Path) -> CompositionArtifact {
         .filter(|stem| !stem.trim().is_empty())
         .unwrap_or("composition")
         .to_string();
-    let project_root = composition_path
+    let composition_dir = composition_path
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
+    let project_root =
+        if composition_dir.file_name().and_then(|name| name.to_str()) == Some("compositions") {
+            composition_dir
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or(composition_dir)
+        } else {
+            composition_dir
+        };
     let project_slug = project_root
         .file_name()
         .and_then(|name| name.to_str())
@@ -212,6 +257,26 @@ fn render_source_path(composition_path: &Path) -> PathBuf {
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join("render_source.json")
+}
+
+fn normalized_profile(raw: &str) -> String {
+    let value = raw.trim();
+    if value.is_empty() {
+        "draft".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn normalized_resolution(raw: Option<&str>) -> String {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("auto")
+        .to_string()
+}
+
+fn requested_resolution(context: &ExportContext) -> Option<String> {
+    (context.resolution != "auto").then(|| context.resolution.clone())
 }
 
 fn absolute_path(path: &Path) -> PathBuf {
@@ -253,6 +318,10 @@ mod tests {
             kind: ExportKind::Mp4,
             out: None,
             fps: 30,
+            profile: "draft".to_string(),
+            resolution: None,
+            parallel: None,
+            strict_recorder: false,
         });
 
         assert!(!report.ok);
@@ -270,6 +339,10 @@ mod tests {
             kind: ExportKind::Mp4,
             out: None,
             fps: 30,
+            profile: "draft".to_string(),
+            resolution: None,
+            parallel: None,
+            strict_recorder: false,
         });
 
         assert!(!report.ok);

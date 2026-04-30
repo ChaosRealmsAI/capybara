@@ -2,7 +2,9 @@ use capy_shell_mac::IOSurfaceHandle;
 
 use crate::pipeline::h264::PipelineH264_1080p;
 use crate::pipeline::hevc::PipelineHevcMain;
-use crate::pipeline::{ColorSpec, OutputStats, PipelineError, RecordOpts, RecordPipeline, VideoCodec};
+use crate::pipeline::{
+    ColorSpec, OutputStats, PipelineError, RecordOpts, RecordPipeline, VideoCodec,
+};
 use crate::record_loop::RecordConfig;
 
 pub(super) enum ActivePipeline {

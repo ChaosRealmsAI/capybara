@@ -1,0 +1,145 @@
+{
+  "schema": "capy.poster.document.v1",
+  "id": "ppt-deck-demo",
+  "title": "Project Context Deck",
+  "viewport": {
+    "w": 1920,
+    "h": 1080,
+    "ratio": "16:9"
+  },
+  "theme": {
+    "background": "#fffaf0",
+    "accent": "#84cc16"
+  },
+  "assets": {},
+  "pages": [
+    {
+      "id": "p1",
+      "title": "Project",
+      "background": "#fffaf0",
+      "layers": [
+        {
+          "id": "bg",
+          "kind": "shape",
+          "shape": "rect",
+          "bounds": { "x": 0, "y": 0, "w": 1920, "h": 1080 },
+          "z": 0,
+          "style": { "fill": "linear-gradient(135deg, #fffaf0, #fef3c7)" }
+        },
+        {
+          "id": "title",
+          "kind": "text",
+          "text": "Project 承接一切",
+          "bounds": { "x": 150, "y": 180, "w": 1240, "h": 140 },
+          "z": 2,
+          "style": { "fontSize": 86, "fontWeight": 900, "color": "#1c1917" }
+        },
+        {
+          "id": "body",
+          "kind": "text",
+          "text": "设计语言、资产、源文件、运行记录、导出和证据都在同一个项目里。",
+          "bounds": { "x": 154, "y": 360, "w": 1020, "h": 120 },
+          "z": 2,
+          "style": { "fontSize": 38, "fontWeight": 650, "color": "#57534e", "lineHeight": 1.34 }
+        },
+        {
+          "id": "chip",
+          "kind": "shape",
+          "shape": "rect",
+          "bounds": { "x": 152, "y": 620, "w": 500, "h": 86 },
+          "z": 3,
+          "style": { "fill": "#84cc16", "radius": 43 }
+        },
+        {
+          "id": "chip-text",
+          "kind": "text",
+          "text": "Artifact Registry",
+          "bounds": { "x": 198, "y": 642, "w": 410, "h": 44 },
+          "z": 4,
+          "style": { "fontSize": 32, "fontWeight": 850, "color": "#1c1917" }
+        }
+      ]
+    },
+    {
+      "id": "p2",
+      "title": "Selection",
+      "background": "#fef3c7",
+      "layers": [
+        {
+          "id": "bg",
+          "kind": "shape",
+          "shape": "rect",
+          "bounds": { "x": 0, "y": 0, "w": 1920, "h": 1080 },
+          "z": 0,
+          "style": { "fill": "linear-gradient(135deg, #fef3c7, #ede9fe)" }
+        },
+        {
+          "id": "title",
+          "kind": "text",
+          "text": "“这里”必须变成上下文",
+          "bounds": { "x": 150, "y": 160, "w": 1320, "h": 136 },
+          "z": 2,
+          "style": { "fontSize": 80, "fontWeight": 900, "color": "#1c1917" }
+        },
+        {
+          "id": "selection-box",
+          "kind": "shape",
+          "shape": "rect",
+          "bounds": { "x": 250, "y": 430, "w": 560, "h": 330 },
+          "z": 2,
+          "style": { "fill": "rgba(255,250,240,.75)", "radius": 36, "borderColor": "#a78bfa", "borderWidth": 8 }
+        },
+        {
+          "id": "selection-text",
+          "kind": "text",
+          "text": "layer_path\nbounds\ncopy\nstyle\nasset refs",
+          "bounds": { "x": 310, "y": 485, "w": 430, "h": 220 },
+          "z": 3,
+          "style": { "fontSize": 38, "fontWeight": 800, "color": "#1c1917", "lineHeight": 1.22 }
+        }
+      ]
+    },
+    {
+      "id": "p3",
+      "title": "Patch",
+      "background": "#ede9fe",
+      "layers": [
+        {
+          "id": "bg",
+          "kind": "shape",
+          "shape": "rect",
+          "bounds": { "x": 0, "y": 0, "w": 1920, "h": 1080 },
+          "z": 0,
+          "style": { "fill": "linear-gradient(135deg, #ede9fe, #fffaf0)" }
+        },
+        {
+          "id": "title",
+          "kind": "text",
+          "text": "Patch 回到源 JSON",
+          "bounds": { "x": 150, "y": 176, "w": 1200, "h": 128 },
+          "z": 2,
+          "style": { "fontSize": 86, "fontWeight": 900, "color": "#1c1917" }
+        },
+        {
+          "id": "body",
+          "kind": "text",
+          "text": "预览 DOM 不是真相源。每次编辑都要写回 document，再刷新 preview 和 evidence。",
+          "bounds": { "x": 154, "y": 360, "w": 1120, "h": 138 },
+          "z": 2,
+          "style": { "fontSize": 40, "fontWeight": 650, "color": "#57534e", "lineHeight": 1.32 }
+        },
+        {
+          "id": "stamp",
+          "kind": "text",
+          "text": "verified",
+          "bounds": { "x": 1360, "y": 680, "w": 320, "h": 80 },
+          "z": 5,
+          "style": { "fontSize": 54, "fontWeight": 900, "color": "#3da065" }
+        }
+      ]
+    }
+  ],
+  "exports": {
+    "default": ["png", "pdf", "json"]
+  }
+}

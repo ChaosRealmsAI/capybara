@@ -103,6 +103,28 @@ Use the same `CAPYBARA_SOCKET` for shell and CLI when multiple worktrees run.
 
 ## Product CLI
 
+All Capybara operations, including internal `[dev]` debugging tools and
+PM-facing product workflows, use CLI progressive disclosure:
+
+```bash
+target/debug/capy --help
+target/debug/capy help
+target/debug/capy help <topic>
+target/debug/capy <command> --help
+target/debug/capy <command> help <topic>
+```
+
+Rules:
+
+- `capy --help` is the compact total index. Do not turn it into a long manual.
+- Internal automation and verification commands stay visible and carry `[dev]`.
+- Real workflows and `[dev]` tools both point to self-contained topic help.
+- Before using an unfamiliar Capybara CLI surface, read its `--help` and, when
+  listed, the matching `help <topic>` first.
+- Keep this contract green with `scripts/verify-capy-cli-help.sh`.
+
+Common examples:
+
 ```bash
 cargo run -p capy-cli -- --help
 target/debug/capy open --project=demo
@@ -114,6 +136,17 @@ target/debug/capy capture --out=tmp/capy-window.png
 target/debug/capy verify
 target/debug/capy quit
 ```
+
+Debugging multiple desktop surfaces:
+
+```bash
+scripts/open-debug-shell.sh --name v19-a --windows 2
+scripts/open-debug-shell.sh --name v19-b --socket=/tmp/capybara-v19-b-$(id -u).sock
+```
+
+Use `scripts/open-debug-shell.sh` for parallel desktop debugging. It launches a
+separate app process with an explicit socket and launchctl label, so one debug
+window cannot accidentally answer another window's CLI commands.
 
 Timeline surface is canonical:
 

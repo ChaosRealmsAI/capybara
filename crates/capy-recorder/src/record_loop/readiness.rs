@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use capy_shell_mac::MacHeadlessShell;
 
-use super::{FRAME_SEEK_TIMEOUT, RecordError};
+use super::{RecordError, FRAME_SEEK_TIMEOUT};
 
 pub(crate) async fn wait_for_video_state_ready(
     shell: &MacHeadlessShell,
@@ -37,7 +37,9 @@ pub(crate) async fn wait_for_export_seek_ready(
 ) -> Result<serde_json::Value, RecordError> {
     let started = Instant::now();
     loop {
-        let raw = shell.eval_sync("return window.__nf_read_seek_export();").await?;
+        let raw = shell
+            .eval_sync("return window.__nf_read_seek_export();")
+            .await?;
         let value = parse_json_result(raw, "export seek result")?;
         let runtime_seq = js_number_as_u64(value.get("seq")).unwrap_or(0);
         if runtime_seq > min_seq_exclusive {

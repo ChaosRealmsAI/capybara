@@ -229,8 +229,9 @@ function verifyLabelMoveSync() {
       const snapshotTarget = () => {
         const current = refreshPlannerContext();
         const nodes = Array.isArray(current?.blocks) ? current.blocks : [];
-        const node = nodes.find((item) => item.title === "Storyboard")
-          || nodes.find((item) => item.content_kind === "video");
+        const node = nodes.find((item) => state.canvas.selectedNode?.id
+          && String(item.id) === String(state.canvas.selectedNode.id))
+          || nodes.find((item) => item.content_kind !== "shape");
         if (!node?.bounds) return null;
         selectNode(node.id);
         const selected = refreshPlannerContext();
@@ -254,7 +255,7 @@ function verifyLabelMoveSync() {
         && Math.abs(sample.rect.top - sample.expected.y) <= 10);
       const before = snapshotTarget();
       if (!before) {
-        done({ passed: false, reason: "missing Storyboard node or label", pageErrors: window.__capyPageErrors || [] });
+        done({ passed: false, reason: "missing semantic node or label", pageErrors: window.__capyPageErrors || [] });
         return;
       }
       canvasEl.focus({ preventScroll: true });

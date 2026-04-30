@@ -3,13 +3,18 @@
     grid-template-columns: 1fr auto;
     padding-left: 18px;
   }
-  .project-tabs { display: none; }
   .workbench {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(360px, 60vh) 1fr auto;
   }
   .workbench:has(.timeline-inspector:not([hidden])) { grid-template-columns: 1fr; }
   .canvas-panel { margin: 8px 8px 0; }
+  .canvas-toolbar { max-width: calc(100% - 32px); }
+  .canvas-bottom {
+    top: 58px;
+    max-width: calc(100% - 32px);
+  }
+  .canvas-zoom-controls { bottom: 16px; }
   .planner-shell,
   .timeline-inspector { margin: 6px 8px 8px; }
 }

@@ -263,6 +263,14 @@ pub fn export_status(state: &ShellState, params: Value) -> Result<Value, String>
 
 pub fn export_cancel(state: &ShellState, params: Value) -> Result<Value, String> {
     let request = ExportJobRequest::from_params(params, "cancel")?;
+    if let Some(job) = state.cancel_timeline_editor_job(&request.job_id)? {
+        return Ok(json!({
+            "ok": true,
+            "trace_id": export_cancel_trace_id(),
+            "stage": "cancel",
+            "job": job
+        }));
+    }
     let mut nodes = state.timeline_nodes()?;
     let mut cancelled = None;
     for (canvas_node_id, mut node) in nodes.drain(..) {
@@ -436,6 +444,9 @@ fn attachment_json(canvas_node_id: u64, node: &AttachedCanvasNode) -> Value {
 }
 
 fn find_export_job(state: &ShellState, job_id: &str) -> Result<Option<ExportJob>, String> {
+    if let Some(job) = state.timeline_editor_job(job_id)? {
+        return Ok(Some(job));
+    }
     Ok(state
         .timeline_nodes()?
         .into_iter()

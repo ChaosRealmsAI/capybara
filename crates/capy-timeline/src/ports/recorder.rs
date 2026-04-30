@@ -15,6 +15,9 @@ pub struct SnapshotOptions {
 pub struct ExportOptions {
     pub profile: String,
     pub fps: u32,
+    pub resolution: Option<String>,
+    pub parallel: Option<usize>,
+    pub strict_recorder: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

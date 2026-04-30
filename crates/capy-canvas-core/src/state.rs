@@ -61,5 +61,8 @@ pub enum AlignGuide {
 }
 
 #[cfg(test)]
+#[path = "state_style_tests.rs"]
+mod style_tests;
+#[cfg(test)]
 #[path = "state_tests.rs"]
 mod tests;

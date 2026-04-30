@@ -1,6 +1,6 @@
 use capy_shell_mac::{DesktopShell, MacHeadlessShell};
 
-use super::{EXPORT_SEEK_SETTLE, SnapshotError};
+use super::{SnapshotError, EXPORT_SEEK_SETTLE};
 
 pub(super) async fn seek_runtime(
     shell: &MacHeadlessShell,

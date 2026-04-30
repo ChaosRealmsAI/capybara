@@ -2,6 +2,7 @@ pub(super) const DEV_HELP: &str = r#"
 Topic: capy dev
 
 Use when: AI needs the internal operation index before verifying or automating Capybara.
+Required parameters: none.
 Meaning of `[dev]`: internal AI/dev verification or automation command. It is safe to expose in `capy --help`, but it is not a PM-facing product workflow.
 Registered `[dev]` commands:
 1. Lifecycle: `shell`, `open`, `ps`, `quit`
@@ -10,6 +11,11 @@ Registered `[dev]` commands:
 4. UI automation: `click`, `type`
 5. Runtime inspection: `agent`, `agent sdk`
 Product workflow commands without `[dev]`: `chat`, `canvas`, `image`, `cutout`, `tts`, `clips`, `media`, `timeline`.
+Recommended commands:
+1. `target/debug/capy --help`
+2. `target/debug/capy help`
+3. `target/debug/capy help desktop`
+4. `target/debug/capy help interaction`
 Do not: hide these commands from help; run `click`/`type` on a user's active window without an isolated `CAPYBARA_SOCKET`; treat `[dev]` commands as a substitute for final product evidence.
 Next step: read `capy help doctor`, `capy help interaction`, or `capy help desktop` for the exact workflow.
 "#;
@@ -23,7 +29,7 @@ Recommended commands:
 1. `target/debug/capy doctor`
 2. Read `domain_doctors[]` in the JSON.
 3. Run the domain doctor for the workflow you will perform next, for example `target/debug/capy clips doctor` or `target/debug/capy tts doctor`.
-Do not: treat `capy doctor` as proof that the desktop UI is visible; use `capy verify --profile desktop --capture-out <png>` for real UI evidence.
+Do not: treat `capy doctor` as proof that the desktop UI is visible; use `capy verify --profile desktop --capture-out <png>` for real UI evidence from built-in app-view capture.
 Next step: save the JSON into version evidence, then run the workflow-specific doctor.
 "#;
 
@@ -53,7 +59,7 @@ Recommended commands:
 3. `target/debug/capy state --key=app.ready`
 4. `target/debug/capy devtools --eval='document.documentElement.dataset.capyBrowser'`
 5. `target/debug/capy verify --profile desktop --capture-out target/capy-desktop.png`
-Do not: claim UI verified from build/tests alone; mix sockets; run `devtools` without `--query` or `--eval`.
+Do not: claim UI verified from build/tests alone; mix sockets; run `devtools` without `--query` or `--eval`; use macOS Screen Recording/global screen capture as the default evidence path.
 Next step: save JSON output and PNGs into version evidence.
 "#;
 
@@ -181,7 +187,7 @@ Recommended commands:
 2. `target/debug/capy image doctor`
 3. `target/debug/capy image generate --dry-run "<five-section prompt>" --size 1:1 --resolution 1k --out <dir> --name <slug>`
 4. `target/debug/capy image balance`
-Do not: call provider CLIs directly; use short unstructured prompts; run live generation unless spending credits is intended.
+Do not: call provider CLIs directly; use short unstructured prompts; run live generation unless spending credits is intended; assume `--cutout-ready` proves the generated pixels are cutout-safe.
 Next step: for alpha cutout, read `capy help image-cutout`.
 "#;
 
@@ -189,18 +195,19 @@ pub(super) const IMAGE_CUTOUT_HELP: &str = r##"
 Topic: image-cutout
 
 Use when: generated image will be passed to `capy cutout run` or `batch`.
-Required parameters: add `--cutout-ready`; prompt must include five sections plus `#E0E0E0`, `one`/`single`, `fully visible`/`uncropped`, clean edges, no extra objects, no text, no watermark, no green screen, no blue screen.
+Required parameters: add `--cutout-ready`; prompt must include five sections plus a neutral gray background strategy: `#E0E0E0` default, `#E8E8E8` for dark subjects, or `#B8BEC3` for white/light subjects. It must also include `one`/`single`, `fully visible`/`uncropped`, clean edges or strong separation, no extra objects, no text, no watermark, no green screen, no blue screen.
 Recommended command: `target/debug/capy image generate --cutout-ready "<prompt>" --size 1:1 --resolution 1k --out target/capy-image --name object`
 Prompt template:
 ```text
-Scene: Neutral matte #E0E0E0 studio background for cutout source.
+Scene: Flat uniform matte #E0E0E0 neutral gray background for cutout source.
 Subject: One single <object> centered, fully visible, uncropped, 70% frame height.
 Important details: Clean silhouette, clear edges, soft even light, strong separation from background.
 Use case: Source for automated alpha cutout and transparent PNG UI composition.
 Constraints: No text, no watermark, no extra objects, no green screen, no blue screen, no cast shadow, no reflection.
 ```
-Do not: use green/blue screen; crop the object; add text, logos, hard shadows, reflections, or busy backgrounds.
-Next step: run `capy cutout doctor`, `capy cutout init` if needed, then `capy cutout run`.
+Background rules: default to neutral gray `#E0E0E0`; use `#E8E8E8` for dark subjects; use `#B8BEC3` for white/light subjects; always keep background and subject colors clearly separated.
+Do not: use green/blue screen, pure white, pure black, gradients, vignettes, floors, cast shadows, reflections, busy backgrounds, or a background color that collides with the subject color; assume the provider obeyed every background/shadow instruction without visual QA.
+Next step: run `capy cutout doctor`, `capy cutout init` if needed, then `capy cutout run`; inspect `qa-white.png` and `qa-black.png` before PM-visible use.
 "##;
 
 pub(super) const CUTOUT_HELP: &str = r#"
@@ -209,7 +216,7 @@ Topic: capy cutout
 Use when: a local image must become a transparent PNG.
 Required parameters: first setup `capy cutout init`; readiness `capy cutout doctor`; single run needs `--input --output`; recommended `--mask-out --qa-dir --report`.
 Recommended command: `target/debug/capy cutout run --input <image.png> --output <cutout.png> --mask-out <mask.png> --qa-dir <qa-dir> --report <report.json>`
-Do not: use old fixed-background removal; skip doctor/init; skip QA previews for PM-visible assets.
+Do not: use old fixed-background removal; skip doctor/init; skip QA previews for PM-visible assets; treat a generated source as clean just because it passed `capy image generate --cutout-ready`; use source backgrounds that collide with the subject color.
 Next step: open `qa-white.png` and `qa-black.png`; confirm `sips -g hasAlpha <cutout.png>` is `yes`.
 "#;
 

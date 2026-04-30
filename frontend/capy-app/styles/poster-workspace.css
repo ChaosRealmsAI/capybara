@@ -1,0 +1,299 @@
+.poster-workspace {
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(520px, 1fr) 330px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  margin: 14px;
+}
+
+.workbench:has(.poster-workspace:not([hidden])) {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.poster-workspace[hidden] {
+  display: none;
+}
+
+.poster-workspace-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(120, 113, 108, .18);
+  border-radius: 24px;
+  background: rgba(255, 250, 240, .72);
+  box-shadow: 0 12px 30px rgba(28, 25, 23, .08);
+  backdrop-filter: blur(18px);
+}
+
+.poster-source {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  flex: 1;
+}
+
+.poster-path {
+  width: 100%;
+  height: 38px;
+  border: 1px solid rgba(120, 113, 108, .18);
+  border-radius: 14px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, .66);
+  color: #1c1917;
+  font: 13px "JetBrains Mono", "SF Mono", Menlo, monospace;
+}
+
+.poster-actions,
+.poster-inspector-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.poster-sidebar,
+.poster-inspector-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(120, 113, 108, .18);
+  border-radius: 26px;
+  background: rgba(255, 250, 240, .66);
+  box-shadow: 0 14px 32px rgba(28, 25, 23, .08);
+  backdrop-filter: blur(18px);
+}
+
+.poster-status,
+.poster-export-status {
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(28, 25, 23, .08);
+  color: #57534e;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.poster-status[data-status="error"] {
+  background: rgba(251, 113, 133, .16);
+  color: #9f1239;
+}
+
+.poster-status[data-status="verified"],
+.poster-status[data-status="patched"] {
+  background: rgba(132, 204, 22, .18);
+  color: #365314;
+}
+
+.poster-panel-label {
+  margin-top: 2px;
+  color: #78716c;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.poster-page-list,
+.poster-layer-list {
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+}
+
+.poster-page-row,
+.poster-layer-row {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(120, 113, 108, .14);
+  border-radius: 16px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, .50);
+  color: #1c1917;
+  text-align: left;
+}
+
+.poster-page-row[data-selected="true"],
+.poster-layer-row[data-selected="true"] {
+  border-color: rgba(167, 139, 250, .55);
+  background: rgba(167, 139, 250, .18);
+  box-shadow: 0 8px 20px rgba(167, 139, 250, .14);
+}
+
+.poster-page-row span,
+.poster-layer-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.poster-page-row small,
+.poster-layer-row small {
+  color: #78716c;
+  font-size: 12px;
+}
+
+.poster-stage-panel {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(360px, 1fr) 190px;
+  gap: 14px;
+}
+
+.poster-preview-workspace {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #fffaf0;
+  box-shadow: 0 20px 60px rgba(28, 25, 23, .16);
+}
+
+.poster-workspace-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  overflow: hidden;
+  transform-origin: center;
+}
+
+.poster-workspace-layer {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.poster-workspace-layer[data-selected="true"] {
+  outline: 8px solid rgba(167, 139, 250, .82);
+  outline-offset: 0;
+}
+
+.poster-workspace-layer img {
+  display: block;
+}
+
+.poster-workspace-placeholder,
+.poster-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #78716c;
+  font-weight: 750;
+}
+
+.poster-source-json {
+  margin: 0;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(120, 113, 108, .16);
+  border-radius: 22px;
+  padding: 14px;
+  background: rgba(28, 25, 23, .88);
+  color: #fffaf0;
+  font: 12px/1.45 "JetBrains Mono", "SF Mono", Menlo, monospace;
+}
+
+.poster-inspector {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.poster-inspector-kv {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(28, 25, 23, .06);
+}
+
+.poster-inspector-kv span {
+  color: #78716c;
+  font-size: 12px;
+}
+
+.poster-inspector-kv strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.poster-field,
+.poster-field-grid {
+  display: grid;
+  gap: 7px;
+}
+
+.poster-field-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.poster-field span {
+  color: #78716c;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.poster-field input,
+.poster-field textarea {
+  width: 100%;
+  border: 1px solid rgba(120, 113, 108, .16);
+  border-radius: 13px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, .62);
+  color: #1c1917;
+  font: 13px "JetBrains Mono", "SF Mono", Menlo, monospace;
+}
+
+.poster-field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.poster-field-wide {
+  grid-column: 1 / -1;
+}
+
+.poster-param-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.poster-param-fields h3 {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #57534e;
+}
+
+@media (max-width: 980px) {
+  .poster-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto minmax(420px, 1fr) auto;
+  }
+
+  .poster-stage-panel {
+    grid-template-rows: 420px 180px;
+  }
+}

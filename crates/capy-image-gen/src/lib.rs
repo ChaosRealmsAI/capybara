@@ -4,12 +4,12 @@ mod types;
 
 use std::path::PathBuf;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use thiserror::Error;
 
 pub use prompt::{
-    missing_cutout_prompt_requirements, missing_prompt_sections, validate_cutout_prompt,
-    validate_prompt_sections, REQUIRED_PROMPT_SECTIONS,
+    REQUIRED_PROMPT_SECTIONS, missing_cutout_prompt_requirements, missing_prompt_sections,
+    validate_cutout_prompt, validate_prompt_sections,
 };
 pub use types::{
     DoctorReport, GenerateImageRequest, ImageGenerateMode, ImageProviderId, ProviderInfo,
@@ -140,7 +140,9 @@ mod tests {
     #[test]
     fn cutout_prompt_reports_missing_requirements() {
         let missing = missing_cutout_prompt_requirements(&valid_prompt());
-        assert!(missing.contains(&"neutral matte #E0E0E0 background"));
+        assert!(missing.contains(
+            &"neutral matte gray background (#E0E0E0 default, #E8E8E8 for dark subjects, #B8BEC3 for light subjects)"
+        ));
         assert!(missing.contains(&"fully visible uncropped subject"));
         assert!(missing.contains(&"no green screen"));
     }
@@ -151,6 +153,32 @@ mod tests {
             "Scene: Neutral matte #E0E0E0 studio background for cutout source.",
             "Subject: One single ceramic cup centered, fully visible, uncropped, 70% frame height.",
             "Important details: Product photo with clean silhouette, clear edges, soft even light.",
+            "Use case: Source for automated alpha cutout and transparent PNG UI composition.",
+            "Constraints: No text, no watermark, no extra objects, no green screen, no blue screen, no cast shadow, no reflection.",
+        ]
+        .join(" ");
+        validate_cutout_prompt(&prompt)
+    }
+
+    #[test]
+    fn cutout_prompt_accepts_dark_subject_light_gray_strategy() -> Result<()> {
+        let prompt = [
+            "Scene: Flat uniform matte #E8E8E8 neutral gray background for a dark subject.",
+            "Subject: One single dark navy rounded object centered, fully visible, uncropped, 70% frame height.",
+            "Important details: Clean silhouette, clear edges, strong separation from background, soft even light.",
+            "Use case: Source for automated alpha cutout and transparent PNG UI composition.",
+            "Constraints: No text, no watermark, no extra objects, no green screen, no blue screen, no cast shadow, no reflection.",
+        ]
+        .join(" ");
+        validate_cutout_prompt(&prompt)
+    }
+
+    #[test]
+    fn cutout_prompt_accepts_light_subject_mid_gray_strategy() -> Result<()> {
+        let prompt = [
+            "Scene: Flat uniform matte #B8BEC3 neutral gray background for a white or light subject.",
+            "Subject: One single white ceramic object centered, fully visible, uncropped, 70% frame height.",
+            "Important details: Clean silhouette, clear edges, strong separation from background, soft even light.",
             "Use case: Source for automated alpha cutout and transparent PNG UI composition.",
             "Constraints: No text, no watermark, no extra objects, no green screen, no blue screen, no cast shadow, no reflection.",
         ]
@@ -192,8 +220,8 @@ mod tests {
     }
 
     #[test]
-    fn find_downloaded_image_path_recurses_into_provider_result(
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    fn find_downloaded_image_path_recurses_into_provider_result()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
         let path = std::env::temp_dir().join(format!(
             "capy-image-gen-path-test-{}.png",
             std::process::id()

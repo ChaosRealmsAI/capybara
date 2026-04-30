@@ -28,9 +28,7 @@ use objc2_core_media::{
     CMVideoFormatDescription,
 };
 use objc2_core_video::{CVImageBuffer, CVPixelBuffer};
-use objc2_video_toolbox::{
-    kVTEncodeFrameOptionKey_ForceKeyFrame, VTCompressionSession,
-};
+use objc2_video_toolbox::{kVTEncodeFrameOptionKey_ForceKeyFrame, VTCompressionSession};
 
 use super::{ColorSpec, PipelineError, VideoCodec};
 

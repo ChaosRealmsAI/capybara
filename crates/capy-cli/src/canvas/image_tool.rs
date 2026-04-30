@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use clap::{Args, ValueEnum};
 use image::ImageEncoder;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::{absolute_path, canvas_eval, js_string, js_value, placement, snapshot};
 

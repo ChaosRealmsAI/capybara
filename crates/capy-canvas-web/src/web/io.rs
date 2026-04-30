@@ -50,18 +50,14 @@ impl WebApp {
         }
     }
 
-    /// Drain `pending_svg_export` (sync · just blob+download) and
-    /// `export_requested` (async · GPU readback + PNG encode + blob+download).
-    /// Mirrors `serial_fs::drain_pending_file_requests` on native, but the
-    /// PNG path is async via `spawn_local` since wgpu `map_async` is the
-    /// only readback path on web.
+    /// Drain `pending_svg_export` into a plain browser download.
+    /// v0.24 keeps canvas export SVG/vector-first and intentionally avoids
+    /// the old PNG readback path.
     pub(super) fn drain_pending_export_requests(&mut self) {
-        let (svg_to_export, png_requested) = match self.state.lock() {
+        let svg_to_export = match self.state.lock() {
             Ok(mut state) => {
                 let svg = state.pending_svg_export.take();
-                let png = state.export_requested;
-                state.export_requested = false;
-                (svg, png)
+                svg
             }
             Err(_) => return,
         };
@@ -74,14 +70,6 @@ impl WebApp {
             } else {
                 log("[capy-canvas-web] svg exported");
             }
-        }
-
-        if png_requested {
-            spawn_local(async move {
-                if let Err(error) = downloads::perform_png_export().await {
-                    log(&format!("[capy-canvas-web] png export: {error}"));
-                }
-            });
         }
     }
 }

@@ -26,11 +26,11 @@
 
 use std::path::Path;
 
-use capy_shell_mac::{DesktopShell, MacHeadlessShell, ShellConfig};
 use self::png::{
-    FALLBACK_HEIGHT, FALLBACK_WIDTH, MAX_SAFE_SNAPSHOT_PIXELS, rgba_png_looks_black,
-    sample_until_committed,
+    rgba_png_looks_black, sample_until_committed, FALLBACK_HEIGHT, FALLBACK_WIDTH,
+    MAX_SAFE_SNAPSHOT_PIXELS,
 };
+use capy_shell_mac::{DesktopShell, MacHeadlessShell, ShellConfig};
 use readiness::seek_runtime;
 
 mod png;

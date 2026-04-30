@@ -13,6 +13,7 @@ use crate::state::{
     Tool,
 };
 use crate::ui;
+use crate::viewport_interaction;
 
 pub fn handle_mouse_button(
     state: &mut AppState,
@@ -25,6 +26,9 @@ pub fn handle_mouse_button(
             return handle_right_click(state, state.cursor_x, state.cursor_y);
         }
         return false;
+    }
+    if button == MouseButton::Middle {
+        return viewport_interaction::handle_middle_button(state, pressed);
     }
     if button != MouseButton::Left {
         return false;
@@ -212,9 +216,7 @@ fn handle_mouse_up(state: &mut AppState) -> bool {
                 arrow.h = ty - fy;
                 arrow.binding_start = Some(from_id);
                 arrow.binding_end = Some(tid);
-                arrow.stroke_width = state.stroke_width;
-                arrow.stroke_style = state.stroke_style;
-                arrow.opacity = state.opacity;
+                input_tools::apply_style_from_state(state, &mut arrow);
                 let idx = state.add_shape(arrow);
                 state.selected = vec![idx];
             }
@@ -242,6 +244,9 @@ fn handle_mouse_up(state: &mut AppState) -> bool {
         return true;
     }
     state.lasso_points.clear();
+    if was_creating {
+        crate::input_finalize::finalize_created_shape(state);
+    }
     state.drag_mode = DragMode::None;
     state.drag_shape_origins.clear();
     state.rubber_band = None;
@@ -287,8 +292,7 @@ pub fn handle_mouse_move(state: &mut AppState, x: f64, y: f64) -> bool {
             for (i, &idx) in state.selected.iter().enumerate() {
                 if idx < state.shapes.len() && i < state.drag_shape_origins.len() {
                     let (ox, oy) = state.drag_shape_origins[i];
-                    state.shapes[idx].x = ox + dx;
-                    state.shapes[idx].y = oy + dy;
+                    state.shapes[idx].move_to(ox + dx, oy + dy);
                 }
             }
             edge_scroll(state, x, y);
@@ -474,12 +478,11 @@ fn handle_move_creating(state: &mut AppState, x: f64, y: f64) -> bool {
     true
 }
 
-pub fn handle_scroll(state: &mut AppState, delta: MouseScrollDelta) -> bool {
-    let dy = match delta {
-        MouseScrollDelta::LineDelta(_, y) => y as f64 * 20.0,
-        MouseScrollDelta::PixelDelta(pos) => pos.y,
-    };
-    let factor = if dy > 0.0 { 1.05 } else { 1.0 / 1.05 };
-    state.target_zoom = (state.target_zoom * factor).clamp(0.1, 10.0);
-    true
+pub fn handle_scroll(
+    state: &mut AppState,
+    delta: MouseScrollDelta,
+    cmd_or_ctrl: bool,
+    shift: bool,
+) -> bool {
+    viewport_interaction::handle_scroll(state, delta, cmd_or_ctrl, shift)
 }

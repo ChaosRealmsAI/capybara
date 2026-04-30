@@ -92,6 +92,8 @@ pub enum Event {
         status: String,
         moov_front: bool,
         codec: String,
+        width: u32,
+        height: u32,
         frame_rate: f64,
         bit_rate: u64,
         color_primaries: String,

@@ -181,6 +181,29 @@ mod ai_context {
         assert_eq!(state.shapes[0].id, a_id);
         assert!(state.delete_shape_by_id(999).is_err());
     }
+
+    #[test]
+    fn id_based_move_keeps_highlighter_points_with_frame() {
+        let mut state = AppState::new();
+        let mut shape = Shape::new(ShapeKind::Highlighter, 100.0, 80.0, 0xfbbf24);
+        shape.w = 160.0;
+        shape.h = 70.0;
+        shape.points = vec![(112.0, 90.0), (180.0, 118.0), (258.0, 148.0)];
+        let idx = state.add_shape(shape);
+        let id = state.shapes[idx].id;
+
+        state
+            .move_shape_by_id(id, 220.0, 150.0)
+            .expect("move by id");
+
+        let moved = &state.shapes[idx];
+        assert_eq!(moved.x, 220.0);
+        assert_eq!(moved.y, 150.0);
+        assert!((moved.points[0].0 - 232.0).abs() < 1e-6);
+        assert!((moved.points[0].1 - 160.0).abs() < 1e-6);
+        assert!((moved.points[2].0 - 378.0).abs() < 1e-6);
+        assert!((moved.points[2].1 - 218.0).abs() < 1e-6);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

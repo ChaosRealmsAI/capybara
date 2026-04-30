@@ -12,7 +12,8 @@ mod report;
     after_help = "AI quick start:
   Use `capy timeline --help` as the index and `capy timeline help <topic>` for full workflows.
   Common flow: doctor -> compose-poster -> validate -> compile -> snapshot/export -> verify-export.
-  Required params: composition commands need --composition; attach/open need --canvas-node.
+  Video editor flow: launch shell, then `capy timeline open --composition <composition.json>`.
+  Required params: composition commands need --composition; attach needs --canvas-node; open needs --composition or --canvas-node.
   Pitfalls: validate/compile before export; run rebuild after token changes.
   Help topics: `capy timeline help poster-export`, `capy timeline help live`."
 )]
@@ -47,7 +48,9 @@ enum TimelineCommand {
     Status(TimelineStatusArgs),
     #[command(about = "Cancel a live Timeline export job tracked by capy-shell")]
     Cancel(TimelineCancelArgs),
-    #[command(about = "Open a live Timeline composition preview in the desktop host")]
+    #[command(
+        about = "Open a live Timeline composition preview or video editor in the desktop host"
+    )]
     Open(TimelineOpenArgs),
     #[command(about = "Show self-contained AI help topics for Timeline")]
     Help(TimelineHelpArgs),
@@ -121,6 +124,14 @@ struct TimelineExportArgs {
     out: Option<PathBuf>,
     #[arg(long, default_value_t = 30)]
     fps: u32,
+    #[arg(long, default_value = "draft")]
+    profile: String,
+    #[arg(long)]
+    resolution: Option<String>,
+    #[arg(long)]
+    parallel: Option<usize>,
+    #[arg(long)]
+    strict_recorder: bool,
 }
 
 #[derive(Debug, Args)]
@@ -162,7 +173,9 @@ struct TimelineCancelArgs {
 #[derive(Debug, Args)]
 struct TimelineOpenArgs {
     #[arg(long)]
-    canvas_node: u64,
+    canvas_node: Option<u64>,
+    #[arg(long)]
+    composition: Option<PathBuf>,
     #[arg(long)]
     socket: Option<PathBuf>,
 }
@@ -282,6 +295,10 @@ fn export(args: TimelineExportArgs) -> Result<(), String> {
         kind,
         out: args.out,
         fps: args.fps,
+        profile: args.profile,
+        resolution: args.resolution,
+        parallel: args.parallel,
+        strict_recorder: args.strict_recorder,
     });
     print_json(&report)?;
     if report.ok {

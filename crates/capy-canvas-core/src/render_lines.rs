@@ -6,6 +6,7 @@ use vello::peniko::{Color, Fill};
 
 use crate::line_geometry;
 use crate::render::color_from_hex;
+use crate::render_rough;
 use crate::state::{AppState, ArrowHead, Connector, ConnectorStyle, Shape, StrokeStyle};
 
 pub(crate) fn draw_line(
@@ -17,8 +18,7 @@ pub(crate) fn draw_line(
     stroke: &Stroke,
 ) {
     let (start, end) = line_geometry::endpoints(state, shape);
-    let line = Line::new(start, end);
-    scene.stroke(stroke, shape_tf, stroke_color, None, &line);
+    render_rough::draw_rough_line(scene, shape_tf, start, end, stroke_color, stroke, shape.id);
 }
 
 pub(crate) fn draw_arrow(
@@ -38,6 +38,15 @@ pub(crate) fn draw_arrow(
             path.move_to(start);
             path.quad_to(control, end);
             scene.stroke(stroke, shape_tf, stroke_color, None, &path);
+            render_rough::draw_rough_line(
+                scene,
+                shape_tf,
+                start,
+                end,
+                stroke_color,
+                stroke,
+                shape.id.wrapping_add(0x4d2),
+            );
         }
         None => draw_line(scene, state, shape, shape_tf, stroke_color, stroke),
     }
@@ -135,47 +144,6 @@ pub(crate) fn build_shape_transform(shape: &Shape, camera_tf: Affine) -> Affine 
     }
 
     camera_tf * local_tf
-}
-
-pub(crate) fn draw_hachure(
-    scene: &mut Scene,
-    tf: Affine,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    color: Color,
-) {
-    let spacing = 6.0;
-    let stroke = Stroke::new(1.0);
-    let max_dist = w + h;
-    let mut d = spacing;
-    while d < max_dist {
-        let (mut x1, mut y1, mut x2, mut y2);
-        if d <= h {
-            x1 = x;
-            y1 = y + d;
-            x2 = x + d.min(w);
-            y2 = y;
-        } else if d <= w {
-            x1 = x + d - h;
-            y1 = y + h;
-            x2 = x + d;
-            y2 = y;
-        } else {
-            x1 = x + d - h;
-            y1 = y + h;
-            x2 = x + w;
-            y2 = y + d - w;
-        }
-        x1 = x1.clamp(x, x + w);
-        y1 = y1.clamp(y, y + h);
-        x2 = x2.clamp(x, x + w);
-        y2 = y2.clamp(y, y + h);
-        let line = Line::new((x1, y1), (x2, y2));
-        scene.stroke(&stroke, tf, color, None, &line);
-        d += spacing;
-    }
 }
 
 pub(crate) fn draw_arrowhead_typed(

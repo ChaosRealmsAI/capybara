@@ -33,9 +33,9 @@ const report = {
 try {
   assert(existsSync(capy), `missing CLI binary: ${capy}`);
 
-  report.checks.seeded = waitFor("canvas seed", () =>
+  report.checks.ready = waitFor("canvas ready", () =>
     capyJson(["canvas", "snapshot"])
-  , (data) => data?.canvas?.ready === true && data?.canvas?.nodeCount >= 4 && data?.selectedId);
+  , (data) => data?.canvas?.ready === true);
 
   const before = capyJson(["canvas", "snapshot"]);
   report.checks.before = summarizeCanvas(before);
@@ -82,8 +82,8 @@ try {
   assert(afterUi.canvas.nodeCount > afterCli.canvas.nodeCount, "UI dry-run must increase node count");
 
   report.checks.capture = capyJson(["capture", "--out", capturePath]);
-  assert(report.checks.capture.bytes > 100000, "native capture must be non-empty");
-  assert(statSync(capturePath).size > 100000, "native capture file must be non-empty");
+  assert(report.checks.capture.bytes > 100000, "app-view capture must be non-empty");
+  assert(statSync(capturePath).size > 100000, "app-view capture file must be non-empty");
 
   report.ok = true;
   report.finished_at = new Date().toISOString();

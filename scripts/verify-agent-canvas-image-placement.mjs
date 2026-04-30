@@ -147,7 +147,7 @@ function runScenario(provider, mode) {
   assert((report.runtime.pageErrors || []).length === 0, `${provider} ${mode}: page errors must be empty`);
   assert((report.runtime.consoleErrors || []).length === 0, `${provider} ${mode}: console errors must be empty`);
   report.capture_result = capyJson(["capture", "--out", captureOut]);
-  assert(report.capture_result.bytes > 100_000, `${provider} ${mode}: native capture too small`);
+  assert(report.capture_result.bytes > 100_000, `${provider} ${mode}: app-view capture too small`);
   report.ok = true;
   fs.writeFileSync(path.join(assetsDir, `${slug}.json`), JSON.stringify(report, null, 2));
   return report;

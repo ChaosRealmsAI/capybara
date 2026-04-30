@@ -1,6 +1,6 @@
 use std::process::ExitCode;
 
-use capy_recorder::events::{Event, emit};
+use capy_recorder::events::{emit, Event};
 use capy_recorder::record_loop::RecordError;
 use capy_recorder::{ExportOpts, ExportResolution, RecorderBackend};
 
@@ -116,7 +116,10 @@ pub(crate) async fn dispatch_source_export(args: SourceExportArgs) -> ExitCode {
     };
     let audio_muxed = summary.audio_tracks > 0;
     if let Some(path) = args.diagnostics {
-        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             if let Err(err) = std::fs::create_dir_all(parent) {
                 emit(Event::Error {
                     code: "IO_FAILED".into(),

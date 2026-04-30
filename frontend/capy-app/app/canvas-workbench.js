@@ -39,7 +39,6 @@ async function initCanvasWorkbench() {
     installCanvasLabelSync();
     installCanvasRegionSelection();
     await nextFrame();
-    seedDemoCanvas();
     refreshPlannerContext();
     window.setInterval(refreshPlannerContext, 450);
   } catch (error) {
@@ -51,20 +50,7 @@ async function initCanvasWorkbench() {
 }
 
 function seedDemoCanvas() {
-  if (state.blocks.length > 0 || state.canvas.nodeCount > 0) return state.blocks;
-  create_content_card("brand", "Brand Kit", 110, 105);
-  create_content_card("image", "主视觉候选 A", 410, 96);
-  create_content_card("web", "Landing Draft", 650, 322);
-  create_content_card("video", "Storyboard", 222, 392);
-  loadPosterDocument(cloneDefaultPosterDocument(), {
-    title: "Poster JSON preview",
-    x: 360,
-    y: 118,
-    sourcePath: "fixture://poster/default"
-  });
   refreshPlannerContext();
-  const preferred = state.blocks.find((node) => node.title === "主视觉候选 A") || state.blocks[0];
-  if (preferred) selectNode(preferred.id);
   return state.blocks;
 }
 

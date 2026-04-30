@@ -62,11 +62,11 @@ fn verify_battle_mp4_passes_all_six_assertions() {
     // with varying input complexity; hard-coding 12 Mbps makes this test
     // flaky. The verifier's correctness does not depend on magnitude — only
     // on honest reporting.
-    let (probe_verdict, _) = verify_mp4::verify(&path, 60, None)
+    let (probe_verdict, _) = verify_mp4::verify(&path, 60, None, "avc1")
         .expect("probe pass must succeed on well-formed battle MP4");
     let expected_bitrate = u32::try_from(probe_verdict.bit_rate).expect("bit_rate fits in u32");
 
-    let (verdict, asserts) = verify_mp4::verify(&path, 60, Some(expected_bitrate))
+    let (verdict, asserts) = verify_mp4::verify(&path, 60, Some(expected_bitrate), "avc1")
         .expect("verify should succeed on well-formed battle MP4");
 
     // There must be exactly 6 assertions.
@@ -108,7 +108,7 @@ fn verify_rejects_non_mp4_file() {
     let tmp = std::env::temp_dir().join("t17-verify-bogus.bin");
     std::fs::write(&tmp, b"this is not an mp4 at all, just some text bytes").expect("write bogus");
 
-    let res = verify_mp4::verify(&tmp, 60, Some(12_000_000));
+    let res = verify_mp4::verify(&tmp, 60, Some(12_000_000), "avc1");
     match res {
         Err(VerifyError::Malformed(_)) => { /* expected */ }
         other => panic!("expected Malformed · got {:?}", other),
@@ -121,7 +121,7 @@ fn verify_rejects_non_mp4_file() {
 fn verify_rejects_missing_file() {
     let tmp = std::env::temp_dir().join("t17-definitely-does-not-exist-42.mp4");
     let _ = std::fs::remove_file(&tmp);
-    let res = verify_mp4::verify(&tmp, 60, None);
+    let res = verify_mp4::verify(&tmp, 60, None, "avc1");
     match res {
         Err(VerifyError::Io(_)) => { /* expected */ }
         other => panic!("expected Io · got {:?}", other),

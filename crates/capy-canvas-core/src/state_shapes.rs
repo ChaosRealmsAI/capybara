@@ -49,8 +49,7 @@ impl AppState {
             .shape_index_by_id(id)
             .ok_or_else(|| format!("shape id {id} not found"))?;
         self.push_undo();
-        self.shapes[idx].x = x;
-        self.shapes[idx].y = y;
+        self.shapes[idx].move_to(x, y);
         self.selected = vec![idx];
         Ok(idx)
     }
@@ -198,8 +197,7 @@ impl AppState {
         for &i in &self.selected.clone() {
             if i < self.shapes.len() {
                 let mut clone = self.shapes[i].clone();
-                clone.x += offset_x;
-                clone.y += offset_y;
+                clone.translate_by(offset_x, offset_y);
                 clone.group_id = 0; // duplicates are ungrouped
                 let idx = self.add_shape(clone);
                 new_indices.push(idx);
@@ -229,8 +227,7 @@ impl AppState {
         let mut new_sel = Vec::new();
         for s in self.clipboard.clone() {
             let mut ns = s;
-            ns.x += wx - cx;
-            ns.y += wy - cy;
+            ns.translate_by(wx - cx, wy - cy);
             ns.group_id = 0;
             let idx = self.add_shape(ns);
             new_sel.push(idx);

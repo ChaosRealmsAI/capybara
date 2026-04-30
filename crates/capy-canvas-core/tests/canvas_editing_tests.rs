@@ -72,10 +72,10 @@ mod drag_create {
         assert!((s.y - 20.0).abs() < 1e-6);
     }
 
-    /// excalidraw: zero-size drag (click without move) still creates a shape but
-    /// with zero dimensions.
+    /// Click without moving creates a visible default shape instead of an
+    /// invisible zero-size shape.
     #[test]
-    fn zero_size_drag_creates_shape_with_zero_dimensions() {
+    fn zero_size_drag_creates_visible_default_shape() {
         let mut state = AppState::new();
         state.tool = Tool::Rect;
 
@@ -85,11 +85,16 @@ mod drag_create {
         handle_mouse_button(&mut state, MouseButton::Left, true, false);
         handle_mouse_button(&mut state, MouseButton::Left, false, false);
 
-        // Shape is created but with w=0, h=0
         assert_eq!(state.shapes.len(), 1);
         let s = &state.shapes[0];
-        assert!((s.w).abs() < 1e-6, "zero-drag should produce zero width");
-        assert!((s.h).abs() < 1e-6, "zero-drag should produce zero height");
+        assert!(
+            (s.w - 120.0).abs() < 1e-6,
+            "click-create should produce visible default width"
+        );
+        assert!(
+            (s.h - 80.0).abs() < 1e-6,
+            "click-create should produce visible default height"
+        );
     }
 
     /// excalidraw dragCreate: rect at (30,20) to (60,70) -> position (30,20)

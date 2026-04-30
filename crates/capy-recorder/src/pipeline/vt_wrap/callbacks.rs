@@ -3,8 +3,7 @@ use std::ptr::NonNull;
 
 use objc2_core_foundation::{CFArray, CFBoolean, CFDictionary, CFRetained, CFString};
 use objc2_core_media::{
-    kCMSampleAttachmentKey_NotSync, CMBlockBuffer, CMSampleBuffer, CMTime,
-    CMVideoFormatDescription,
+    kCMSampleAttachmentKey_NotSync, CMBlockBuffer, CMSampleBuffer, CMTime, CMVideoFormatDescription,
 };
 use objc2_video_toolbox::VTEncodeInfoFlags;
 

@@ -285,6 +285,30 @@ mod wave4_shapes {
         assert_eq!(state.shapes[1].kind, ShapeKind::StickyNote);
         assert_eq!(state.shapes[1].text, "Copy me");
     }
+
+    #[test]
+    fn copy_paste_highlighter_keeps_points_attached_to_frame() {
+        let mut state = AppState::new();
+        let mut shape = Shape::new(ShapeKind::Highlighter, 100.0, 120.0, 0xfbbf24);
+        shape.w = 140.0;
+        shape.h = 60.0;
+        shape.points = vec![(110.0, 130.0), (180.0, 155.0), (238.0, 176.0)];
+        let idx = state.add_shape(shape);
+        state.selected = vec![idx];
+        state.copy_selected();
+
+        state.paste_at(360.0, 320.0);
+
+        assert_eq!(state.shapes.len(), 2);
+        let pasted = &state.shapes[1];
+        assert_eq!(pasted.kind, ShapeKind::Highlighter);
+        assert!((pasted.x - 290.0).abs() < 1e-6);
+        assert!((pasted.y - 290.0).abs() < 1e-6);
+        assert!((pasted.points[0].0 - 300.0).abs() < 1e-6);
+        assert!((pasted.points[0].1 - 300.0).abs() < 1e-6);
+        assert!((pasted.points[2].0 - 428.0).abs() < 1e-6);
+        assert!((pasted.points[2].1 - 346.0).abs() < 1e-6);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

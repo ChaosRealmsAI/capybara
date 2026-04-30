@@ -177,6 +177,27 @@ check_v16_tts_clips_boundary() {
   fi
 }
 
+check_no_default_screen_recording_capture() {
+  local matches
+  matches="$(
+    rg -n 'CGWindowListCreateImage|cacheDisplayInRect|NSBitmapImageRep|capture_screen_region|ScreenCaptureRegion|capture_window_by_number|"source": "screen-region"|window_number' \
+      crates/capy-shell/src crates/capy-cli/src crates/capy-shell/Cargo.toml \
+      || true
+  )"
+  if [[ -n "$matches" ]]; then
+    echo "$matches" >&2
+    fail_guardrail \
+      "default desktop evidence must not use macOS global screen/window capture" \
+      "route capy capture/screenshot/verify through built-in app-view capture and return source=app-view"
+  fi
+  rg -q 'capture_png_data_url' crates/capy-shell/src/capture.rs crates/capy-shell/src/app/probes.rs ||
+    fail "desktop capture must write PNG data exported by the app itself"
+  rg -q 'cef-dom-self-render' crates/capy-shell/src/app/probes.rs ||
+    fail "desktop capture must identify the CEF self-render capture backend"
+  rg -q '"source": "app-view"' crates/capy-shell/src/app/ipc_handlers.rs crates/capy-shell/src/app/probes.rs ||
+    fail "desktop capture/screenshot responses must report source=app-view"
+}
+
 check_no_external_timeline_engine
 check_timeline_engine_dependency_boundary
 check_no_new_render_source_builders
@@ -185,6 +206,7 @@ check_no_legacy_poster_render_source
 check_no_binary_adapter
 check_v15_contract_boundary
 check_v16_tts_clips_boundary
+check_no_default_screen_recording_capture
 
 for path in \
   Cargo.toml \
@@ -280,7 +302,7 @@ rg -q 'http_range' crates/capy-scroll-media/src/types.rs || fail "scroll media m
 rg -q '206' crates/capy-scroll-media/src/range_server.rs || fail "scroll media server must support HTTP 206 Partial Content"
 rg -q 'capy-multi-video-scroll-story' crates/capy-scroll-media/src/types.rs || fail "multi-video story manifest kind must be explicit"
 rg -q 'StoryPack' crates/capy-cli/src/media.rs || fail "capy media story-pack CLI must remain wired"
-rg -q 'Timeline\(timeline::TimelineArgs\)' crates/capy-cli/src/main.rs || fail "capy timeline CLI must remain wired"
+rg -q 'Timeline\((Box<)?timeline::TimelineArgs(>)?\)' crates/capy-cli/src/main.rs || fail "capy timeline CLI must remain wired"
 if rg -n 'Nextframe\(timeline::TimelineArgs\)|name = "nextframe"|capy nextframe' crates/capy-cli/src scripts README.md AGENTS.md CLAUDE.md | rg -v 'scripts/check-architecture.sh'; then
   fail "capy nextframe legacy alias must not remain wired"
 fi

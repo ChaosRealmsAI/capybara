@@ -305,7 +305,6 @@ fn fit_stage_in_output(output_viewport: (u32, u32), logical_viewport: (u32, u32)
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;

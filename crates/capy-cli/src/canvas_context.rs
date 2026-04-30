@@ -144,7 +144,7 @@ pub(crate) fn export_context(args: CanvasContextExportArgs) -> Result<Value, Str
         }),
     )?;
     let image = image::open(&window_capture)
-        .map_err(|err| format!("read native window capture failed: {err}"))?;
+        .map_err(|err| format!("read built-in app-view capture failed: {err}"))?;
     let (image_w, image_h) = image.dimensions();
     let scale_x = image_w as f64 / inner_w.max(1.0);
     let scale_y = image_h as f64 / inner_h.max(1.0);

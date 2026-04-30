@@ -13,7 +13,28 @@ use anyhow::Result;
 
 pub use args::{Cli, Command, ConfigAction};
 
-pub(crate) const LONG_ABOUT: &str = r#"capy tts · Multi-backend TTS · agent-friendly · 中文原生.
+pub(crate) const LONG_ABOUT: &str = r#"Topic: capy tts playbook
+
+Use when:
+- AI needs the full TTS quality, voice, backend, duration, and long-text playbook.
+
+Required parameters:
+- None for reading the playbook. Commands inside it require their own flags.
+
+Recommended commands:
+1. `target/debug/capy tts help agent`
+2. `target/debug/capy tts synth --help`
+3. `target/debug/capy tts batch --help`
+4. `target/debug/capy tts voices --lang zh`
+
+Do not:
+- Do not treat this playbook as a substitute for command-specific `--help`.
+- Do not run paid/live backend examples unless provider spend is intended.
+
+Next step:
+- Choose `synth`, `batch`, `preview`, or `voices`, then run that subcommand's `--help`.
+
+capy tts · Multi-backend TTS · agent-friendly · 中文原生.
 
 ═══ OUTPUT (default · 4 files · flat into -d) ═══════════════════════════════
 

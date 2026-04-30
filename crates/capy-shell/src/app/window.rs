@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-#[cfg(target_os = "macos")]
-use tao::platform::macos::WindowExtMacOS;
 use tao::window::{UserAttentionType, Window, WindowId};
 
 use crate::app::ShellEvent;
@@ -25,7 +23,6 @@ pub(crate) struct WindowManager {
     pub(crate) webviews: HashMap<String, ShellBrowser>,
     id_by_wid: HashMap<WindowId, String>,
     metadata: HashMap<String, WindowMeta>,
-    window_numbers: HashMap<String, u32>,
     focused_window_id: Option<String>,
     next_seq: u64,
 }
@@ -37,7 +34,6 @@ impl WindowManager {
             webviews: HashMap::new(),
             id_by_wid: HashMap::new(),
             metadata: HashMap::new(),
-            window_numbers: HashMap::new(),
             focused_window_id: None,
             next_seq: 1,
         }
@@ -65,9 +61,6 @@ impl WindowManager {
         let window_id = self.allocate_window_id();
         let (window, webview) =
             crate::browser::create_window(target, proxy.clone(), &window_id, project)?;
-        if let Some(window_number) = native_window_number(&window) {
-            self.window_numbers.insert(window_id.clone(), window_number);
-        }
         self.id_by_wid.insert(window.id(), window_id.clone());
         self.metadata.insert(
             window_id.clone(),
@@ -88,7 +81,6 @@ impl WindowManager {
         self.windows.remove(&window_id);
         self.webviews.remove(&window_id);
         self.metadata.remove(&window_id);
-        self.window_numbers.remove(&window_id);
         if self.focused_window_id.as_deref() == Some(window_id.as_str()) {
             self.focused_window_id = None;
         }
@@ -99,7 +91,6 @@ impl WindowManager {
         self.windows.clear();
         self.id_by_wid.clear();
         self.metadata.clear();
-        self.window_numbers.clear();
         self.focused_window_id = None;
     }
 
@@ -141,21 +132,6 @@ impl WindowManager {
         self.webviews
             .get(window_id)
             .ok_or_else(|| format!("webview missing for {window_id}"))
-    }
-
-    pub(crate) fn native_window_number_for_target(
-        &self,
-        window_id: Option<&str>,
-    ) -> Result<(String, u32), String> {
-        let target_id = self
-            .find_target(window_id)
-            .ok_or_else(|| "no open Capybara window".to_string())?;
-        let window_number = self
-            .window_numbers
-            .get(&target_id)
-            .copied()
-            .ok_or_else(|| format!("native window number missing for {target_id}"))?;
-        Ok((target_id, window_number))
     }
 
     pub(crate) fn focus(&mut self, window_id: &str) -> Result<(), String> {
@@ -247,32 +223,3 @@ fn activate_current_app() {
 
 #[cfg(not(target_os = "macos"))]
 fn activate_current_app() {}
-
-#[cfg(target_os = "macos")]
-#[allow(clashing_extern_declarations)]
-fn native_window_number(window: &Window) -> Option<u32> {
-    use std::ffi::c_void;
-
-    #[link(name = "objc")]
-    unsafe extern "C" {
-        fn sel_registerName(name: *const i8) -> *mut c_void;
-        #[link_name = "objc_msgSend"]
-        fn objc_msg_send_window_number(receiver: *mut c_void, selector: *mut c_void) -> isize;
-    }
-
-    let ns_window = window.ns_window();
-    if ns_window.is_null() {
-        return None;
-    }
-    let selector = unsafe { sel_registerName(c"windowNumber".as_ptr()) };
-    if selector.is_null() {
-        return None;
-    }
-    let number = unsafe { objc_msg_send_window_number(ns_window.cast(), selector) };
-    u32::try_from(number).ok().filter(|number| *number > 0)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn native_window_number(_window: &Window) -> Option<u32> {
-    None
-}

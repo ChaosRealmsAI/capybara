@@ -111,11 +111,10 @@ pub fn maybe_run_subprocess() -> Result<bool, CefOsrError> {
         return Ok(false);
     }
     #[cfg(target_os = "macos")]
-    let _sandbox =
-        wef::SandboxContext::new().map_err(|err| CefOsrError::Init(err.to_string()))?;
+    let _sandbox = wef::SandboxContext::new().map_err(|err| CefOsrError::Init(err.to_string()))?;
     #[cfg(target_os = "macos")]
-    let _loader = wef::FrameworkLoader::load_in_helper()
-        .map_err(|err| CefOsrError::Init(err.to_string()))?;
+    let _loader =
+        wef::FrameworkLoader::load_in_helper().map_err(|err| CefOsrError::Init(err.to_string()))?;
     wef::exec_process().map_err(|err| CefOsrError::Init(err.to_string()))
 }
 
@@ -203,15 +202,11 @@ hasDuration: !!(window.__nf && window.__nf.getDuration)
 }})();"#
             );
             self.execute(&script)?;
-            if let Ok(event) =
-                self.wait_bridge_event("ready", token, Duration::from_millis(500))
-            {
+            if let Ok(event) = self.wait_bridge_event("ready", token, Duration::from_millis(500)) {
                 let complete = event.get("ready").and_then(Value::as_str) == Some("complete");
                 let has_seek = event.get("hasSeek").and_then(Value::as_bool) == Some(true);
-                let has_prepare =
-                    event.get("hasPrepare").and_then(Value::as_bool) == Some(true);
-                let has_duration =
-                    event.get("hasDuration").and_then(Value::as_bool) == Some(true);
+                let has_prepare = event.get("hasPrepare").and_then(Value::as_bool) == Some(true);
+                let has_duration = event.get("hasDuration").and_then(Value::as_bool) == Some(true);
                 if complete && has_seek && has_prepare && has_duration {
                     return Ok(());
                 }
@@ -436,7 +431,10 @@ pub async fn snapshot_png(
 }
 
 mod util;
-use util::{browser_subprocess_path, create_temp_dir, file_url, js_number_as_u64, path_to_string, wait_until};
+use util::{
+    browser_subprocess_path, create_temp_dir, file_url, js_number_as_u64, path_to_string,
+    wait_until,
+};
 
 impl From<CefOsrError> for RecordError {
     fn from(err: CefOsrError) -> Self {

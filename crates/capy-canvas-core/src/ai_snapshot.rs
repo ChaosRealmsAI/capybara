@@ -61,6 +61,10 @@ pub struct CanvasAiNode {
     pub bounds: ShapeGeometry,
     pub center: CanvasPoint,
     pub area: f64,
+    pub stroke_color: String,
+    pub fill_color: String,
+    pub fill_style: String,
+    pub stroke_width: f64,
     pub z_index: usize,
     pub group_id: Option<u64>,
     pub selected: bool,
@@ -101,20 +105,34 @@ impl AppState {
 
     pub fn ai_snapshot_text(&self) -> String {
         let snapshot = self.ai_snapshot();
+        let vector_count = snapshot
+            .nodes
+            .iter()
+            .filter(|node| node.content_kind == CanvasContentKind::Shape)
+            .count();
+        let semantic_count = snapshot.nodes.len().saturating_sub(vector_count);
         let mut lines = vec![format!(
-            "Canvas snapshot v{}: {} nodes, {} connectors, {} groups, {} selected",
+            "Canvas snapshot v{}: {} objects ({} semantic nodes, {} vectors), {} connectors, {} groups, {} selected",
             snapshot.schema_version,
             snapshot.nodes.len(),
+            semantic_count,
+            vector_count,
             snapshot.connectors.len(),
             snapshot.groups.len(),
             snapshot.selection.selected_count
         )];
 
         for node in &snapshot.nodes {
+            let object_kind = if node.content_kind == CanvasContentKind::Shape {
+                "vector"
+            } else {
+                "node"
+            };
             lines.push(format!(
-                "- #{} {} [{} · id={}] bounds=({}, {}, {}, {}) z={}{}",
+                "- #{} {} [{}:{} · id={}] bounds=({}, {}, {}, {}) z={}{}",
                 node.index,
                 node.title,
+                object_kind,
                 node.content_kind.as_str(),
                 node.id,
                 node.bounds.x,
@@ -129,6 +147,12 @@ impl AppState {
             }
             if let Some(next) = node.next_action.as_ref() {
                 lines.push(format!("  next: {next}"));
+            }
+            if node.content_kind == CanvasContentKind::Shape {
+                lines.push(format!(
+                    "  style: stroke={} fill={} {} {:.1}px",
+                    node.stroke_color, node.fill_color, node.fill_style, node.stroke_width
+                ));
             }
         }
 
@@ -200,6 +224,10 @@ impl AppState {
                     area: bounds.w * bounds.h,
                     bounds,
                     center: CanvasPoint { x: cx, y: cy },
+                    stroke_color: format!("#{:06x}", shape.stroke_color),
+                    fill_color: format!("#{:06x}", shape.color),
+                    fill_style: format!("{:?}", shape.fill_style).to_ascii_lowercase(),
+                    stroke_width: shape.stroke_width,
                     z_index: index,
                     group_id: (shape.group_id > 0).then_some(shape.group_id),
                     selected: self.selected.contains(&index),

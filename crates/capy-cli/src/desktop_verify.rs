@@ -93,12 +93,16 @@ pub(crate) fn verify(window: Option<String>, capture_out: Option<PathBuf>) -> Re
         json!({ "out": capture_out.display().to_string(), "window": window }),
     )?;
     ensure(
+        capture.get("source").and_then(Value::as_str) == Some("app-view"),
+        "desktop verify failed: capture source is not built-in app-view",
+    )?;
+    ensure(
         capture
             .get("bytes")
             .and_then(Value::as_u64)
             .unwrap_or_default()
             > 100_000,
-        "desktop verify failed: native capture is too small",
+        "desktop verify failed: app-view capture is too small",
     )?;
 
     let summary = json!({

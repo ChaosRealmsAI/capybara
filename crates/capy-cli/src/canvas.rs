@@ -96,11 +96,9 @@ struct CanvasCreateCardArgs {
 }
 
 pub fn handle(args: CanvasArgs) -> Result<(), String> {
-    if let CanvasCommand::Help(args) = args.command {
-        return crate::help_topics::print_canvas_topic(args.topic.as_deref());
-    }
-    let command_name = args.command.name();
-    let result = match args.command {
+    let command = args.command;
+    let command_name = command.name();
+    let result = match command {
         CanvasCommand::Snapshot(args) => snapshot(args.window),
         CanvasCommand::Select(args) => canvas_eval(
             &format!("window.capyWorkbench.selectNode({})", args.id),
@@ -129,7 +127,9 @@ pub fn handle(args: CanvasArgs) -> Result<(), String> {
         CanvasCommand::Context(args) => match args.command {
             CanvasContextCommand::Export(args) => canvas_context::export_context(args),
         },
-        CanvasCommand::Help(_) => unreachable!("handled before command execution"),
+        CanvasCommand::Help(args) => {
+            return crate::help_topics::print_canvas_topic(args.topic.as_deref());
+        }
     };
     append_tool_call_log(command_name, &result);
     let data = result?;

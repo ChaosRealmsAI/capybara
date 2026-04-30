@@ -70,17 +70,6 @@ pub fn export_svg() -> Result<(), JsValue> {
     Ok(())
 }
 
-/// JS-callable PNG export. Renders current AppState to an offscreen RGBA
-/// texture, reads back via `map_async`, encodes PNG, triggers download.
-#[wasm_bindgen]
-pub async fn export_png() -> Result<(), JsValue> {
-    downloads::perform_png_export()
-        .await
-        .map_err(|e| JsValue::from_str(&e))?;
-    log("[capy-canvas-web] export_png() ok");
-    Ok(())
-}
-
 /// JS-callable load. Mirror image of `save()`.
 #[wasm_bindgen]
 pub async fn load() -> Result<bool, JsValue> {
@@ -318,6 +307,58 @@ pub fn current_tool() -> String {
         .unwrap_or_else(|| "select".to_string())
 }
 
+/// Set the active canvas tool from HTML controls. Returns the normalized
+/// snake_case tool label after the state change.
+#[wasm_bindgen]
+pub fn set_tool(tool: &str) -> Result<String, JsValue> {
+    let next_tool = parse_tool(tool)
+        .ok_or_else(|| JsValue::from_str(&format!("set_tool(): unsupported tool '{tool}'")))?;
+    let state_arc = shared_state()
+        .ok_or_else(|| JsValue::from_str("set_tool(): no shared state · call start() first"))?;
+    {
+        let mut state = state_arc
+            .lock()
+            .map_err(|_| JsValue::from_str("set_tool(): state lock poisoned"))?;
+        state.tool = next_tool;
+        state.connector_from = None;
+        state.connector_preview = None;
+        state.text_edit = None;
+    }
+    redraw_via_shared();
+    Ok(tool_label(next_tool).to_string())
+}
+
+/// Set the active vector sketch style from HTML controls. If vector graphics
+/// are selected, apply the same style immediately; semantic Planner nodes keep
+/// their product-card colors.
+#[wasm_bindgen]
+pub fn set_vector_style(stroke: &str, fill: &str, fill_style: &str) -> Result<String, JsValue> {
+    super::vector_style::set_vector_style(stroke, fill, fill_style)
+}
+
+/// Center the canvas viewport on a world-space point. Used by the HTML minimap
+/// so its click behavior is backed by the real canvas camera.
+#[wasm_bindgen]
+pub fn center_view_on(x: f64, y: f64) -> Result<bool, JsValue> {
+    let state_arc = shared_state().ok_or_else(|| {
+        JsValue::from_str("center_view_on(): no shared state · call start() first")
+    })?;
+    {
+        let mut state = state_arc
+            .lock()
+            .map_err(|_| JsValue::from_str("center_view_on(): state lock poisoned"))?;
+        if !x.is_finite() || !y.is_finite() {
+            return Ok(false);
+        }
+        let zoom = state.camera.zoom;
+        state.camera.offset_x = state.viewport_w / 2.0 - x * zoom;
+        state.camera.offset_y = state.viewport_h / 2.0 - y * zoom;
+        state.target_zoom = zoom;
+    }
+    redraw_via_shared();
+    Ok(true)
+}
+
 /// Whether dark mode is active in AppState. Returns false if state isn't
 /// ready (matches `AppState::new()` default).
 #[wasm_bindgen]
@@ -395,6 +436,25 @@ fn tool_label(tool: Tool) -> &'static str {
         Tool::Text => "text",
         Tool::Eraser => "eraser",
         Tool::Lasso => "lasso",
+    }
+}
+
+fn parse_tool(tool: &str) -> Option<Tool> {
+    match tool.trim().to_ascii_lowercase().as_str() {
+        "select" | "cursor" => Some(Tool::Select),
+        "rect" | "rectangle" => Some(Tool::Rect),
+        "ellipse" | "circle" => Some(Tool::Ellipse),
+        "triangle" | "tri" => Some(Tool::Triangle),
+        "diamond" => Some(Tool::Diamond),
+        "line" => Some(Tool::Line),
+        "arrow" | "link" => Some(Tool::Arrow),
+        "freehand" | "pen" => Some(Tool::Freehand),
+        "highlighter" => Some(Tool::Highlighter),
+        "sticky_note" | "sticky" | "node" => Some(Tool::StickyNote),
+        "text" => Some(Tool::Text),
+        "eraser" => Some(Tool::Eraser),
+        "lasso" => Some(Tool::Lasso),
+        _ => None,
     }
 }
 

@@ -116,7 +116,9 @@ fn read_ftyp_brand(file: &mut File, ftyp_brand: &mut String) -> Result<(), Verif
 
 fn read_atom_body(file: &mut File, body_len: u64, label: &str) -> Result<Vec<u8>, VerifyError> {
     let Ok(body_len_usize) = usize::try_from(body_len) else {
-        return Err(VerifyError::Malformed(format!("{label} too large: {body_len}")));
+        return Err(VerifyError::Malformed(format!(
+            "{label} too large: {body_len}"
+        )));
     };
     let mut buf = vec![0u8; body_len_usize];
     let n = read_fully(file, &mut buf)?;

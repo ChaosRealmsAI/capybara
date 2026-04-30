@@ -1,13 +1,10 @@
 use super::{
     agent_tool_env, claude_append_system_prompt, claude_args, claude_delta, codex_app_server_args,
     codex_developer_instructions, codex_resume_params, codex_sandbox_mode, codex_sandbox_policy,
-    codex_start_params, codex_turn_params, desktop_tool_path_env, resolve_tool_path,
+    codex_start_params, codex_turn_params,
 };
 use crate::store::{Conversation, Provider};
 use serde_json::json;
-use std::fs;
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn extracts_claude_assistant_text() {
@@ -268,6 +265,49 @@ fn capy_canvas_tools_extend_claude_and_codex_instructions() -> Result<(), String
 }
 
 #[test]
+fn codex_project_instructions_extend_developer_instructions() -> Result<(), String> {
+    let conversation = Conversation {
+        id: "conv".to_string(),
+        title: "Test".to_string(),
+        provider: Provider::Codex,
+        cwd: "/tmp/project".to_string(),
+        native_session_id: None,
+        native_thread_id: None,
+        model: None,
+        config: json!({
+            "developerInstructions": "Existing Codex instruction.",
+            "capyProjectInstructions": true
+        }),
+        status: "idle".to_string(),
+        archived: false,
+        created_at: 0,
+        updated_at: 0,
+    };
+
+    let instructions = codex_developer_instructions(
+        Some("Existing Codex instruction.".to_string()),
+        &conversation.config,
+    )
+    .ok_or_else(|| "codex project instructions missing".to_string())?;
+    assert!(instructions.starts_with("Existing Codex instruction."));
+    assert!(instructions.contains("Capybara desktop communication contract."));
+    assert!(instructions.contains("fenced `html` block"));
+    assert!(instructions.contains("semantic body fragment"));
+    assert!(instructions.contains("Do not include `<style>`, inline `style=\"\"`, scripts"));
+    assert!(instructions.contains("compact enough for the right-side chat"));
+    assert!(instructions.contains("capy-card"));
+
+    let start = codex_start_params(&conversation);
+    assert!(
+        start["developerInstructions"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Capybara desktop communication contract.")
+    );
+    Ok(())
+}
+
+#[test]
 fn maps_codex_sandbox_shapes_for_thread_and_turn_params() {
     assert_eq!(codex_sandbox_mode("workspace-write"), "workspace-write");
     assert_eq!(codex_sandbox_mode("workspaceWrite"), "workspace-write");
@@ -396,36 +436,5 @@ fn write_code_preset_maps_to_codex_unrestricted_workspace() -> Result<(), String
     assert_eq!(turn["approvalPolicy"], json!("never"));
     assert_eq!(turn["sandboxPolicy"], json!({ "type": "dangerFullAccess" }));
 
-    Ok(())
-}
-
-#[test]
-fn desktop_tool_path_env_includes_common_gui_missing_dirs() {
-    let path_env = desktop_tool_path_env();
-    let dirs: Vec<PathBuf> = std::env::split_paths(&path_env).collect();
-
-    assert!(dirs.contains(&PathBuf::from("/opt/homebrew/bin")));
-    assert!(dirs.contains(&PathBuf::from("/usr/local/bin")));
-}
-
-#[test]
-fn resolves_tool_from_augmented_path_env() -> Result<(), Box<dyn std::error::Error>> {
-    let suffix = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|err| format!("time should be available: {err}"))?
-        .as_nanos();
-    let temp_dir =
-        std::env::temp_dir().join(format!("capy-tool-path-{}-{suffix}", std::process::id()));
-    fs::create_dir_all(&temp_dir)?;
-    let codex = temp_dir.join("codex");
-    fs::write(&codex, "#!/bin/sh\n")?;
-
-    let path_env = std::env::join_paths([temp_dir.clone()])?
-        .to_string_lossy()
-        .into_owned();
-    let resolved = resolve_tool_path("codex", &path_env);
-
-    let _cleanup = fs::remove_dir_all(&temp_dir);
-    assert_eq!(resolved, Some(codex));
     Ok(())
 }

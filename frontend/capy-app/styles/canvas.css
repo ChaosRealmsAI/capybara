@@ -9,6 +9,11 @@
   grid-template-columns: minmax(560px, 1fr) 390px 360px;
 }
 
+.canvas-panel[hidden],
+.planner-shell[hidden] {
+  display: none !important;
+}
+
 /* ─── canvas panel ─── */
 .canvas-panel {
   position: relative;
@@ -39,8 +44,9 @@
 .canvas-toolbar {
   position: absolute; top: 16px; left: 16px; z-index: 5;
   display: flex; gap: 4px; align-items: center;
+  max-width: max(150px, calc(50% - 320px));
   padding: 4px;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.66);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   border: 0.5px solid rgba(255, 255, 255, 0.85);
@@ -70,66 +76,17 @@
   box-shadow: 0 1px 2px rgba(28, 25, 23, 0.08), inset 0 0 0 0.5px rgba(77, 124, 15, 0.22);
 }
 .seg-info {
+  min-width: 0;
   font-size: 11px;
   font-family: var(--f-mono);
   color: var(--c-text-mute);
   padding: 0 10px 0 6px;
   border-left: 0.5px solid rgba(28, 25, 23, 0.1);
   margin-left: 4px;
-}
-
-/* canvas bottom toolbar (左下 · 紧凑) */
-.canvas-bottom {
-  position: absolute; left: 16px; bottom: 16px; z-index: 5;
-  display: flex; align-items: center; gap: 1px;
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.62);
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  border: 0.5px solid rgba(255, 255, 255, 0.85);
-  border-radius: 12px;
-  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-.bt {
-  width: 28px; height: 28px;
-  border-radius: 7px;
-  display: grid; place-items: center;
-  color: var(--c-text-mute);
-  transition: background .12s, color .12s;
-}
-.bt:hover { background: rgba(255, 255, 255, 0.7); color: var(--c-text-dark); }
-.bt.active {
-  background: #fff;
-  color: var(--c-acc-purple-deep);
-  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06), inset 0 0 0 0.5px rgba(167, 139, 250, 0.3);
-}
-.bt svg { width: 14px; height: 14px; }
-.bt-sep {
-  width: 0.5px; height: 16px; margin: 0 3px;
-  background: rgba(28, 25, 23, 0.1);
-}
-
-/* mini map */
-.mini-map {
-  position: absolute; right: 16px; bottom: 16px; z-index: 4;
-  width: 130px; height: 90px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  border: 0.5px solid rgba(255, 255, 255, 0.85);
-  border-radius: 12px;
-  box-shadow: var(--shadow-card);
   overflow: hidden;
-  padding: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.mini-map span {
-  position: absolute;
-  height: 14px;
-  border-radius: 4px;
-  background: rgba(28, 25, 23, 0.08);
-}
-.mini-map span:nth-child(1) { left: 16px; top: 18px; width: 38px; }
-.mini-map span:nth-child(2) { left: 64px; top: 14px; width: 50px; background: rgba(167, 139, 250, 0.32); }
-.mini-map span:nth-child(3) { left: 30px; top: 50px; width: 42px; background: rgba(251, 191, 36, 0.32); }
 
 /* ─── node skin overlay · 玻璃节点 ─── */
 .node-label-layer {
@@ -439,4 +396,3 @@
 }
 .node-label.is-image-preview .node-foot .node-title { color: #fff; }
 .node-label.is-image-preview .node-foot .node-meta { color: rgba(255, 255, 255, 0.85); }
-

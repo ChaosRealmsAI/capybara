@@ -10,7 +10,7 @@ use serde_json::{Value, json};
   Use `capy image --help` as the index and `capy image help <topic>` for full workflows.
   Common commands: `capy image providers`, `capy image doctor`, `capy image generate --dry-run ...`, `capy image balance`.
   Required params: `generate` needs one five-section prompt: Scene, Subject, Important details, Use case, Constraints.
-  Pitfalls: live generation spends credits unless --dry-run or --submit-only is used; use --out and --name when later steps need a file.
+  Pitfalls: live generation spends credits unless --dry-run or --submit-only is used; cutout sources use neutral gray (#E0E0E0 default, #E8E8E8 dark subject, #B8BEC3 light subject) and must avoid subject/background color collision.
   Help topics: `capy image help agent`, `capy image help cutout-ready`."
 )]
 pub struct ImageArgs {

@@ -399,7 +399,6 @@ version = "0.2.0"
 dependencies = [
  "capy-canvas-core",
  "console_error_panic_hook",
- "futures-channel",
  "idb",
  "image",
  "js-sys",

@@ -1,4 +1,5 @@
 pub mod adapter;
+mod clip_first;
 pub mod report;
 pub mod structural;
 

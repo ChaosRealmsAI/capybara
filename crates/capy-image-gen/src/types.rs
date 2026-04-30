@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::prompt::{validate_cutout_prompt, validate_prompt_sections};
 use crate::{ImageGenError, Result};

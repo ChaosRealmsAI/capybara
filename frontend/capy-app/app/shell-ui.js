@@ -18,7 +18,6 @@ export function installShellUi(ctx) {
     renderRuntimeFoot,
     renderError,
     defaultImagePrompt,
-    seedDemoCanvas,
   } = ctx;
 
 /* ─── config dialog · 弹窗 ─── */
@@ -122,11 +121,6 @@ function runCmd(cmd) {
   if (cmd === "dark-mode") {
     state.canvas.darkMode = !state.canvas.darkMode;
     document.documentElement.dataset.canvasDark = state.canvas.darkMode ? "true" : "false";
-    closeCmdPalette();
-    return;
-  }
-  if (cmd === "seed-demo") {
-    seedDemoCanvas();
     closeCmdPalette();
     return;
   }

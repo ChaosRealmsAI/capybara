@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use super::window::WindowManager;
-use super::{ShellState, timeline};
+use super::{ShellState, timeline, timeline_editor};
 use crate::ipc::{IpcRequest, IpcResponse};
 
 pub(crate) fn attach(
@@ -57,6 +57,23 @@ pub(crate) fn open(
                 .ok()
                 .or_else(|| Some(json!({ "code": "IPC_ERROR", "message": error }))),
         },
+    }
+}
+
+pub(crate) fn composition_open(
+    manager: &WindowManager,
+    state: &ShellState,
+    request: IpcRequest,
+) -> IpcResponse {
+    let req_id = request.req_id.clone();
+    match timeline_editor::open_response(req_id.clone(), state, request.params) {
+        response @ IpcResponse { ok: true, .. } => {
+            if let Some(data) = response.data.as_ref() {
+                broadcast(manager, "capy:timeline-composition-opened", data);
+            }
+            response
+        }
+        response => response,
     }
 }
 

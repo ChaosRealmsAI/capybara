@@ -68,9 +68,9 @@ enum Command {
     State(StateArgs),
     #[command(about = "[dev] Inspect DOM state for AI verification")]
     Devtools(DevtoolsArgs),
-    #[command(about = "[dev] Capture a real desktop PNG for a DOM region")]
+    #[command(about = "[dev] Capture a built-in app-view PNG for a DOM region")]
     Screenshot(ScreenshotArgs),
-    #[command(about = "[dev] Capture the native macOS window PNG")]
+    #[command(about = "[dev] Capture the Capybara-owned app-view PNG")]
     Capture(CaptureArgs),
     #[command(about = "[dev] Run a no-spend project health check")]
     Doctor(doctor::DoctorArgs),
@@ -85,21 +85,21 @@ enum Command {
     #[command(about = "Manage persistent Claude/Codex conversations")]
     Chat(Box<chat::ChatArgs>),
     #[command(about = "Operate the live canvas through AI-safe commands")]
-    Canvas(canvas::CanvasArgs),
+    Canvas(Box<canvas::CanvasArgs>),
     #[command(about = "Run AI-usable creative generation tools")]
-    Image(image::ImageArgs),
+    Image(Box<image::ImageArgs>),
     #[command(about = "Show self-contained AI help topics")]
     Help(HelpArgs),
     #[command(about = "Package video clips for scroll-driven HTML pages")]
-    Media(media::MediaArgs),
+    Media(Box<media::MediaArgs>),
     #[command(about = "Operate Timeline composition and recorder integration")]
-    Timeline(timeline::TimelineArgs),
+    Timeline(Box<timeline::TimelineArgs>),
     #[command(about = "Generate, preview, play, batch, and align TTS audio")]
-    Tts(tts::TtsArgs),
+    Tts(Box<tts::TtsArgs>),
     #[command(about = "Download, transcribe, align, cut, and preview video clips")]
-    Clips(clips::ClipsArgs),
+    Clips(Box<clips::ClipsArgs>),
     #[command(about = "[dev] Inspect local agent runtimes")]
-    Agent(agent::AgentArgs),
+    Agent(Box<agent::AgentArgs>),
     #[command(
         about = "[dev] Quit the Capybara shell",
         after_help = "AI quick start:
@@ -112,6 +112,11 @@ enum Command {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = "AI quick start:
+  Use `capy help` to list self-contained help topics, then `capy help <topic>` for the exact workflow.
+  Required params: none for the topic index; optional TOPIC for a specific playbook.
+  Pitfalls: do not skip topic help for unfamiliar workflows; `--help` is the index, not the long operating manual.
+  Next topic: start with `capy help dev`, `capy help desktop`, or the domain topic shown by `capy help`.")]
 struct HelpArgs {
     #[arg(value_name = "TOPIC")]
     topic: Option<String>,
@@ -166,7 +171,7 @@ struct DevtoolsArgs {
   Use `capy screenshot --region canvas --out <png>` for cropped DOM-region evidence.
   Required params: --out.
   Regions: full, canvas, planner, topbar.
-  Pitfalls: this captures real native pixels after a DOM rect probe; do not replace it with browser mocks for desktop evidence.
+  Pitfalls: this uses Capybara-owned app-view capture after a DOM rect probe; it must not request macOS Screen Recording permission.
   Next topic: `capy help desktop`.")]
 struct ScreenshotArgs {
     #[arg(long, default_value = "full")]
@@ -179,9 +184,9 @@ struct ScreenshotArgs {
 
 #[derive(Debug, Args)]
 #[command(after_help = "AI quick start:
-  Use `capy capture --out <png>` for full native macOS window evidence.
+  Use `capy capture --out <png>` for full Capybara app-view evidence.
   Required params: --out.
-  Pitfalls: requires a running shell window and macOS capture permissions; keep CAPYBARA_SOCKET consistent.
+  Pitfalls: requires a running shell window; the default path must use built-in app-view capture and must not request macOS Screen Recording permission.
   Next topic: `capy help desktop`.")]
 struct CaptureArgs {
     #[arg(long)]
@@ -194,7 +199,7 @@ struct CaptureArgs {
 #[command(after_help = "AI quick start:
   Use `capy verify` for readiness and `capy verify --profile desktop --capture-out <png>` for visible desktop proof.
   Required params: none for readiness; --capture-out is required for --profile desktop.
-  Pitfalls: readiness alone is not visual verification; desktop profile checks browser identity, bridge, errors, topbar, and native capture.
+  Pitfalls: readiness alone is not visual verification; desktop profile checks browser identity, bridge, errors, topbar, and built-in app-view capture.
   Next topic: `capy help desktop`.")]
 struct VerifyArgs {
     #[arg(long)]
@@ -253,18 +258,24 @@ fn run() -> Result<(), String> {
                 )
             }
         }
-        Command::Screenshot(args) => send(
-            "screenshot",
-            json!({
-                "region": args.region,
-                "out": args.out.display().to_string(),
-                "window": args.window
-            }),
-        ),
-        Command::Capture(args) => send(
-            "capture",
-            json!({ "out": args.out.display().to_string(), "window": args.window }),
-        ),
+        Command::Screenshot(args) => {
+            let out = absolute_path(args.out)?;
+            send(
+                "screenshot",
+                json!({
+                    "region": args.region,
+                    "out": out.display().to_string(),
+                    "window": args.window
+                }),
+            )
+        }
+        Command::Capture(args) => {
+            let out = absolute_path(args.out)?;
+            send(
+                "capture",
+                json!({ "out": out.display().to_string(), "window": args.window }),
+            )
+        }
         Command::Doctor(args) => doctor::handle(args),
         Command::Click(args) => interaction::click(args),
         Command::Type(args) => interaction::type_text(args),
@@ -277,14 +288,14 @@ fn run() -> Result<(), String> {
             VerifyProfile::Desktop => desktop_verify::verify(args.window, args.capture_out),
         },
         Command::Chat(args) => chat::handle(args),
-        Command::Canvas(args) => canvas::handle(args),
-        Command::Image(args) => image::handle(args),
+        Command::Canvas(args) => canvas::handle(*args),
+        Command::Image(args) => image::handle(*args),
         Command::Help(args) => help_topics::print_capy_topic(args.topic.as_deref()),
-        Command::Media(args) => media::handle(args),
-        Command::Timeline(args) => timeline::handle(args),
-        Command::Tts(args) => tts::handle(args),
-        Command::Clips(args) => clips::handle(args),
-        Command::Agent(args) => agent::handle(args),
+        Command::Media(args) => media::handle(*args),
+        Command::Timeline(args) => timeline::handle(*args),
+        Command::Tts(args) => tts::handle(*args),
+        Command::Clips(args) => clips::handle(*args),
+        Command::Agent(args) => agent::handle(*args),
         Command::Quit => send("quit", json!({})),
     }
 }
@@ -300,6 +311,15 @@ pub(crate) fn print_json(data: &Value) -> Result<(), String> {
         serde_json::to_string_pretty(data).map_err(|err| err.to_string())?
     );
     Ok(())
+}
+
+fn absolute_path(path: PathBuf) -> Result<PathBuf, String> {
+    if path.is_absolute() {
+        return Ok(path);
+    }
+    std::env::current_dir()
+        .map_err(|err| format!("read cwd failed: {err}"))
+        .map(|cwd| cwd.join(path))
 }
 
 fn request_data(op: &str, params: Value) -> Result<Value, String> {

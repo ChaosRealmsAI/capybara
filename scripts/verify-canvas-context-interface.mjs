@@ -43,9 +43,9 @@ const report = {
 
 try {
   assert(existsSync(capy), `missing CLI binary: ${capy}`);
-  report.checks.seeded = waitFor("canvas seed", () =>
+  report.checks.ready = waitFor("canvas ready", () =>
     capyJson(["devtools", "--eval", ensureSelectionProbe()])
-  , (data) => data?.canvas?.ready === true && data?.canvas?.nodeCount >= 4 && data?.selectedId);
+  , (data) => data?.canvas?.ready === true);
 
   const anchorPrompt = [
     "Scene: Warm product design board with soft natural light.",
@@ -93,7 +93,7 @@ try {
   }
   report.checks.planner_shot = capyJson(["screenshot", "--region", "planner", "--out", plannerShotPath]);
   report.checks.capture = capyJson(["capture", "--out", capturePath]);
-  assert(report.checks.capture.bytes > 100000, "native capture must be non-empty");
+  assert(report.checks.capture.bytes > 100000, "app-view capture must be non-empty");
 
   const runtime = capyJson([
     "devtools",

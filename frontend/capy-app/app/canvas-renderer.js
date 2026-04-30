@@ -116,6 +116,7 @@ function renderNodeLabels(nodes, selectedId, viewport) {
   );
   for (const node of nodes) {
     if (!node || !node.bounds) continue;
+    if (String(node.content_kind || "").toLowerCase() === "shape") continue;
     if (node.content_kind === "poster") continue;
     const nodeId = String(node.id);
     let skin = existing.get(nodeId);

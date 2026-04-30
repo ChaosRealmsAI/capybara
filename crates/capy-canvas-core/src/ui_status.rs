@@ -318,7 +318,7 @@ pub fn draw_help_overlay(scene: &mut Scene, state: &AppState) {
         ("Cmd+A", "Select All"),
         ("Cmd+G / Cmd+Shift+G", "Group / Ungroup"),
         ("Cmd+S / Cmd+O", "Save / Load"),
-        ("Cmd+E / Cmd+Shift+E", "Export PNG / SVG"),
+        ("Cmd+E / Cmd+Shift+E", "Export SVG"),
         ("", ""),
         ("Cmd+= / Cmd+-", "Zoom In / Out"),
         ("Cmd+1 / Cmd+2", "Zoom Fit / Selection"),

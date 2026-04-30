@@ -1,10 +1,17 @@
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::process::Command;
+
+mod runtime;
 
 use crate::error::{TimelineError, TimelineErrorCode};
 use crate::ports::{
     CompositionArtifact, ExportOptions, ExportReport, SnapshotOptions, SnapshotReport,
     TimelineRecorderPort,
+};
+
+use runtime::{
+    capy_shell_helper_path_for_recorder, ensure_parent, recorder_export_command,
+    recorder_snapshot_command, render_source_path, stderr_tail, stdout_tail,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -37,26 +44,32 @@ fn snapshot_with_recorder_crate(
     options: SnapshotOptions,
 ) -> Result<SnapshotReport, TimelineError> {
     ensure_parent(out, TimelineErrorCode::SnapshotFailed)?;
+    let source_path = source.to_path_buf();
+    let out_path = out.to_path_buf();
     let resolution = options
         .resolution
         .as_deref()
         .filter(|value| !value.trim().is_empty())
         .map(parse_resolution)
         .transpose()?;
-    recorder_runtime()?
-        .block_on(capy_recorder::snapshot_from_source(
-            source,
-            out,
-            options.t_ms,
-            resolution,
-        ))
-        .map_err(|err| {
-            TimelineError::new(
-                TimelineErrorCode::SnapshotFailed,
-                format!("capy-recorder crate snapshot failed: {err}"),
-                "next step · rerun capy timeline snapshot",
-            )
-        })?;
+    let t_ms = options.t_ms;
+    run_recorder_thread(move || {
+        runtime::recorder_runtime()?
+            .block_on(capy_recorder::snapshot_from_source(
+                &source_path,
+                &out_path,
+                t_ms,
+                resolution,
+            ))
+            .map_err(|err| {
+                TimelineError::new(
+                    TimelineErrorCode::SnapshotFailed,
+                    format!("capy-recorder crate snapshot failed: {err}"),
+                    "next step · rerun capy timeline snapshot",
+                )
+            })
+    })
+    .map(|_| ())?;
 
     Ok(SnapshotReport {
         ok: true,
@@ -65,6 +78,21 @@ fn snapshot_with_recorder_crate(
         stdout: String::new(),
         stderr: String::new(),
     })
+}
+
+#[cfg(target_os = "macos")]
+fn run_recorder_thread<T, F>(job: F) -> Result<T, TimelineError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, TimelineError> + Send + 'static,
+{
+    std::thread::spawn(job).join().map_err(|_| {
+        TimelineError::new(
+            TimelineErrorCode::TimelineNotFound,
+            "capy-recorder worker thread panicked",
+            "next step · rerun capy timeline export and inspect logs",
+        )
+    })?
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -88,46 +116,51 @@ fn export_with_recorder_crate(
 ) -> Result<ExportReport, TimelineError> {
     let source = render_source_path(&artifact.composition_path);
     ensure_parent(out, TimelineErrorCode::ExportFailed)?;
-    let summary = capy_recorder::validate_render_source_file(&source).map_err(|err| {
+    capy_recorder::validate_render_source_file(&source).map_err(|err| {
         TimelineError::new(
             TimelineErrorCode::ExportFailed,
             format!("capy-recorder source validation failed: {err}"),
             "next step · rerun capy timeline compile",
         )
     })?;
-    let fps = options.fps.max(1);
-    let stats = recorder_runtime()?
-        .block_on(capy_recorder::run_export_from_source(
-            &source,
-            out,
-            capy_recorder::ExportOpts {
-                duration_s: summary.duration_ms as f64 / 1000.0,
-                viewport: summary.viewport,
-                fps,
-                ..Default::default()
-            },
-        ))
-        .map_err(|err| {
-            TimelineError::new(
-                TimelineErrorCode::ExportFailed,
-                format!("capy-recorder crate export failed: {err}"),
-                "next step · rerun capy timeline export",
-            )
-        })?;
+    let command = recorder_export_command(&source, out, &options)?;
+    let mut process = Command::new(&command[0]);
+    process.args(&command[1..]);
+    if let Some(helper) = capy_shell_helper_path_for_recorder(Path::new(&command[0]))? {
+        process.env("NF_CEF_HELPER", helper);
+    }
+    let output = process.output().map_err(|err| {
+        TimelineError::new(
+            TimelineErrorCode::ExportFailed,
+            format!("spawn capy-recorder export failed: {err}"),
+            "next step · build capy-recorder with cef-osr and stage the app bundle",
+        )
+    })?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if !output.status.success() {
+        return Err(TimelineError::new(
+            TimelineErrorCode::ExportFailed,
+            format!(
+                "capy-recorder export failed with status {}: {}{}",
+                output
+                    .status
+                    .code()
+                    .map(|code| code.to_string())
+                    .unwrap_or_else(|| "signal".to_string()),
+                stderr_tail(&stderr),
+                stdout_tail(&stdout),
+            ),
+            "next step · inspect recorder stderr and rerun strict export",
+        ));
+    }
 
     Ok(ExportReport {
         ok: true,
         output: out.to_path_buf(),
-        command: recorder_export_command(&source, out, fps),
-        stdout: serde_json::to_string(&serde_json::json!({
-            "path": stats.path,
-            "frames": stats.frames,
-            "duration_ms": stats.duration_ms,
-            "size_bytes": stats.size_bytes,
-            "moov_front": stats.moov_front
-        }))
-        .unwrap_or_default(),
-        stderr: String::new(),
+        command,
+        stdout,
+        stderr,
     })
 }
 
@@ -144,41 +177,6 @@ fn export_with_recorder_crate(
     ))
 }
 
-fn render_source_path(composition_path: &Path) -> PathBuf {
-    composition_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join("render_source.json")
-}
-
-fn recorder_snapshot_command(source: &Path, out: &Path, t_ms: u64) -> Vec<String> {
-    vec![
-        "capy-recorder".to_string(),
-        "snapshot-source".to_string(),
-        "--source".to_string(),
-        source.display().to_string(),
-        "--t-ms".to_string(),
-        t_ms.to_string(),
-        "--output".to_string(),
-        out.display().to_string(),
-    ]
-}
-
-fn recorder_export_command(source: &Path, out: &Path, fps: u32) -> Vec<String> {
-    vec![
-        "capy-recorder".to_string(),
-        "export".to_string(),
-        "--source".to_string(),
-        source.display().to_string(),
-        "--profile".to_string(),
-        "draft".to_string(),
-        "--output".to_string(),
-        out.display().to_string(),
-        "--fps".to_string(),
-        fps.to_string(),
-    ]
-}
-
 #[cfg(target_os = "macos")]
 fn parse_resolution(raw: &str) -> Result<capy_recorder::ExportResolution, TimelineError> {
     capy_recorder::ExportResolution::parse_str(raw).ok_or_else(|| {
@@ -190,62 +188,13 @@ fn parse_resolution(raw: &str) -> Result<capy_recorder::ExportResolution, Timeli
     })
 }
 
-#[cfg(target_os = "macos")]
-fn recorder_runtime() -> Result<tokio::runtime::Runtime, TimelineError> {
-    if !current_exe_is_macos_app_bundle() {
-        return Err(TimelineError::new(
-            TimelineErrorCode::TimelineNotFound,
-            "capy-recorder crate mode requires a macOS app bundle CEF runtime",
-            "embedded mode required",
-        ));
-    }
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|err| {
-            TimelineError::new(
-                TimelineErrorCode::TimelineNotFound,
-                format!("create capy-recorder runtime failed: {err}"),
-                "embedded mode required",
-            )
-        })
-}
-
-#[cfg(target_os = "macos")]
-fn current_exe_is_macos_app_bundle() -> bool {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| {
-            let contents_dir = exe.parent()?.parent()?;
-            let app_dir = contents_dir.parent()?;
-            let has_contents = contents_dir.file_name()?.to_str()? == "Contents";
-            let has_app_extension = app_dir.extension()?.to_str()? == "app";
-            Some(has_contents && has_app_extension)
-        })
-        .unwrap_or(false)
-}
-
-fn ensure_parent(path: &Path, code: TimelineErrorCode) -> Result<(), TimelineError> {
-    if let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        fs::create_dir_all(parent).map_err(|err| {
-            TimelineError::new(
-                code,
-                format!("create output parent failed: {err}"),
-                "next step · check output directory permissions",
-            )
-        })?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
-    use super::{recorder_export_command, recorder_snapshot_command};
+    use crate::ports::ExportOptions;
+
+    use super::runtime::{build_recorder_export_command, recorder_snapshot_command};
 
     #[test]
     fn recorder_snapshot_command_targets_source_api() {
@@ -265,23 +214,34 @@ mod tests {
 
     #[test]
     fn recorder_export_command_carries_fps() {
-        let command = recorder_export_command(
+        let command = build_recorder_export_command(
+            PathBuf::from("capy-recorder"),
             Path::new("/tmp/render_source.json"),
             Path::new("/tmp/out.mp4"),
-            24,
+            &ExportOptions {
+                profile: "final".to_string(),
+                fps: 30,
+                resolution: Some("4k".to_string()),
+                parallel: Some(2),
+                strict_recorder: true,
+            },
         );
 
         assert_eq!(command[0], "capy-recorder");
         assert_eq!(command[1], "export");
         assert!(command.contains(&"--source".to_string()));
         assert!(command.contains(&"--fps".to_string()));
-        assert!(command.contains(&"24".to_string()));
+        assert!(command.contains(&"30".to_string()));
+        assert!(command.contains(&"--resolution".to_string()));
+        assert!(command.contains(&"4k".to_string()));
+        assert!(command.contains(&"--parallel".to_string()));
+        assert!(command.contains(&"2".to_string()));
         assert!(command.contains(&"/tmp/out.mp4".to_string()));
     }
 
     #[cfg(target_os = "macos")]
     #[test]
     fn unit_test_binary_is_not_treated_as_app_bundle() {
-        assert!(!super::current_exe_is_macos_app_bundle());
+        assert!(!super::runtime::current_exe_is_macos_app_bundle());
     }
 }

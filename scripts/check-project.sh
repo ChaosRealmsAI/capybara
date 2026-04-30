@@ -8,12 +8,14 @@ scripts/lint-spec.sh
 export CAPY_SPEC_STRUCTURE_CHECKED=1
 scripts/check-architecture.sh
 scripts/check-large-files.sh
+scripts/check-code-sign-clones.sh
 scripts/build-canvas-for-app.sh >/dev/null
 scripts/check-frontend-js.sh >/dev/null
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test --manifest-path crates/capy-recorder/Cargo.toml --lib
+scripts/verify-capy-cli-help.sh
 cargo run -p capy-cli -- --help >/dev/null
 cargo run -p capy-cli -- agent doctor >/dev/null
 cargo run -p capy-cli -- cutout --help >/dev/null
@@ -33,6 +35,15 @@ cargo run -p capy-cli -- timeline compile \
 if ! jq -e '.schema_version == "capy.timeline.render_source.v1" and (.tracks | length) == 1' \
   target/capy-timeline/sample-poster/render_source.json >/dev/null; then
   echo "project check failed: timeline compile must emit render_source.v1 with one component track" >&2
+  exit 1
+fi
+cargo run -p capy-cli -- timeline validate \
+  --composition fixtures/timeline/video-editing/compositions/main.json >/dev/null
+cargo run -p capy-cli -- timeline compile \
+  --composition fixtures/timeline/video-editing/compositions/main.json >/dev/null
+if ! jq -e '.schema_version == "capy.timeline.render_source.v1" and .duration_ms == 4000 and (.tracks | length) == 2' \
+  fixtures/timeline/video-editing/compositions/render_source.json >/dev/null; then
+  echo "project check failed: clip-first video editing fixture must compile to 4000ms render_source with two tracks" >&2
   exit 1
 fi
 cargo run -p capy-cli -- tts --help >/dev/null

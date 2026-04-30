@@ -14,6 +14,10 @@ export const nodeRegistry = {
 export const posterDocuments = new Map();
 
 export const state = {
+  workspace: {
+    activeTab: "canvas",
+    timelineInspectorWasOpen: false
+  },
   conversations: [],
   activeId: null,
   messages: [],
@@ -24,8 +28,14 @@ export const state = {
   canvas: {
     ready: false,
     nodeCount: 0,
+    vectorCount: 0,
+    objectCount: 0,
+    objects: [],
     selectedNode: null,
+    selectedVector: null,
     currentTool: "select",
+    currentStyle: { stroke: "#8a6fae", fill: "#fef3c7", fillStyle: "hachure" },
+    viewport: null,
     snapshotText: "",
     darkMode: false,
     error: null
@@ -54,6 +64,15 @@ export const state = {
     lastNodeId: null,
     lastError: null
   },
+  posterWorkspace: {
+    status: "idle",
+    path: "",
+    document: null,
+    pageId: "",
+    layerPath: "",
+    exportStatus: "",
+    error: ""
+  },
   timeline: {
     attachments: new Map(),
     inspector: {
@@ -62,5 +81,19 @@ export const state = {
       detail: null,
       error: null
     }
+  },
+  video: {
+    status: "idle",
+    compositionPath: "",
+    renderSourcePath: "",
+    renderSource: null,
+    previewUrl: "",
+    editor: null,
+    selectedTrackId: "",
+    selectedField: "",
+    playheadMs: 0,
+    durationMs: 0,
+    exportJob: null,
+    error: null
   }
 };

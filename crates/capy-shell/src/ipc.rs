@@ -13,8 +13,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::oneshot;
 
 use capy_contracts::timeline::{
-    OP_TIMELINE_ATTACH, OP_TIMELINE_EXPORT_CANCEL, OP_TIMELINE_EXPORT_STATUS, OP_TIMELINE_OPEN,
-    OP_TIMELINE_STATE,
+    OP_TIMELINE_ATTACH, OP_TIMELINE_COMPOSITION_OPEN, OP_TIMELINE_COMPOSITION_PATCH,
+    OP_TIMELINE_COMPOSITION_STATE, OP_TIMELINE_EXPORT_CANCEL, OP_TIMELINE_EXPORT_START,
+    OP_TIMELINE_EXPORT_STATUS, OP_TIMELINE_OPEN, OP_TIMELINE_STATE,
 };
 
 use crate::app::{ShellEvent, ShellState};
@@ -133,6 +134,9 @@ async fn dispatch(
     match req.op.as_str() {
         "state-query" if state.can_answer_directly(&req) => state.state_query(req),
         OP_TIMELINE_STATE => state.timeline_state_query(req),
+        OP_TIMELINE_COMPOSITION_STATE => state.timeline_composition_state_query(req),
+        OP_TIMELINE_COMPOSITION_PATCH => state.timeline_composition_patch_query(req),
+        OP_TIMELINE_EXPORT_START => state.timeline_export_start_query(req),
         OP_TIMELINE_EXPORT_STATUS => state.timeline_export_status_query(req),
         OP_TIMELINE_EXPORT_CANCEL => state.timeline_export_cancel_query(req),
         "state-query" => {
@@ -202,6 +206,12 @@ async fn dispatch(
             send_event(req, proxy, |request, ack| ShellEvent::TimelineOpen {
                 request,
                 ack,
+            })
+            .await
+        }
+        OP_TIMELINE_COMPOSITION_OPEN => {
+            send_event(req, proxy, |request, ack| {
+                ShellEvent::TimelineCompositionOpen { request, ack }
             })
             .await
         }

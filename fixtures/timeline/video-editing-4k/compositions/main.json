@@ -1,0 +1,206 @@
+{
+  "schema": "capy.timeline.composition.v2",
+  "schema_version": "capy.composition.v2",
+  "id": "capybara-video-editing-4k-30s",
+  "name": "Capybara 4K 视频剪辑导出",
+  "duration_ms": 30000,
+  "viewport": {
+    "w": 3840,
+    "h": 2160,
+    "ratio": "16:9"
+  },
+  "theme": "capybara-warm-prism",
+  "export": {
+    "resolution": "4k",
+    "fps": 30,
+    "parallel": 2
+  },
+  "clips": [
+    {
+      "id": "open",
+      "name": "打开 JSON",
+      "duration": "5s",
+      "tracks": [
+        {
+          "id": "stage",
+          "kind": "component",
+          "component": "html.capy-4k-editor",
+          "z": 0,
+          "items": [
+            {
+              "id": "frame",
+              "time": {
+                "start": "in",
+                "end": "out"
+              },
+              "params": {
+                "eyebrow": "CAPYBARA TIMELINE",
+                "title": "视频剪辑从 JSON 打开",
+                "subtitle": "composition.json 成为预览、轨道、检查器和导出的同一份真相源",
+                "status": "JSON 已载入",
+                "metric": "4K · 30fps",
+                "clip": "打开 JSON",
+                "accent": "lavender"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "preview",
+      "name": "在线预览",
+      "duration": "5s",
+      "tracks": [
+        {
+          "id": "stage",
+          "kind": "component",
+          "component": "html.capy-4k-editor",
+          "z": 0,
+          "items": [
+            {
+              "id": "frame",
+              "time": {
+                "start": "in",
+                "end": "out"
+              },
+              "params": {
+                "eyebrow": "ONLINE PREVIEW",
+                "title": "预览就是实际组件画面",
+                "subtitle": "画面在 Capybara 工作台里渲染，AI 能读状态，人能直接判断结果",
+                "status": "DOM preview ready",
+                "metric": "6 clips · 30s",
+                "clip": "在线预览",
+                "accent": "peach"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tracks",
+      "name": "轨道检查",
+      "duration": "5s",
+      "tracks": [
+        {
+          "id": "stage",
+          "kind": "component",
+          "component": "html.capy-4k-editor",
+          "z": 0,
+          "items": [
+            {
+              "id": "frame",
+              "time": {
+                "start": "in",
+                "end": "out"
+              },
+              "params": {
+                "eyebrow": "TRACK INSPECTOR",
+                "title": "Clip、Track、字段都可检查",
+                "subtitle": "左侧看 clips，中间看画面，右侧看字段，底部看时间线",
+                "status": "Inspector synced",
+                "metric": "component track",
+                "clip": "轨道检查",
+                "accent": "mint"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "record",
+      "name": "严格录制",
+      "duration": "5s",
+      "tracks": [
+        {
+          "id": "stage",
+          "kind": "component",
+          "component": "html.capy-4k-editor",
+          "z": 0,
+          "items": [
+            {
+              "id": "frame",
+              "time": {
+                "start": "in",
+                "end": "out"
+              },
+              "params": {
+                "eyebrow": "STRICT RECORDER",
+                "title": "导出必须走 Recorder",
+                "subtitle": "这版不接受 embedded fallback，MP4 必须来自 CEF recorder 真实逐帧录制",
+                "status": "Fallback disabled",
+                "metric": "recorder only",
+                "clip": "严格录制",
+                "accent": "lavender"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "name": "4K 导出",
+      "duration": "5s",
+      "tracks": [
+        {
+          "id": "stage",
+          "kind": "component",
+          "component": "html.capy-4k-editor",
+          "z": 0,
+          "items": [
+            {
+              "id": "frame",
+              "time": {
+                "start": "in",
+                "end": "out"
+              },
+              "params": {
+                "eyebrow": "4K EXPORT",
+                "title": "30 秒 4K MP4 成片",
+                "subtitle": "3840×2160、30fps、约 900 帧，保留 Capybara 产品设计语言",
+                "status": "4K export running",
+                "metric": "3840×2160",
+                "clip": "4K 导出",
+                "accent": "peach"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence",
+      "name": "证据留档",
+      "duration": "5s",
+      "tracks": [
+        {
+          "id": "stage",
+          "kind": "component",
+          "component": "html.capy-4k-editor",
+          "z": 0,
+          "items": [
+            {
+              "id": "frame",
+              "time": {
+                "start": "in",
+                "end": "out"
+              },
+              "params": {
+                "eyebrow": "EVIDENCE",
+                "title": "视频、首帧、日志一起交付",
+                "subtitle": "下一位 AI 不读聊天记录，也能从 evidence 复现导出路径",
+                "status": "Evidence complete",
+                "metric": "MP4 + JSON",
+                "clip": "证据留档",
+                "accent": "mint"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

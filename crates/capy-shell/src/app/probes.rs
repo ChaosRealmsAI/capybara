@@ -2,6 +2,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
+use crate::capture::{self, CaptureRegion};
 use crate::ipc::{IpcResponse, error_response};
 
 pub(super) fn devtools_script(query: &str, get: &str) -> String {
@@ -64,15 +65,112 @@ pub(super) fn screenshot_probe_script(region: &str) -> String {
     };
     let selector_json = json_string(selector);
     format!(
-        r#"(function() {{
+        r##"(async function() {{
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const selector = {selector_json};
   const el = selector ? document.querySelector(selector) : document.documentElement;
   const target = el || document.documentElement;
   const rect = target.getBoundingClientRect();
-  const width = Math.max(1, Math.round((selector && el ? rect.width : window.innerWidth) || 1));
-  const height = Math.max(1, Math.round((selector && el ? rect.height : window.innerHeight) || 1));
-  return {{ ok: true, width, height, dpr: 1, selector, found: !!el }};
-}})()"#
+  const full = !(selector && el);
+  const viewportWidth = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+  const viewportHeight = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+  const x = full ? 0 : rect.x;
+  const y = full ? 0 : rect.y;
+  const width = Math.max(1, full ? viewportWidth : Math.min(rect.width, viewportWidth - Math.max(0, x)));
+  const height = Math.max(1, full ? viewportHeight : Math.min(rect.height, viewportHeight - Math.max(0, y)));
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const pixelWidth = Math.max(1, Math.ceil(width * dpr));
+  const pixelHeight = Math.max(1, Math.ceil(height * dpr));
+  const bodyClone = document.body.cloneNode(true);
+  bodyClone.querySelectorAll("script").forEach((node) => node.remove());
+
+  const sourceCanvases = Array.from(document.querySelectorAll("canvas"));
+  const clonedCanvases = Array.from(bodyClone.querySelectorAll("canvas"));
+  for (let i = 0; i < clonedCanvases.length; i += 1) {{
+    const sourceCanvas = sourceCanvases[i];
+    const clonedCanvas = clonedCanvases[i];
+    const image = document.createElement("img");
+    image.setAttribute("alt", "canvas snapshot");
+    image.setAttribute("data-capy-canvas-snapshot", "true");
+    try {{
+      image.src = sourceCanvas && sourceCanvas.toDataURL ? sourceCanvas.toDataURL("image/png") : "";
+    }} catch (_err) {{
+      image.src = "data:image/png;base64,iVBORw0KGgo=";
+    }}
+    const sourceRect = sourceCanvas ? sourceCanvas.getBoundingClientRect() : clonedCanvas.getBoundingClientRect();
+    image.style.width = `${{Math.max(1, sourceRect.width || clonedCanvas.width || 1)}}px`;
+    image.style.height = `${{Math.max(1, sourceRect.height || clonedCanvas.height || 1)}}px`;
+    image.style.display = getComputedStyle(clonedCanvas).display || "block";
+    clonedCanvas.replaceWith(image);
+  }}
+
+  const seenStyleSheets = new Set();
+  function collectCssRules(sheet) {{
+    if (!sheet || seenStyleSheets.has(sheet)) return "";
+    seenStyleSheets.add(sheet);
+    try {{
+      return Array.from(sheet.cssRules || []).map((rule) => {{
+        if (rule.styleSheet) return collectCssRules(rule.styleSheet);
+        return rule.cssText || "";
+      }}).join("\n");
+    }} catch (_err) {{
+      return "";
+    }}
+  }}
+  const cssText = Array.from(document.styleSheets).map(collectCssRules).join("\n");
+  const background = getComputedStyle(document.body).backgroundColor || "#111";
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  wrapper.style.width = `${{width}}px`;
+  wrapper.style.height = `${{height}}px`;
+  wrapper.style.overflow = "hidden";
+  wrapper.style.background = background;
+  const style = document.createElement("style");
+  style.textContent = cssText;
+  wrapper.appendChild(style);
+  const translated = document.createElement("div");
+  translated.style.width = `${{viewportWidth}}px`;
+  translated.style.height = `${{viewportHeight}}px`;
+  translated.style.transformOrigin = "top left";
+  translated.style.transform = `translate(${{-Math.max(0, x)}}px, ${{-Math.max(0, y)}}px)`;
+  translated.appendChild(bodyClone);
+  wrapper.appendChild(translated);
+
+  const serialized = new XMLSerializer().serializeToString(wrapper);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${{width}}" height="${{height}}" viewBox="0 0 ${{width}} ${{height}}"><foreignObject x="0" y="0" width="${{width}}" height="${{height}}">${{serialized}}</foreignObject></svg>`;
+  const image = new Image();
+  const data = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  await new Promise((resolve, reject) => {{
+    image.onload = resolve;
+    image.onerror = () => reject(new Error("app-view self-render SVG failed to load"));
+    image.src = data;
+  }});
+  const canvas = document.createElement("canvas");
+  canvas.width = pixelWidth;
+  canvas.height = pixelHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(image, 0, 0, width, height);
+  const dataUrl = canvas.toDataURL("image/png");
+  return {{
+    ok: true,
+    dataUrl,
+    x,
+    y,
+    width,
+    height,
+    pixelWidth,
+    pixelHeight,
+    viewportWidth,
+    viewportHeight,
+    dpr,
+    selector,
+    found: !!el,
+    renderer: "cef-dom-self-render"
+  }};
+}})()"##
     )
 }
 
@@ -87,121 +185,98 @@ pub(super) fn screenshot_response(
         Ok(value) => value,
         Err(err) => return error_response(req_id, format!("invalid screenshot probe JSON: {err}")),
     };
-    let width = value
-        .get("width")
-        .and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok())
-        .unwrap_or(1)
-        .clamp(1, 4096);
-    let height = value
-        .get("height")
-        .and_then(Value::as_u64)
-        .and_then(|value| u32::try_from(value).ok())
-        .unwrap_or(1)
-        .clamp(1, 4096);
-    let png = encode_stub_png(width, height);
-    if let Err(err) = write_png(Path::new(out), &png) {
-        return error_response(req_id, format!("write screenshot failed: {err}"));
+    let capture_region = match capture_region_from_probe(&value) {
+        Ok(region) => region,
+        Err(err) => return error_response(req_id, err),
+    };
+    let data_url = match string_field(&value, "dataUrl") {
+        Ok(value) => value,
+        Err(err) => return error_response(req_id, err),
+    };
+    let width = match usize_field(&value, "pixelWidth") {
+        Ok(value) => value,
+        Err(err) => return error_response(req_id, err),
+    };
+    let height = match usize_field(&value, "pixelHeight") {
+        Ok(value) => value,
+        Err(err) => return error_response(req_id, err),
+    };
+    let capture = match capture::capture_png_data_url(Path::new(out), data_url, width, height) {
+        Ok(capture) => capture,
+        Err(err) => return error_response(req_id, err),
+    };
+    let mut probe = value.clone();
+    if let Some(object) = probe.as_object_mut() {
+        object.remove("dataUrl");
     }
     IpcResponse {
         req_id: req_id.to_string(),
         ok: true,
         data: Some(json!({
             "window_id": window_id,
+            "source": "app-view",
             "region": region,
-            "out": out,
-            "width": width,
-            "height": height,
-            "bytes": png.len(),
+            "capture": {
+                "kind": "cef-dom-self-render",
+                "renderer": value.get("renderer").cloned().unwrap_or_else(|| json!("unknown")),
+                "viewport_width": capture_region.viewport_width,
+                "viewport_height": capture_region.viewport_height,
+                "dpr": capture_region.dpr
+            },
+            "crop": {
+                "x": capture_region.x,
+                "y": capture_region.y,
+                "width": capture_region.width,
+                "height": capture_region.height,
+                "viewport_width": capture_region.viewport_width,
+                "viewport_height": capture_region.viewport_height,
+                "dpr": capture_region.dpr
+            },
+            "out": capture.out.display().to_string(),
+            "width": capture.width,
+            "height": capture.height,
+            "bytes": capture.bytes,
             "format": "png",
-            "probe": value
+            "probe": probe
         })),
         error: None,
     }
 }
 
-fn write_png(path: &Path, png: &[u8]) -> Result<(), std::io::Error> {
-    if let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(path, png)
+fn capture_region_from_probe(value: &Value) -> Result<CaptureRegion, String> {
+    Ok(CaptureRegion {
+        x: number_field(value, "x").unwrap_or(0.0),
+        y: number_field(value, "y").unwrap_or(0.0),
+        width: number_field(value, "width")?,
+        height: number_field(value, "height")?,
+        viewport_width: number_field(value, "viewportWidth")?,
+        viewport_height: number_field(value, "viewportHeight")?,
+        dpr: number_field(value, "dpr").unwrap_or(0.0),
+    })
 }
 
-pub fn encode_stub_png(width: u32, height: u32) -> Vec<u8> {
-    let row_len = 1usize + width as usize * 4;
-    let mut raw = Vec::with_capacity(row_len * height as usize);
-    for y in 0..height {
-        raw.push(0);
-        for x in 0..width {
-            let shade = 28u8.saturating_add(((x + y) % 24) as u8);
-            raw.extend_from_slice(&[shade, shade, 38, 255]);
-        }
-    }
-
-    let mut png = Vec::new();
-    png.extend_from_slice(b"\x89PNG\r\n\x1a\n");
-    let mut ihdr = Vec::with_capacity(13);
-    ihdr.extend_from_slice(&width.to_be_bytes());
-    ihdr.extend_from_slice(&height.to_be_bytes());
-    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
-    push_chunk(&mut png, b"IHDR", &ihdr);
-    push_chunk(&mut png, b"IDAT", &zlib_store(&raw));
-    push_chunk(&mut png, b"IEND", &[]);
-    png
+fn number_field(value: &Value, key: &str) -> Result<f64, String> {
+    value
+        .get(key)
+        .and_then(Value::as_f64)
+        .filter(|number| number.is_finite())
+        .ok_or_else(|| format!("screenshot probe missing numeric `{key}`"))
 }
 
-fn zlib_store(data: &[u8]) -> Vec<u8> {
-    let mut out = vec![0x78, 0x01];
-    let mut offset = 0usize;
-    while offset < data.len() {
-        let remaining = data.len() - offset;
-        let block_len = remaining.min(65_535);
-        let final_block = offset + block_len == data.len();
-        out.push(if final_block { 0x01 } else { 0x00 });
-        let len = block_len as u16;
-        out.extend_from_slice(&len.to_le_bytes());
-        out.extend_from_slice(&(!len).to_le_bytes());
-        out.extend_from_slice(&data[offset..offset + block_len]);
-        offset += block_len;
-    }
-    out.extend_from_slice(&adler32(data).to_be_bytes());
-    out
+fn string_field<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|text| !text.is_empty())
+        .ok_or_else(|| format!("screenshot probe missing string `{key}`"))
 }
 
-fn push_chunk(png: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    png.extend_from_slice(&(data.len() as u32).to_be_bytes());
-    png.extend_from_slice(kind);
-    png.extend_from_slice(data);
-    let mut crc_input = Vec::with_capacity(kind.len() + data.len());
-    crc_input.extend_from_slice(kind);
-    crc_input.extend_from_slice(data);
-    png.extend_from_slice(&crc32(&crc_input).to_be_bytes());
-}
-
-fn adler32(data: &[u8]) -> u32 {
-    const MOD: u32 = 65_521;
-    let mut a = 1u32;
-    let mut b = 0u32;
-    for byte in data {
-        a = (a + u32::from(*byte)) % MOD;
-        b = (b + a) % MOD;
-    }
-    (b << 16) | a
-}
-
-fn crc32(data: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for byte in data {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            let mask = 0u32.wrapping_sub(crc & 1);
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
+fn usize_field(value: &Value, key: &str) -> Result<usize, String> {
+    let number = value
+        .get(key)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("screenshot probe missing integer `{key}`"))?;
+    usize::try_from(number).map_err(|_| format!("screenshot probe `{key}` is too large"))
 }
 
 fn json_string(value: &str) -> String {
@@ -210,15 +285,39 @@ fn json_string(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::encode_stub_png;
+    use serde_json::json;
 
     #[test]
-    fn screenshot_png_has_valid_signature() {
-        let png = encode_stub_png(2, 2);
+    fn capture_region_from_probe_reads_dom_rect() -> Result<(), String> {
+        let value = json!({
+            "x": 12.5,
+            "y": 20.0,
+            "width": 320.0,
+            "height": 180.0,
+            "viewportWidth": 1440.0,
+            "viewportHeight": 900.0,
+            "dpr": 2.0
+        });
 
-        assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
-        assert!(png.windows(4).any(|chunk| chunk == b"IHDR"));
-        assert!(png.windows(4).any(|chunk| chunk == b"IDAT"));
-        assert!(png.windows(4).any(|chunk| chunk == b"IEND"));
+        let region = super::capture_region_from_probe(&value)?;
+
+        assert_eq!(region.x, 12.5);
+        assert_eq!(region.width, 320.0);
+        assert_eq!(region.viewport_height, 900.0);
+        assert_eq!(region.dpr, 2.0);
+        Ok(())
+    }
+
+    #[test]
+    fn usize_field_rejects_missing_values() -> Result<(), String> {
+        let value = json!({});
+
+        let error = match super::usize_field(&value, "pixelWidth") {
+            Ok(_) => return Err("missing pixelWidth should fail".to_string()),
+            Err(error) => error,
+        };
+
+        assert!(error.contains("pixelWidth"));
+        Ok(())
     }
 }

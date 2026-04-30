@@ -61,6 +61,7 @@ import { createRuntimeControls } from "./app/runtime-controls.js";
 import { installShellUi } from "./app/shell-ui.js";
 import { labelSync, nodeRegistry, pending, posterDocuments, state } from "./app/state.js";
 import { base64ToBytes, contentKindLabel, nextFrame, normalizeValue, stringifyError } from "./app/utils.js";
+import { createPosterWorkspace } from "./app/poster-workspace.js";
 import { createTimelineWorkbench } from "./app/timeline-workbench.js";
 import { createVideoEditor } from "./app/video-editor.js";
 import { installWindowFacade } from "./app/window-facade.js";
@@ -99,6 +100,7 @@ let controlsApi;
 let workbenchApi;
 let timelineApi;
 let videoEditorApi;
+let posterWorkspaceApi;
 let conversationsApi;
 
 conversationsApi = createConversations({
@@ -130,8 +132,14 @@ timelineApi = createTimelineWorkbench({
   inferType: (...args) => rendererApi.inferType(...args),
 });
 
+posterWorkspaceApi = createPosterWorkspace({
+  state, dom, stringifyError,
+});
+
 videoEditorApi = createVideoEditor({
   state, dom, rpc, stringifyError, setRunStatus,
+  renderPosterWorkspace: (...args) => posterWorkspaceApi.renderPosterWorkspace(...args),
+  ensurePosterDocument: (...args) => posterWorkspaceApi.ensureDefaultDocument(...args),
 });
 
 contextApi = createCanvasContext({
@@ -181,6 +189,7 @@ controlsApi = createCanvasControls({
   stringifyError,
 });
 controlsApi.installCanvasControls();
+posterWorkspaceApi.installPosterWorkspace();
 videoEditorApi.installVideoEditor();
 
 const shellUi = installShellUi({
@@ -221,6 +230,8 @@ installWindowFacade({
     switchWorkspaceTab: (...args) => videoEditorApi.switchWorkspace(...args),
     openVideoComposition: (...args) => videoEditorApi.openComposition(...args),
     renderVideoEditor: (...args) => videoEditorApi.renderVideoEditor(...args),
+    openPosterDocument: (...args) => posterWorkspaceApi.openDocument(...args),
+    renderPosterWorkspace: (...args) => posterWorkspaceApi.renderPosterWorkspace(...args),
     startCanvasImageTool: (...args) => workbenchApi.startCanvasImageTool(...args),
     verifyCanvasImageTool: (...args) => workbenchApi.verifyCanvasImageTool(...args),
     verifyLabelMoveSync: (...args) => contextApi.verifyLabelMoveSync(...args),
@@ -405,6 +416,7 @@ function stateSnapshot() {
     planner: state.planner,
     workspace: state.workspace,
     video: state.video,
+    posterWorkspace: { status: state.posterWorkspace.status, path: state.posterWorkspace.path, pageId: state.posterWorkspace.pageId, layerPath: state.posterWorkspace.layerPath, pageCount: state.posterWorkspace.document?.pages?.length || 0, exportStatus: state.posterWorkspace.exportStatus, error: state.posterWorkspace.error },
     poster: {
       ...state.poster,
       documents: rendererApi.posterDocumentsState()

@@ -27,7 +27,8 @@ fn timeline_open_registers_loopback_preview() -> Result<(), Box<dyn std::error::
 
     let response = http_get(preview_url)?;
     assert!(response.starts_with("HTTP/1.1 200 OK"));
-    assert!(response.contains("html.capy-poster"));
+    assert!(response.contains("data-capy-timeline-preview-slug"));
+    assert!(response.contains("render_source.json"));
 
     fs::remove_dir_all(dir)?;
     Ok(())

@@ -4,6 +4,18 @@ use common::*;
 mod align_distribute {
     use super::*;
 
+    fn add_highlighter(state: &mut AppState, x: f64, y: f64) -> usize {
+        let mut shape = Shape::new(ShapeKind::Highlighter, x, y, 0xfbbf24);
+        shape.w = 120.0;
+        shape.h = 50.0;
+        shape.points = vec![
+            (x + 10.0, y + 12.0),
+            (x + 70.0, y + 28.0),
+            (x + 118.0, y + 45.0),
+        ];
+        state.add_shape(shape)
+    }
+
     #[test]
     fn align_left_moves_to_min_x() {
         let mut state = AppState::new();
@@ -174,6 +186,41 @@ mod align_distribute {
             undo_before + 1,
             "distribute should push undo"
         );
+    }
+
+    #[test]
+    fn align_moves_highlighter_points_with_frame() {
+        let mut state = AppState::new();
+        add_rect(&mut state, 0.0, 0.0, 80.0, 40.0);
+        let highlighter = add_highlighter(&mut state, 160.0, 20.0);
+        let before = state.shapes[highlighter].points.clone();
+        state.selected = vec![0, highlighter];
+
+        state.align_left();
+
+        assert_eq!(state.shapes[highlighter].x, 0.0);
+        for (before, after) in before.iter().zip(&state.shapes[highlighter].points) {
+            assert!((after.0 - before.0 + 160.0).abs() < 1e-6);
+            assert!((after.1 - before.1).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn distribute_moves_highlighter_points_with_frame() {
+        let mut state = AppState::new();
+        add_rect(&mut state, 0.0, 0.0, 20.0, 40.0);
+        let highlighter = add_highlighter(&mut state, 70.0, 10.0);
+        add_rect(&mut state, 260.0, 0.0, 40.0, 40.0);
+        let before = state.shapes[highlighter].points.clone();
+        state.selected = vec![0, highlighter, 2];
+
+        state.distribute_h();
+
+        assert_eq!(state.shapes[highlighter].x, 80.0);
+        for (before, after) in before.iter().zip(&state.shapes[highlighter].points) {
+            assert!((after.0 - before.0 - 10.0).abs() < 1e-6);
+            assert!((after.1 - before.1).abs() < 1e-6);
+        }
     }
 }
 

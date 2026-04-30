@@ -370,7 +370,7 @@ mod validation;
 
 use audio::{cleanup_export_temp_outputs, mux_audio_tracks};
 use html::{build_export_html, resolve_export_preset, resolve_stage_background};
-pub use validation::{RenderSourceSummary, validate_render_source, validate_render_source_file};
+pub use validation::{validate_render_source, validate_render_source_file, RenderSourceSummary};
 
 #[cfg(test)]
 mod tests {

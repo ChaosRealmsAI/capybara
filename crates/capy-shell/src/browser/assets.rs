@@ -123,6 +123,9 @@ fn frontend_response(root: &Path, path: &str) -> Result<HttpResponse, String> {
     let path = path.trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
     let decoded_path = percent_decode(path)?;
+    if decoded_path.starts_with("fixtures/") {
+        return workspace_fixture_response(&decoded_path);
+    }
     let file = root.join(decoded_path);
     let file = file
         .canonicalize()
@@ -140,6 +143,30 @@ fn frontend_response(root: &Path, path: &str) -> Result<HttpResponse, String> {
         reason: "OK",
         content_type: mime_for_path(&file),
         body: content,
+    })
+}
+
+fn workspace_fixture_response(path: &str) -> Result<HttpResponse, String> {
+    let cwd = default_session_cwd()?
+        .canonicalize()
+        .map_err(|err| format!("session cwd failed: {err}"))?;
+    let fixture_root = cwd.join("fixtures");
+    let fixture_root = fixture_root
+        .canonicalize()
+        .map_err(|err| format!("fixtures root failed: {err}"))?;
+    let file = cwd.join(path);
+    let file = file
+        .canonicalize()
+        .map_err(|err| format!("fixture asset missing: {path}: {err}"))?;
+    if !file.starts_with(&fixture_root) {
+        return Ok(text_response(403, "Forbidden", "forbidden"));
+    }
+    let body = std::fs::read(&file).map_err(|err| format!("fixture asset failed: {err}"))?;
+    Ok(HttpResponse {
+        status: 200,
+        reason: "OK",
+        content_type: mime_for_path(&file),
+        body,
     })
 }
 
@@ -430,6 +457,25 @@ mod tests {
             mime_for_path(Path::new("capy_canvas_web_bg.wasm")),
             "application/wasm"
         );
+    }
+
+    #[test]
+    fn fixture_assets_are_served_from_workspace_root() {
+        let frontend = project_root().unwrap().join("frontend/capy-app");
+        let response =
+            frontend_response(&frontend, "/fixtures/poster/v1/single-poster.json").unwrap();
+        assert_eq!(response.status, 200);
+        assert_eq!(response.content_type, "application/json; charset=utf-8");
+        let text = String::from_utf8(response.body).unwrap();
+        assert!(text.contains("\"schema\": \"capy.poster.document.v1\""));
+        assert!(text.contains("\"title\": \"AI Design Poster\""));
+    }
+
+    #[test]
+    fn fixture_route_rejects_path_escape() {
+        let response = workspace_fixture_response("fixtures/../frontend/capy-app/index.html")
+            .expect("escaped fixture route should produce a forbidden response");
+        assert_eq!(response.status, 403);
     }
 
     #[test]

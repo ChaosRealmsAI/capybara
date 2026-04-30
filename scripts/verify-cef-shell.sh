@@ -78,11 +78,16 @@ stop_service() {
   rm -f "$SOCKET"
 }
 
+cleanup_code_sign_clones() {
+  scripts/check-code-sign-clones.sh --cleanup --apply --older-than-minutes 10 --keep-newest 2 >/dev/null || true
+}
+
 if [[ "$KEEP_OPEN" == "0" ]]; then
-  trap 'run_capy quit >/dev/null 2>&1 || true; stop_service' EXIT
+  trap 'run_capy quit >/dev/null 2>&1 || true; stop_service; cleanup_code_sign_clones' EXIT
 fi
 
 stop_service
+cleanup_code_sign_clones
 
 stage_frontend_assets() {
   local resources="$APP/Contents/Resources/capy-app"
@@ -99,6 +104,7 @@ fi
 stage_frontend_assets
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
+cleanup_code_sign_clones
 
 if [[ "$LAUNCH_MODE" == "launchctl" ]]; then
   : > "$ASSETS/capy-cef-launchctl.out.log"

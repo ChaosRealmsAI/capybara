@@ -263,7 +263,7 @@ fn write_http_response(
 
 fn preview_index_html(slug: &str) -> String {
     format!(
-        r#"<!doctype html>
+        r##"<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -277,18 +277,115 @@ fn preview_index_html(slug: &str) -> String {
 <body data-capy-timeline-preview-slug="{slug}">
   <div id="root"></div>
   <script type="module">
-    const [composition, component] = await Promise.all([
-      fetch("./composition.json").then((response) => response.json()),
-      import("./components/html.capy-poster.js")
-    ]);
-    const track = (composition.tracks || []).find((item) => item.component === "html.capy-poster") || {{}};
     const root = document.getElementById("root");
-    component.mount && component.mount(root, {{ params: track.params || {{}} }});
-    component.update && component.update(root, {{ params: track.params || {{}} }});
+    const source = await fetch("./render_source.json", {{ cache: "no-store" }}).then((response) => response.json());
+    const modules = new Map();
+    const mounted = new Map();
+    let currentTimeMs = 0;
+
+    root.style.position = "relative";
+    root.style.overflow = "hidden";
+    root.style.background = source.theme && source.theme.background ? String(source.theme.background) : "#000";
+
+    async function componentModule(id) {{
+      if (modules.has(id)) return modules.get(id);
+      const sourceText = source.components && source.components[id];
+      if (!sourceText) throw new Error(`missing component: ${{id}}`);
+      const blob = new Blob([String(sourceText)], {{ type: "text/javascript" }});
+      const url = URL.createObjectURL(blob);
+      const module = await import(url);
+      modules.set(id, module);
+      return module;
+    }}
+
+    function clipStart(clip) {{
+      return Number(clip.begin_ms ?? clip.begin ?? 0);
+    }}
+
+    function clipEnd(clip) {{
+      return Number(clip.end_ms ?? clip.end ?? clipStart(clip));
+    }}
+
+    function clipContext(track, clip) {{
+      const params = clip.params || {{}};
+      const begin = clipStart(clip);
+      const end = clipEnd(clip);
+      const duration = Math.max(1, end - begin);
+      const localTime = Math.max(0, Math.min(duration, currentTimeMs - begin));
+      return {{
+        timeMs: currentTimeMs,
+        localTimeMs: localTime,
+        progress: localTime / duration,
+        durationMs: duration,
+        params: params.params || params,
+        style: params.style || {{}},
+        track: params.track || {{ id: track.id, kind: track.kind }},
+        theme: source.theme || {{}},
+        viewport: source.viewport || {{}},
+        mode: "preview"
+      }};
+    }}
+
+    async function render() {{
+      const active = new Set();
+      const tracks = Array.isArray(source.tracks) ? source.tracks.slice() : [];
+      tracks.sort((left, right) => Number(left.z || 0) - Number(right.z || 0));
+      for (const track of tracks) {{
+        const clips = Array.isArray(track.clips) ? track.clips : [];
+        for (const clip of clips) {{
+          const begin = clipStart(clip);
+          const end = clipEnd(clip);
+          if (currentTimeMs < begin || currentTimeMs > end) continue;
+          const params = clip.params || {{}};
+          const componentId = params.component;
+          if (!componentId) continue;
+          const key = `${{track.id}}::${{clip.id}}`;
+          active.add(key);
+          let entry = mounted.get(key);
+          if (!entry) {{
+            const el = document.createElement("div");
+            el.dataset.trackId = String(track.id || "");
+            el.dataset.clipId = String(clip.id || "");
+            el.style.position = "absolute";
+            el.style.inset = "0";
+            el.style.zIndex = String(Number(track.z || 0));
+            el.style.pointerEvents = "none";
+            root.appendChild(el);
+            const module = await componentModule(componentId);
+            entry = {{ el, module }};
+            mounted.set(key, entry);
+            entry.module.mount && entry.module.mount(entry.el, clipContext(track, clip));
+          }}
+          entry.module.update && entry.module.update(entry.el, clipContext(track, clip));
+        }}
+      }}
+      for (const [key, entry] of mounted) {{
+        if (active.has(key)) continue;
+        entry.module.destroy && entry.module.destroy(entry.el);
+        entry.el.remove();
+        mounted.delete(key);
+      }}
+      document.body.dataset.previewReady = "true";
+      document.body.dataset.currentTimeMs = String(currentTimeMs);
+    }}
+
+    window.addEventListener("message", (event) => {{
+      const data = event.data || {{}};
+      if (data.type !== "capy-timeline-set-time") return;
+      currentTimeMs = Math.max(0, Number(data.time_ms || 0));
+      render().catch((error) => {{
+        document.body.dataset.previewError = String(error && error.message || error);
+      }});
+    }});
+
+    render().catch((error) => {{
+      document.body.dataset.previewError = String(error && error.message || error);
+      root.textContent = document.body.dataset.previewError;
+    }});
   </script>
 </body>
 </html>
-"#
+"##
     )
 }
 

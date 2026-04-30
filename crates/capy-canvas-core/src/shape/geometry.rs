@@ -238,6 +238,62 @@ impl Shape {
         ]
     }
 
+    pub fn translate_by(&mut self, dx: f64, dy: f64) {
+        if !dx.is_finite() || !dy.is_finite() || (dx.abs() < 1e-9 && dy.abs() < 1e-9) {
+            return;
+        }
+        self.x += dx;
+        self.y += dy;
+        self.translate_path_points(dx, dy);
+    }
+
+    pub fn move_to(&mut self, x: f64, y: f64) {
+        self.translate_by(x - self.x, y - self.y);
+    }
+
+    pub fn resize_to_bounds(&mut self, x: f64, y: f64, w: f64, h: f64) {
+        let old_x = self.x;
+        let old_y = self.y;
+        let old_w = self.w;
+        let old_h = self.h;
+        self.x = x;
+        self.y = y;
+        self.w = w.max(1.0);
+        self.h = h.max(1.0);
+
+        if !self.has_absolute_path_points() || self.points.is_empty() {
+            return;
+        }
+        let sx = if old_w.abs() < 1e-9 {
+            1.0
+        } else {
+            self.w / old_w
+        };
+        let sy = if old_h.abs() < 1e-9 {
+            1.0
+        } else {
+            self.h / old_h
+        };
+        for point in &mut self.points {
+            point.0 = self.x + (point.0 - old_x) * sx;
+            point.1 = self.y + (point.1 - old_y) * sy;
+        }
+    }
+
+    fn translate_path_points(&mut self, dx: f64, dy: f64) {
+        if !self.has_absolute_path_points() {
+            return;
+        }
+        for point in &mut self.points {
+            point.0 += dx;
+            point.1 += dy;
+        }
+    }
+
+    fn has_absolute_path_points(&self) -> bool {
+        matches!(self.kind, ShapeKind::Freehand | ShapeKind::Highlighter)
+    }
+
     pub fn default_color_for_kind(kind: ShapeKind) -> u32 {
         match kind {
             ShapeKind::Rect => 0x5b8abf,
