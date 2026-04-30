@@ -17,6 +17,9 @@ export function createVideoEditor(ctx) {
   const clipDelivery = createVideoClipDeliveryController({
     state,
     dom,
+    rpc,
+    stringifyError,
+    projectPath: () => state.projectPackage.path,
     exportComposition,
     seek,
     renderVideoEditor,
@@ -128,6 +131,25 @@ export function createVideoEditor(ctx) {
       state.video.status = "error";
       state.video.error = stringifyError(error);
       renderVideoEditor();
+    }
+  }
+
+  async function loadProjectQueue(projectPath = state.projectPackage.path) {
+    if (!projectPath) {
+      clipDelivery.applyProjectQueueManifest(null, "");
+      return null;
+    }
+    try {
+      const manifest = await rpc("project-video-clip-queue-get", { project: projectPath });
+      clipDelivery.applyProjectQueueManifest(manifest, projectPath);
+      return manifest;
+    } catch (error) {
+      state.video.clipQueue = [];
+      state.video.clipQueueManifest = null;
+      state.video.clipQueuePersistStatus = "error";
+      state.video.clipQueuePersistError = stringifyError(error);
+      renderVideoEditor();
+      return null;
     }
   }
 
@@ -391,6 +413,7 @@ export function createVideoEditor(ctx) {
     installVideoEditor,
     switchWorkspace,
     openComposition,
+    loadProjectQueue,
     renderVideoEditor,
     setVideoSelectedRange: (...args) => clipDelivery.setSelectedRange(...args),
   };

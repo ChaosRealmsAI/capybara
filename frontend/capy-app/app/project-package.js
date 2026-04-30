@@ -14,7 +14,7 @@ import {
   selectedCardSummary
 } from "./project-package-helpers.js";
 
-export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage, canvasApi = {} }) {
+export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage, canvasApi = {}, videoApi = {} }) {
   const {
     projectPackagePanelEl,
     projectPackageTitleEl,
@@ -49,6 +49,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       const inspection = await rpc("project-inspect", { project: projectPath });
       const workbench = await rpc("project-workbench", { project: projectPath });
       const surfaceNodes = await artifactNodes.loadSurfaceNodes(projectPath);
+      await videoApi.loadProjectQueue?.(projectPath);
       state.projectPackage.inspection = inspection;
       state.projectPackage.workbench = workbench;
       state.projectPackage.surfaceNodes = surfaceNodes;

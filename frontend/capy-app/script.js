@@ -29,6 +29,7 @@ import { clampRectToBounds, compactGeometry, nodeBounds, normalizeRect, regionPe
 import { compileRows, compositionRows, evidenceRows, exportRows, exportStatus, inspectorMessage, sourceRows, stageCard, stageLabel } from "./timeline/inspector-render.js";
 import { createCanvasContext } from "./app/canvas-context.js";
 import { createCanvasControls } from "./app/canvas-controls.js";
+import { createCanvasNodeRegistry } from "./app/canvas-node-registry.js";
 import { createCanvasRenderer } from "./app/canvas-renderer.js";
 import { createCanvasWorkbench } from "./app/canvas-workbench.js";
 import { createConversations } from "./app/conversations.js";
@@ -66,6 +67,7 @@ const {
   imageToolMetaEl,
 } = dom;
 const rpc = createRpc(pending);
+const registerCanvasNodes = createCanvasNodeRegistry({ nodeRegistry, rpc });
 const runtimeApi = createRuntimeControls({ state, dom });
 const {
   currentConfig, syncPolicyOptions, applyWriteCodeDefaults, updateConfigSummary,
@@ -140,6 +142,9 @@ projectPackageApi = createProjectPackageWiring({
     selectNode: (...args) => workbenchApi.selectNode(...args),
     refreshPlannerContext: () => refreshPlannerContext(),
     scheduleCanvasLabelRefresh: (...args) => rendererApi.scheduleCanvasLabelRefresh(...args),
+  },
+  videoApi: {
+    loadProjectQueue: (...args) => videoEditorApi.loadProjectQueue(...args),
   },
 });
 
@@ -242,7 +247,9 @@ installWindowFacade({
     retrySelectedProjectReview: (...args) => projectPackageApi.retrySelectedReview(...args),
     undoSelectedProjectReview: (...args) => projectPackageApi.undoSelectedReview(...args),
     switchWorkspaceTab: (...args) => videoEditorApi.switchWorkspace(...args),
-    openVideoComposition: (...args) => videoEditorApi.openComposition(...args), setVideoSelectedRange: (...args) => videoEditorApi.setVideoSelectedRange(...args),
+    openVideoComposition: (...args) => videoEditorApi.openComposition(...args),
+    loadProjectVideoQueue: (...args) => videoEditorApi.loadProjectQueue(...args),
+    setVideoSelectedRange: (...args) => videoEditorApi.setVideoSelectedRange(...args),
     renderVideoEditor: (...args) => videoEditorApi.renderVideoEditor(...args),
     openPosterDocument: (...args) => posterWorkspaceApi.openDocument(...args),
     renderPosterWorkspace: (...args) => posterWorkspaceApi.renderPosterWorkspace(...args),
@@ -411,19 +418,6 @@ function canvasStatusLabel(canvas) {
   if (canvas.vectorCount) parts.push(`${canvas.vectorCount} ${canvas.vectorCount === 1 ? "vector" : "vectors"}`);
   if (!parts.length) parts.push("empty");
   return `${parts.join(" · ")} · ${canvas.currentTool || "select"}`;
-}
-
-function registerCanvasNodes(nodes) {
-  const ids = nodes
-    .map((node) => Number(node?.id))
-    .filter((id) => Number.isFinite(id) && id >= 0)
-    .sort((a, b) => a - b);
-  const key = ids.join(",");
-  if (!ids.length || key === nodeRegistry.key) return;
-  nodeRegistry.key = key;
-  rpc("canvas-nodes-register", { ids }).catch(() => {
-    nodeRegistry.key = "";
-  });
 }
 
 async function init() {

@@ -421,7 +421,7 @@ pub(crate) fn write_string(path: &Path, contents: &str) -> ProjectPackageResult<
     })
 }
 
-fn read_json<T: for<'de> serde::Deserialize<'de>>(
+pub(crate) fn read_json<T: for<'de> serde::Deserialize<'de>>(
     path: &Path,
     context: &str,
 ) -> ProjectPackageResult<T> {

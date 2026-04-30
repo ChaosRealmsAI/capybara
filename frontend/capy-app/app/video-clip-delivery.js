@@ -1,14 +1,17 @@
 import {
   normalizedQueue,
+  queueFromManifest,
   queueExportRange,
   queueItemFromRange,
+  queueManifestItem,
   queueTotalDuration,
   renumberQueue,
   renderQueue
 } from "./video-clip-queue.js";
 
 export function createVideoClipDeliveryController(ctx) {
-  const { state, dom, exportComposition, seek, renderVideoEditor, selectedTrack, firstTrackForClip } = ctx;
+  const { state, dom, rpc, projectPath, stringifyError, exportComposition, seek, renderVideoEditor, selectedTrack, firstTrackForClip } = ctx;
+  let persistSerial = 0;
 
   function install() {
     dom.videoProposalGenerateEl?.addEventListener("click", () => generateClipProposal());
@@ -25,6 +28,16 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.clipProposal = null;
     state.video.proposalStatus = "idle";
     state.video.lastExport = null;
+  }
+
+  function applyProjectQueueManifest(manifest, loadedProjectPath = projectPath?.()) {
+    state.video.clipQueueManifest = manifest || null;
+    state.video.clipQueue = queueFromManifest(manifest, loadedProjectPath);
+    state.video.clipQueuePersistStatus = "loaded";
+    state.video.clipQueuePersistError = null;
+    state.video.clipProposal = null;
+    state.video.proposalStatus = "idle";
+    renderVideoEditor();
   }
 
   function render() {
@@ -141,6 +154,7 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.clipQueue = renumberQueue(queue);
     state.video.clipProposal = null;
     state.video.proposalStatus = "idle";
+    persistQueue("add");
     renderVideoEditor();
   }
 
@@ -155,6 +169,7 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.clipQueue = renumberQueue(queue);
     state.video.clipProposal = null;
     state.video.proposalStatus = "idle";
+    persistQueue("move");
     renderVideoEditor();
   }
 
@@ -162,6 +177,7 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.clipQueue = renumberQueue(normalizedQueue(state).filter((item) => item.id !== id));
     state.video.clipProposal = null;
     state.video.proposalStatus = "idle";
+    persistQueue("remove");
     renderVideoEditor();
   }
 
@@ -220,7 +236,7 @@ export function createVideoClipDeliveryController(ctx) {
 
   function confirmClipProposal() {
     if (!state.video.clipProposal) generateClipProposal();
-    const proposal = state.video.clipProposal;
+      const proposal = state.video.clipProposal;
     if (!proposal) return;
     if (proposal.kind === "video-clip-queue-proposal") {
       return exportComposition({
@@ -241,6 +257,30 @@ export function createVideoClipDeliveryController(ctx) {
       },
       proposal
     });
+  }
+
+  function persistQueue(reason) {
+    const project = projectPath?.();
+    if (!project || !rpc) return;
+    const serial = ++persistSerial;
+    const items = normalizedQueue(state).map(queueManifestItem);
+    state.video.clipQueuePersistStatus = "saving";
+    state.video.clipQueuePersistError = null;
+    rpc("project-video-clip-queue-set", { project, items, reason })
+      .then((manifest) => {
+        if (serial !== persistSerial) return;
+        state.video.clipQueueManifest = manifest;
+        state.video.clipQueuePersistStatus = "saved";
+        state.video.clipQueuePersistError = null;
+        state.video.clipQueue = queueFromManifest(manifest, project);
+        renderVideoEditor();
+      })
+      .catch((error) => {
+        if (serial !== persistSerial) return;
+        state.video.clipQueuePersistStatus = "error";
+        state.video.clipQueuePersistError = stringifyError ? stringifyError(error) : String(error);
+        renderVideoEditor();
+      });
   }
 
   function setSelectedRange(range, shouldRender = true) {
@@ -301,6 +341,7 @@ export function createVideoClipDeliveryController(ctx) {
   return {
     install,
     applyOpenResult,
+    applyProjectQueueManifest,
     render,
     selectClipRange,
     selectRangeFromTrack,

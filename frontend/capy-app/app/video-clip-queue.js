@@ -2,9 +2,10 @@ export function renderQueue({ state, dom, moveQueueItem, removeQueueItem, format
   const queue = normalizedQueue(state);
   const total = queueTotalDuration(queue);
   if (dom.videoQueueSummaryEl) {
+    const persist = queuePersistLabel(state);
     dom.videoQueueSummaryEl.textContent = queue.length
-      ? `${queue.length} 个待导出片段 · 总时长 ${formatTime(total)}`
-      : "剪辑队列为空";
+      ? `${queue.length} 个待导出片段 · 总时长 ${formatTime(total)}${persist}`
+      : `剪辑队列为空${persist}`;
   }
   if (!dom.videoQueueEl) return;
   if (!queue.length) {
@@ -50,6 +51,41 @@ export function queueExportRange(item) {
     scene: item.scene || item.clip_id,
     source_video: item.source_video || null
   };
+}
+
+export function queueManifestItem(item) {
+  return {
+    id: item.id,
+    sequence: item.sequence,
+    composition_path: item.composition_path,
+    render_source_path: item.render_source_path || "",
+    clip_id: item.clip_id,
+    track_id: item.track_id || "",
+    scene: item.scene || item.clip_id,
+    start_ms: item.start_ms,
+    end_ms: item.end_ms,
+    duration_ms: item.duration_ms,
+    source_video: item.source_video || null,
+    updated_at: item.updated_at || Date.now()
+  };
+}
+
+export function queueFromManifest(manifest, projectPath) {
+  const items = Array.isArray(manifest?.items) ? manifest.items : [];
+  return renumberQueue(items.map((item) => ({
+    id: item.id || `queue-${item.sequence || Date.now()}`,
+    sequence: Number(item.sequence || 0),
+    clip_id: item.clip_id || "source",
+    track_id: item.track_id || "",
+    scene: item.scene || item.clip_id || "片段",
+    start_ms: Math.round(Number(item.start_ms || 0)),
+    end_ms: Math.round(Number(item.end_ms || 0)),
+    duration_ms: Math.max(1, Math.round(Number(item.duration_ms || Number(item.end_ms || 0) - Number(item.start_ms || 0)))),
+    composition_path: absoluteProjectPath(projectPath, item.composition_path),
+    render_source_path: absoluteProjectPath(projectPath, item.render_source_path),
+    source_video: item.source_video || null,
+    updated_at: item.updated_at || 0
+  })));
 }
 
 export function normalizedQueue(state) {
@@ -101,4 +137,21 @@ function safeSlug(value) {
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     || "clip";
+}
+
+function queuePersistLabel(state) {
+  if (state.video.clipQueuePersistStatus === "saving") return " · 保存中";
+  if (state.video.clipQueuePersistStatus === "saved") return " · 已保存到项目";
+  if (state.video.clipQueuePersistStatus === "loaded") return " · 已从项目恢复";
+  if (state.video.clipQueuePersistStatus === "error") return " · 保存失败";
+  return "";
+}
+
+function absoluteProjectPath(root, value) {
+  const path = String(value || "");
+  if (!path) return "";
+  if (/^(file|https?|data|blob):/i.test(path)) return path;
+  if (path.startsWith("/")) return path;
+  const base = String(root || "").replace(/\/+$/, "");
+  return base ? `${base}/${path.replace(/^\/+/, "")}` : path;
 }

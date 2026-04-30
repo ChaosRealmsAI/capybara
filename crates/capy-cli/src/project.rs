@@ -7,7 +7,10 @@ use capy_project::{
 use clap::{Args, Subcommand, ValueEnum};
 use serde_json::Value;
 
+mod clip_queue;
 mod live;
+
+use clip_queue::{ProjectClipQueueArgs, handle_clip_queue};
 
 #[derive(Debug, Args)]
 #[command(
@@ -15,8 +18,8 @@ mod live;
     after_help = "AI quick start:
   Use `capy project --help` as the index and `capy help project` for the full workflow.
   Common commands: init, inspect, design-language inspect, design-language validate, workbench, import-video, generate, campaign, run, add-design, add-artifact.
-  Required params: all commands use --project <dir>; generate needs --artifact, --provider, and --prompt; selected target context uses --selector, --json-pointer, or --canvas-node; campaign needs --brief; live SDK generation also needs --live; run decisions need a run id.
-  Pitfalls: paths must live inside the project root; import-video uses local ffprobe/ffmpeg only; validate design language before live generation; use --review for AI proposals; accept is the only review action that mutates source files.
+  Required params: all commands use --project <dir>; generate needs --artifact, --provider, and --prompt; selected target context uses --selector, --json-pointer, or --canvas-node; campaign needs --brief; clip-queue write needs --manifest; live SDK generation also needs --live; run decisions need a run id.
+  Pitfalls: paths must live inside the project root; import-video uses local ffprobe/ffmpeg only; clip-queue is a linear manifest, not an NLE; validate design language before live generation; use --review for AI proposals; accept is the only review action that mutates source files.
   Help topic: `capy help project`."
 )]
 pub struct ProjectArgs {
@@ -36,6 +39,8 @@ enum ProjectCommand {
     Workbench(ProjectPathArgs),
     #[command(about = "Import one local project video and materialize preview metadata")]
     ImportVideo(ProjectImportVideoArgs),
+    #[command(about = "Inspect or write the project-level video clip queue manifest")]
+    ClipQueue(ProjectClipQueueArgs),
     #[command(about = "Generate or plan one project artifact through CLI providers")]
     Generate(ProjectGenerateArgs),
     #[command(about = "Review, accept, reject, retry, or undo AI project runs")]
@@ -301,6 +306,7 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
                     .map_err(|err| err.to_string())?,
             )
         }
+        ProjectCommand::ClipQueue(args) => handle_clip_queue(args),
         ProjectCommand::Generate(args) => {
             if [args.dry_run, args.write, args.review]
                 .into_iter()

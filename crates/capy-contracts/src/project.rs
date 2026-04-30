@@ -6,6 +6,8 @@ pub const OP_PATCH_APPLY: &str = "patch-apply";
 pub const OP_PROJECT_WORKBENCH: &str = "project-workbench";
 pub const OP_PROJECT_SURFACE_NODES: &str = "project-surface-nodes";
 pub const OP_PROJECT_SURFACE_NODE_UPDATE: &str = "project-surface-node-update";
+pub const OP_PROJECT_VIDEO_CLIP_QUEUE_GET: &str = "project-video-clip-queue-get";
+pub const OP_PROJECT_VIDEO_CLIP_QUEUE_SET: &str = "project-video-clip-queue-set";
 pub const OP_PROJECT_GENERATE: &str = "project-generate";
 pub const OP_PROJECT_RUN_LIST: &str = "project-run-list";
 pub const OP_PROJECT_RUN_SHOW: &str = "project-run-show";
@@ -24,7 +26,8 @@ mod tests {
         OP_PROJECT_CAMPAIGN_GENERATE, OP_PROJECT_CAMPAIGN_PLAN, OP_PROJECT_CAMPAIGN_SHOW,
         OP_PROJECT_GENERATE, OP_PROJECT_INSPECT, OP_PROJECT_RUN_ACCEPT, OP_PROJECT_RUN_LIST,
         OP_PROJECT_RUN_REJECT, OP_PROJECT_RUN_RETRY, OP_PROJECT_RUN_SHOW, OP_PROJECT_RUN_UNDO,
-        OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES, OP_PROJECT_WORKBENCH,
+        OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES, OP_PROJECT_VIDEO_CLIP_QUEUE_GET,
+        OP_PROJECT_VIDEO_CLIP_QUEUE_SET, OP_PROJECT_WORKBENCH,
     };
 
     #[test]
@@ -39,6 +42,14 @@ mod tests {
         assert_eq!(
             OP_PROJECT_SURFACE_NODE_UPDATE,
             "project-surface-node-update"
+        );
+        assert_eq!(
+            OP_PROJECT_VIDEO_CLIP_QUEUE_GET,
+            "project-video-clip-queue-get"
+        );
+        assert_eq!(
+            OP_PROJECT_VIDEO_CLIP_QUEUE_SET,
+            "project-video-clip-queue-set"
         );
         assert_eq!(OP_PROJECT_GENERATE, "project-generate");
         assert_eq!(OP_PROJECT_RUN_LIST, "project-run-list");

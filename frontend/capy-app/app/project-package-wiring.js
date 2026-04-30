@@ -1,6 +1,6 @@
 import { createProjectPackage } from "./project-package.js";
 
-export function createProjectPackageWiring({ state, rpc, dom, stringifyError, appendPlannerMessage, canvasApi }) {
+export function createProjectPackageWiring({ state, rpc, dom, stringifyError, appendPlannerMessage, canvasApi, videoApi }) {
   return createProjectPackage({
     state,
     rpc,
@@ -24,5 +24,6 @@ export function createProjectPackageWiring({ state, rpc, dom, stringifyError, ap
     stringifyError,
     appendPlannerMessage,
     canvasApi,
+    videoApi,
   });
 }

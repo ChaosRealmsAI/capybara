@@ -25,7 +25,7 @@ pub(super) const PROJECT_HELP: &str = r#"
 Topic: capy project
 
 Use when: AI or a workflow needs a local `.capy` file package that carries project metadata, design-language assets, source artifacts, runs, and evidence.
-Required parameters: every command needs `--project <dir>`. `import-video` also needs `--path <video>` inside the project root. `generate` needs `--artifact <id>`, `--provider fixture|codex|claude`, and `--prompt <text>`. Optional selected target context uses `--selector`, `--json-pointer`, or `--canvas-node`. Add `--live` to actually call the Claude/Codex SDK. `campaign plan|generate` needs `--brief <text>` and optional repeated `--artifact <id>`. Review decisions use `project run <accept|reject|retry|undo> --project <dir> <run_id>`.
+Required parameters: every command needs `--project <dir>`. `import-video` also needs `--path <video>` inside the project root. `clip-queue write` needs `--manifest <json>`. `generate` needs `--artifact <id>`, `--provider fixture|codex|claude`, and `--prompt <text>`. Optional selected target context uses `--selector`, `--json-pointer`, or `--canvas-node`. Add `--live` to actually call the Claude/Codex SDK. `campaign plan|generate` needs `--brief <text>` and optional repeated `--artifact <id>`. Review decisions use `project run <accept|reject|retry|undo> --project <dir> <run_id>`.
 Recommended commands:
 1. `target/debug/capy project init --project <dir> --name "Campaign"`
 2. `target/debug/capy project add-design --project <dir> --path design/tokens.css --kind css --role tokens --title "Tokens"`
@@ -35,15 +35,18 @@ Recommended commands:
 6. `target/debug/capy project import-video --project <dir> --path media/source.webm --title "Source video"`
 7. `target/debug/capy project inspect --project <dir>`
 8. `target/debug/capy project workbench --project <dir>`
-9. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Make this clearer" --review`
-10. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Tighten this headline" --selector '[data-capy-section="hero-title"]' --review`
-11. `target/debug/capy project campaign plan --project <dir> --brief "Launch one coherent campaign"`
-12. `target/debug/capy project campaign generate --project <dir> --brief "Launch one coherent campaign"`
-13. `target/debug/capy project run show --project <dir> <run_id>`
-14. `target/debug/capy project run accept --project <dir> <run_id>`
-15. For real AI prompt evidence, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --sdk-response <fixture.json> --review --save-prompt <prompt.json>`
+9. `target/debug/capy project clip-queue inspect --project <dir>`
+10. `target/debug/capy project clip-queue write --project <dir> --manifest queue.json`
+11. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Make this clearer" --review`
+12. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Tighten this headline" --selector '[data-capy-section="hero-title"]' --review`
+13. `target/debug/capy project campaign plan --project <dir> --brief "Launch one coherent campaign"`
+14. `target/debug/capy project campaign generate --project <dir> --brief "Launch one coherent campaign"`
+15. `target/debug/capy project run show --project <dir> <run_id>`
+16. `target/debug/capy project run accept --project <dir> <run_id>`
+17. For real AI prompt evidence, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --sdk-response <fixture.json> --review --save-prompt <prompt.json>`
 Video import output: `capy.project-video-import.v1` with `artifact`, `metadata{filename,duration_ms,width,height,fps,byte_size}`, `poster_frame_path`, and `composition_path`; it uses local `ffprobe` and `ffmpeg`, never cloud rendering.
-Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact; let models edit `.capy` metadata directly; accept stale proposals after the source hash changed; run live `codex` or `claude` provider commands when no-spend fixture mode is enough; claim a design language affects AI before validate/inspect and generate run records show the same `design_language_ref`; use import-video for cloud or paid-provider video generation.
+Clip queue output: `capy.project-video-clip-queue.v1` with ordered linear `items[]`; it persists a project editing manifest and is not a multi-track timeline.
+Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact; let models edit `.capy` metadata directly; use clip-queue for transitions/subtitles/audio mixing/multi-track edits; accept stale proposals after the source hash changed; run live `codex` or `claude` provider commands when no-spend fixture mode is enough; claim a design language affects AI before validate/inspect and generate run records show the same `design_language_ref`; use import-video for cloud or paid-provider video generation.
 Next step: review `run.review.diff_summary`, then accept, reject, retry, or undo through `capy project run`; or open the desktop workbench for visible card evidence.
 "#;
 
