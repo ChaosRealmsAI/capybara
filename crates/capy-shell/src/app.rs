@@ -224,6 +224,9 @@ pub fn run() {
             std::process::exit(1);
         }
     }
+    let mut builder = EventLoopBuilder::<ShellEvent>::with_user_event();
+    let event_loop = builder.build();
+    let proxy = event_loop.create_proxy();
     let mut cef_runtime = Some(match crate::browser::init_cef_runtime() {
         Ok(runtime) => runtime,
         Err(err) => {
@@ -231,9 +234,6 @@ pub fn run() {
             std::process::exit(1);
         }
     });
-    let mut builder = EventLoopBuilder::<ShellEvent>::with_user_event();
-    let event_loop = builder.build();
-    let proxy = event_loop.create_proxy();
     let state = Arc::new(ShellState::default());
     let store = match Store::open_default() {
         Ok(store) => Arc::new(store),
