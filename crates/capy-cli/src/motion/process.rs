@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use serde_json::{Value, json};
 
 use super::CutoutArgs;
-use super::model::{self, PackagePaths, SourceMeta};
+use super::model::{PackagePaths, SourceMeta};
 
 pub(super) fn prepare_output_dir(out: &Path, overwrite: bool) -> Result<(), String> {
     if out.exists() {
@@ -243,53 +243,6 @@ pub(super) fn export_videos(paths: &PackagePaths, meta: &SourceMeta) -> Result<(
     )
 }
 
-pub(super) fn verify_manifest(manifest_path: &Path) -> Result<Value, String> {
-    let root = manifest_path
-        .parent()
-        .ok_or_else(|| format!("{} has no parent", manifest_path.display()))?;
-    let manifest = read_json(manifest_path)?;
-    let report = read_json(&root.join("qa/report.json"))?;
-    let mut missing = Vec::new();
-    for rel in [
-        "manifest.json",
-        "qa/report.json",
-        "qa/preview.html",
-        "qa/contact-deep.png",
-        "atlas/walk.png",
-        "atlas/walk.json",
-        "video/preview.webm",
-        "video/rgb.mp4",
-        "video/alpha.mp4",
-    ] {
-        if !root.join(rel).is_file() {
-            missing.push(rel.to_string());
-        }
-    }
-    let frame_count = manifest
-        .pointer("/source/frame_count")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let rgba_count = count_pngs(&root.join("frames/rgba"));
-    let mask_count = count_pngs(&root.join("masks"));
-    let passed = missing.is_empty()
-        && frame_count > 0
-        && rgba_count == frame_count
-        && mask_count == frame_count
-        && manifest.get("schema").and_then(Value::as_str) == Some(model::MANIFEST_SCHEMA)
-        && report.get("schema").and_then(Value::as_str) == Some(model::QA_SCHEMA);
-    Ok(json!({
-        "schema": "capy.motion.verify.v1",
-        "verdict": if passed { "passed" } else { "failed" },
-        "manifest": manifest_path,
-        "missing": missing,
-        "frame_count": frame_count,
-        "rgba_frames": rgba_count,
-        "masks": mask_count,
-        "qa_verdict": report.get("verdict").cloned().unwrap_or(Value::Null),
-        "preview_html": root.join("qa/preview.html")
-    }))
-}
-
 pub(super) fn command_available(program: &str, args: &[&str]) -> Value {
     match Command::new(program)
         .args(args)
@@ -365,16 +318,6 @@ fn source_meta(value: &Value) -> Result<SourceMeta, String> {
     })
 }
 
-fn count_pngs(dir: &Path) -> u64 {
-    fs::read_dir(dir)
-        .ok()
-        .into_iter()
-        .flatten()
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("png"))
-        .count() as u64
-}
-
 fn parse_rate(value: &str) -> f64 {
     if let Some((num, den)) = value.split_once('/') {
         let num = num.parse::<f64>().unwrap_or(0.0);
@@ -416,12 +359,6 @@ fn run_self_output(args: &[&str]) -> Result<std::process::Output, String> {
     let exe =
         std::env::current_exe().map_err(|err| format!("resolve current capy exe failed: {err}"))?;
     run_output(Command::new(exe).args(args), "run capy subcommand")
-}
-
-fn read_json(path: &Path) -> Result<Value, String> {
-    let text =
-        fs::read_to_string(path).map_err(|err| format!("read {} failed: {err}", path.display()))?;
-    serde_json::from_str(&text).map_err(|err| format!("parse {} failed: {err}", path.display()))
 }
 
 fn write_bytes(path: &Path, value: &[u8]) -> Result<(), String> {

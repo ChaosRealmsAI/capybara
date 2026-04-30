@@ -282,10 +282,11 @@ Required parameters: `cutout` needs `--input <mp4>` and `--out <dir>`; use `--qu
 Recommended commands:
 1. `target/debug/capy motion doctor`
 2. `target/debug/capy motion cutout --input /Users/Zhuanz/Downloads/d_f_d_d_a_bc_be_a_mp_.mp4 --out spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset --quality animation --target all --verify --overwrite --evidence-index spec/versions/v0.32-animation-grade-video-cutout/evidence/index.html`
-3. `target/debug/capy motion verify --manifest spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset/manifest.json`
-4. Serve `qa/preview.html` over HTTP and capture browser evidence on multiple backgrounds.
+3. `target/debug/capy motion inspect --manifest spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset/manifest.json`
+4. `target/debug/capy motion verify --manifest spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset/manifest.json`
+5. `target/debug/capy motion preview --package spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset --port 5332`
 Reuse command: after a full cutout exists, `--reuse-existing` rebuilds QA, manifest, preview HTML, and exports from existing frames without rerunning Focus.
-Do not: claim ordinary H.264 MP4 is transparent; judge quality from one still frame; use fixed-background/chroma-key removal; skip `qa/report.json` or `manifest.json`.
+Do not: claim ordinary H.264 MP4 is transparent; judge quality from one still frame; use fixed-background/chroma-key removal; skip `qa/report.json`, `prompts/`, or `manifest.json`.
 Next step: if QA verdict is `draft`, inspect `qa/report.json` warnings and improve masks or source before calling the asset app-ready.
 "#;
 
@@ -293,11 +294,44 @@ pub(super) const MOTION_MANIFEST_HELP: &str = r#"
 Topic: capy motion manifest
 
 Use when: AI or a runtime needs to consume the generated motion package.
-Required fields: `schema=capy.motion_asset.manifest.v1`, `source`, `strategy`, `outputs`, and `quality`.
-Recommended command: `target/debug/capy motion verify --manifest <motion-asset-dir>/manifest.json`
-Output families: `frames/rgba/` transparent PNG sequence, `masks/` alpha masks, `atlas/walk.png` plus `atlas/walk.json`, `video/preview.webm`, `video/rgb.mp4`, `video/alpha.mp4`, and `qa/preview.html`.
-Do not: move files without updating `manifest.json`; treat `video/rgb.mp4` alone as alpha-capable; discard masks or QA metrics.
-Next step: open `qa/preview.html` on black, white, photo, and game-like backgrounds before approving the package.
+Required fields: `schema=capy.motion_asset.manifest.v1`, `source`, `strategy`, `outputs`, `prompts`, and `quality`.
+Recommended command: `target/debug/capy motion inspect --manifest <motion-asset-dir>/manifest.json`, then `target/debug/capy motion verify --manifest <motion-asset-dir>/manifest.json`
+Output families: `frames/rgba/` transparent PNG sequence, `masks/` alpha masks, `atlas/walk.png` plus `atlas/walk.json`, `video/preview.webm`, `video/rgb.mp4`, `video/alpha.mp4`, `qa/preview.html`, and `prompts/`.
+Do not: move files without updating `manifest.json`; treat `video/rgb.mp4` alone as alpha-capable; discard masks, prompts, or QA metrics.
+Next step: run `capy motion preview --package <motion-asset-dir>` and open `qa/preview.html` on black, white, photo, and game-like backgrounds before approving the package.
+"#;
+
+pub(super) const MOTION_PROMPT_PACK_HELP: &str = r#"
+Topic: capy motion prompt-pack
+
+Use when: AI needs reusable handoff, process, QA, and app integration prompts for a motion cutout package.
+Required parameters: `--input <mp4> --out <dir>`; optional `--package <motion-asset-dir>` embeds current `manifest.json` and `qa/report.json` context.
+Recommended command: `target/debug/capy motion prompt-pack --input /Users/Zhuanz/Downloads/d_f_d_d_a_bc_be_a_mp_.mp4 --package spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset --out spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset/prompts`
+Generated files: `README.md`, `process.md`, `qa-review.md`, and `app-integration.md`.
+Do not: leave processing instructions only in chat; hand-edit prompts without regenerating or updating manifest references; approve a package if `prompts/` is missing.
+Next step: read `prompts/README.md`, then follow `process.md` or `qa-review.md` depending on whether the task is rerun or verification.
+"#;
+
+pub(super) const MOTION_QA_HELP: &str = r#"
+Topic: capy motion qa
+
+Use when: deciding whether a generated transparent motion package is app/game ready.
+Required evidence: `capy motion verify`, `capy motion inspect`, `qa/report.json`, real browser preview screenshots, one play/pause or background interaction, and console/page error check.
+Recommended command: `target/debug/capy motion verify --manifest <motion-asset-dir>/manifest.json` followed by `target/debug/capy motion preview --package <motion-asset-dir> --port 5332`.
+Review points: alpha frame count, mask frame count, edge shimmer, foot baseline, crop stability, travel-through versus loop mode, and readability on dark/white/photo/game backgrounds.
+Do not: approve from source contact sheet only; hide edge issues with a pale background; treat width variation as a defect without checking whether the source is travel-through.
+Next step: save browser state, screenshots, and command JSON under the version evidence assets before marking BDD passed.
+"#;
+
+pub(super) const MOTION_PREVIEW_HELP: &str = r#"
+Topic: capy motion preview
+
+Use when: `qa/preview.html` must be served through local HTTP for browser verification.
+Required parameters: `--package <motion-asset-dir>`; optional `--host 127.0.0.1 --port <port>`.
+Recommended command: `target/debug/capy motion preview --package spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset --port 5332`, then open `http://127.0.0.1:5332/qa/preview.html`.
+Verification path: capture desktop and mobile screenshots, switch at least one background, pause/play once, and check console/page errors.
+Do not: use `file://` as final proof; claim the preview works without browser evidence; reuse a port already serving another package.
+Next step: run Playwright or the project browser verifier and save screenshots plus state JSON under `spec/versions/<version>/evidence/assets/`.
 "#;
 
 pub(super) const GAME_ASSETS_HELP: &str = r#"

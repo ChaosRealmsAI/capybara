@@ -2,6 +2,8 @@ mod html;
 mod metrics;
 mod model;
 mod process;
+mod prompts;
+mod verify;
 
 use std::fs;
 use std::path::PathBuf;
@@ -13,17 +15,18 @@ use model::{PackagePaths, manifest_json};
 use process::{
     command_available, export_videos, extract_frames, normalize_cutout_outputs,
     normalize_frame_count, prepare_output_dir, probe_source, run_cutout_batch, run_self_json,
-    verify_manifest, write_cutout_manifest, write_json, write_source_contact,
+    write_cutout_manifest, write_json, write_source_contact,
 };
+use verify::{inspect_manifest, verify_manifest};
 
 #[derive(Debug, Args)]
 #[command(
     disable_help_subcommand = true,
     after_help = "AI quick start:
   Use `capy motion cutout --input <mp4> --out <dir> --quality animation --target all --verify --overwrite` for animation-grade transparent motion assets.
-  Required params: cutout needs --input and --out; verify needs --manifest.
+  Required params: cutout needs --input and --out; verify/inspect need --manifest; prompt-pack needs --input and --out; preview needs --package.
   Pitfalls: standard H.264 MP4 has no alpha; use the generated PNG sequence, WebM alpha, sprite atlas, or RGB+Alpha dual MP4. Full-video cutout can be slow.
-  Help topics: `capy motion help agent`, `capy motion help manifest`."
+  Help topics: `capy motion help agent`, `capy motion help manifest`, `capy motion help prompt-pack`, `capy motion help qa`, `capy motion help preview`."
 )]
 pub struct MotionArgs {
     #[command(subcommand)]
@@ -38,6 +41,12 @@ enum MotionCommand {
     Cutout(CutoutArgs),
     #[command(about = "Verify a motion asset manifest and QA report")]
     Verify(VerifyArgs),
+    #[command(about = "Inspect a motion package for app/game integration")]
+    Inspect(VerifyArgs),
+    #[command(about = "Write AI handoff, process, QA, and app integration prompts")]
+    PromptPack(PromptPackArgs),
+    #[command(about = "Serve a motion package preview over local HTTP")]
+    Preview(PreviewArgs),
     #[command(about = "Show self-contained motion asset help topics")]
     Help(HelpArgs),
 }
@@ -52,6 +61,29 @@ struct HelpArgs {
 struct VerifyArgs {
     #[arg(long)]
     manifest: PathBuf,
+}
+
+#[derive(Debug, Args)]
+struct PromptPackArgs {
+    #[arg(long)]
+    input: PathBuf,
+    #[arg(long)]
+    out: PathBuf,
+    #[arg(
+        long,
+        help = "Optional existing motion package root used to embed current QA context"
+    )]
+    package: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct PreviewArgs {
+    #[arg(long, value_name = "DIR")]
+    package: PathBuf,
+    #[arg(long, default_value = "127.0.0.1")]
+    host: String,
+    #[arg(long, default_value_t = 5332)]
+    port: u16,
 }
 
 #[derive(Debug, Args)]
@@ -105,6 +137,13 @@ pub fn handle(args: MotionArgs) -> Result<(), String> {
         MotionCommand::Verify(args) => {
             verify_manifest(&args.manifest).and_then(|value| crate::print_json(&value))
         }
+        MotionCommand::Inspect(args) => {
+            inspect_manifest(&args.manifest).and_then(|value| crate::print_json(&value))
+        }
+        MotionCommand::PromptPack(args) => {
+            prompt_pack(args).and_then(|value| crate::print_json(&value))
+        }
+        MotionCommand::Preview(args) => preview(args),
         MotionCommand::Help(args) => crate::help_topics::print_motion_topic(args.topic.as_deref()),
     }
 }
@@ -120,7 +159,7 @@ fn doctor() -> Value {
         "ffmpeg": ffmpeg,
         "ffprobe": ffprobe,
         "cutout": cutout,
-        "commands": ["doctor", "cutout", "verify", "help"]
+        "commands": ["doctor", "cutout", "verify", "inspect", "prompt-pack", "preview", "help"]
     })
 }
 
@@ -174,6 +213,12 @@ fn cutout(args: CutoutArgs) -> Result<Value, String> {
         &metrics.report,
         &metrics.warnings,
     );
+    let prompt_pack = prompts::write_package_prompt_pack(
+        &paths,
+        &args.input,
+        Some(&manifest),
+        Some(&metrics.report),
+    )?;
     write_json(&paths.root.join("manifest.json"), &manifest)?;
     if args.verify {
         let verify = verify_manifest(&paths.root.join("manifest.json"))?;
@@ -192,6 +237,7 @@ fn cutout(args: CutoutArgs) -> Result<Value, String> {
         "manifest": paths.root.join("manifest.json"),
         "preview_html": paths.qa_dir.join("preview.html"),
         "qa_report": paths.qa_dir.join("report.json"),
+        "prompt_pack": prompt_pack,
         "cutout_summary": compact_cutout_summary(&cutout_summary, &paths),
         "verdict": metrics.report.get("verdict").cloned().unwrap_or_else(|| json!("draft"))
     });
@@ -216,10 +262,10 @@ fn dry_run_plan(args: &CutoutArgs) -> Value {
         "input": args.input,
         "out": args.out,
         "quality": "animation",
-            "target": "all",
-            "max_frames": args.max_frames,
-            "reuse_existing": args.reuse_existing,
-            "files": [
+        "target": "all",
+        "max_frames": args.max_frames,
+        "reuse_existing": args.reuse_existing,
+        "files": [
             "source/metadata.json",
             "source/contact.jpg",
             "frames/source/frame_000001.png",
@@ -233,9 +279,43 @@ fn dry_run_plan(args: &CutoutArgs) -> Value {
             "video/alpha.mp4",
             "qa/preview.html",
             "qa/report.json",
+            "prompts/README.md",
+            "prompts/process.md",
+            "prompts/qa-review.md",
+            "prompts/app-integration.md",
             "manifest.json"
         ]
     })
+}
+
+fn prompt_pack(args: PromptPackArgs) -> Result<Value, String> {
+    prompts::write_standalone_prompt_pack(&args.out, &args.input, args.package.as_deref())
+}
+
+fn preview(args: PreviewArgs) -> Result<(), String> {
+    let root = args
+        .package
+        .canonicalize()
+        .map_err(|err| format!("motion package not found: {err}"))?;
+    let preview = root.join("qa/preview.html");
+    if !preview.is_file() {
+        return Err(format!(
+            "motion preview not found: {}; run `capy motion cutout` first",
+            preview.display()
+        ));
+    }
+    println!(
+        "capy motion preview http://{}:{}/qa/preview.html -> {}",
+        args.host,
+        args.port,
+        root.display()
+    );
+    capy_scroll_media::serve_static(capy_scroll_media::ServeOptions {
+        root,
+        host: args.host,
+        port: args.port,
+    })
+    .map_err(|err| err.to_string())
 }
 
 fn compact_cutout_summary(summary: &Value, paths: &PackagePaths) -> Value {

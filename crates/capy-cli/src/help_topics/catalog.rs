@@ -4,7 +4,8 @@ use super::docs::{
     CHAT_CANVAS_TOOLS_HELP, CHAT_HELP, CUTOUT_HELP, CUTOUT_MANIFEST_HELP, DESKTOP_HELP, DEV_HELP,
     DOCTOR_HELP, GAME_ASSETS_HELP, GAME_ASSETS_LIVE_HELP, GAME_ASSETS_MANIFEST_HELP,
     IMAGE_CUTOUT_HELP, IMAGE_HELP, INTERACTION_HELP, MOTION_HELP, MOTION_MANIFEST_HELP,
-    PROJECT_CONTEXT_HELP, PROJECT_HELP, PROJECT_PATCH_HELP,
+    MOTION_PREVIEW_HELP, MOTION_PROMPT_PACK_HELP, MOTION_QA_HELP, PROJECT_CONTEXT_HELP,
+    PROJECT_HELP, PROJECT_PATCH_HELP,
 };
 use super::media_docs::{
     CLIPS_HELP, CLIPS_YOUTUBE_HELP, COMPONENT_HELP, MEDIA_SCROLL_HELP, MEDIA_STORY_HELP,
@@ -215,6 +216,24 @@ pub(super) const MOTION_TOPICS: &[HelpTopic] = &[
         aliases: &["package", "schema"],
         summary: "Inspect the capy.motion_asset.manifest.v1 package contract.",
         body: MOTION_MANIFEST_HELP,
+    },
+    HelpTopic {
+        name: "prompt-pack",
+        aliases: &["prompts", "process-prompt"],
+        summary: "Generate AI handoff, process, QA, and app integration prompts.",
+        body: MOTION_PROMPT_PACK_HELP,
+    },
+    HelpTopic {
+        name: "qa",
+        aliases: &["review", "quality"],
+        summary: "Review motion package quality before app/game approval.",
+        body: MOTION_QA_HELP,
+    },
+    HelpTopic {
+        name: "preview",
+        aliases: &["serve", "browser"],
+        summary: "Serve qa/preview.html over local HTTP for browser verification.",
+        body: MOTION_PREVIEW_HELP,
     },
 ];
 

@@ -27,15 +27,32 @@ fi
 "$CAPY_BIN" cutout doctor >/dev/null
 "$CAPY_BIN" motion --help >/dev/null
 "$CAPY_BIN" motion help agent >/dev/null
+"$CAPY_BIN" motion help manifest >/dev/null
+"$CAPY_BIN" motion help prompt-pack >/dev/null
+"$CAPY_BIN" motion help qa >/dev/null
+"$CAPY_BIN" motion help preview >/dev/null
 motion_dry_run="$("$CAPY_BIN" motion cutout \
   --input tmp/nonexistent-motion-source.mp4 \
   --out target/capy-motion-dry-run \
   --dry-run)"
-if ! jq -e '.schema == "capy.motion.cutout-plan.v1" and (.files | index("manifest.json")) != null' \
+if ! jq -e '.schema == "capy.motion.cutout-plan.v1" and (.files | index("manifest.json")) != null and (.files | index("prompts/process.md")) != null' \
   <<<"$motion_dry_run" >/dev/null; then
   echo "project check failed: motion cutout dry-run must describe the motion package contract" >&2
   exit 1
 fi
+rm -rf target/capy-motion-prompt-pack
+motion_prompt_pack="$("$CAPY_BIN" motion prompt-pack \
+  --input tmp/nonexistent-motion-source.mp4 \
+  --out target/capy-motion-prompt-pack)"
+if ! jq -e '.schema == "capy.motion.prompt_pack.v1" and (.files | length) == 4' \
+  <<<"$motion_prompt_pack" >/dev/null; then
+  echo "project check failed: motion prompt-pack must write four AI handoff prompts" >&2
+  exit 1
+fi
+test -f target/capy-motion-prompt-pack/README.md
+test -f target/capy-motion-prompt-pack/process.md
+test -f target/capy-motion-prompt-pack/qa-review.md
+test -f target/capy-motion-prompt-pack/app-integration.md
 "$CAPY_BIN" timeline doctor \
   --recorder tmp/nonexistent-capy-recorder >/dev/null
 "$CAPY_BIN" image providers >/dev/null

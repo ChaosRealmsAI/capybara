@@ -45,6 +45,7 @@ pub(super) struct PackagePaths {
     pub atlas_dir: PathBuf,
     pub video_dir: PathBuf,
     pub qa_dir: PathBuf,
+    pub prompts_dir: PathBuf,
     pub logs_dir: PathBuf,
     pub tmp_dir: PathBuf,
 }
@@ -61,12 +62,13 @@ impl PackagePaths {
             atlas_dir: root.join("atlas"),
             video_dir: root.join("video"),
             qa_dir: root.join("qa"),
+            prompts_dir: root.join("prompts"),
             logs_dir: root.join("logs"),
             tmp_dir: root.join("tmp"),
         }
     }
 
-    pub(super) fn all_dirs(&self) -> [&Path; 10] {
+    pub(super) fn all_dirs(&self) -> [&Path; 11] {
         [
             &self.source_dir,
             &self.source_frames_dir,
@@ -76,6 +78,7 @@ impl PackagePaths {
             &self.atlas_dir,
             &self.video_dir,
             &self.qa_dir,
+            &self.prompts_dir,
             &self.logs_dir,
             &self.tmp_dir,
         ]
@@ -127,6 +130,28 @@ pub(super) fn manifest_json(
             "preview_html": "qa/preview.html",
             "qa_report": "qa/report.json"
         },
+        "prompts": [
+            {
+                "kind": "handoff",
+                "path": "prompts/README.md",
+                "use_when": "A future AI needs to understand and reuse this motion asset package."
+            },
+            {
+                "kind": "process",
+                "path": "prompts/process.md",
+                "use_when": "A future AI needs to rerun or adapt the video cutout process."
+            },
+            {
+                "kind": "qa",
+                "path": "prompts/qa-review.md",
+                "use_when": "A future AI needs to judge whether the moving transparent asset is app/game ready."
+            },
+            {
+                "kind": "app-integration",
+                "path": "prompts/app-integration.md",
+                "use_when": "A runtime or app engineer needs to integrate the transparent motion asset."
+            }
+        ],
         "quality": {
             "verdict": qa_report.get("verdict").cloned().unwrap_or_else(|| json!("draft")),
             "metrics": qa_report.get("metrics").cloned().unwrap_or(Value::Null),
