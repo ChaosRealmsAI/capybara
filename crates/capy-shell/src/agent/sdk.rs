@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use tao::event_loop::EventLoopProxy;
 
 use super::{event, record_and_emit};
+use super::tool_path::tool_launch;
 use crate::app::ShellEvent;
 use crate::store::{Conversation, Provider, Store};
 
@@ -36,18 +37,24 @@ pub(super) fn run(
         .iter()
         .any(|message| message.role == "assistant");
     let script = sdk_script_path();
-    let mut command = Command::new("node");
+    if !script.is_file() {
+        return Err(format!("agent SDK bridge script missing: {}", script.display()));
+    }
+    let launch = tool_launch("node");
+    let mut command = Command::new(launch.program());
     command
         .arg(&script)
         .arg("run-stream")
         .args(stream_args(conversation, prompt, use_resume))
         .current_dir(repo_root())
+        .env("PATH", launch.path_env())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = command.spawn().map_err(|err| {
         format!(
-            "agent SDK bridge failed to start at {}: {err}",
-            script.display()
+            "agent SDK bridge failed to start using {} at {}: {err}",
+            launch.display(),
+            script.display(),
         )
     })?;
     store.set_run_pid(run_id, child.id())?;

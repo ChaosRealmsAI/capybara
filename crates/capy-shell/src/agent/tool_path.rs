@@ -77,6 +77,10 @@ pub(super) fn desktop_tool_path_env() -> String {
         let home = PathBuf::from(home);
         push_unique_path(&mut dirs, home.join(".local/bin"));
         push_unique_path(&mut dirs, home.join(".cargo/bin"));
+    } else if let Some(user) = env::var_os("USER") {
+        let home = PathBuf::from("/Users").join(user);
+        push_unique_path(&mut dirs, home.join(".local/bin"));
+        push_unique_path(&mut dirs, home.join(".cargo/bin"));
     }
     env::join_paths(dirs)
         .unwrap_or_default()
