@@ -138,8 +138,9 @@ function buildCanvasContextPreview(selectedItem, viewport) {
   const region = state.canvasContext.region;
   const isRegion = Boolean(region && String(region.node_id) === String(selectedItem.id));
   const isImage = selectedItem.content_kind === "image";
+  const isArtifact = selectedItem.content_kind === "project_artifact";
   const bounds = selectedItem.bounds || selectedItem.geometry || {};
-  const kind = isRegion ? "image_region" : isImage ? "selected_image" : "selected_node";
+  const kind = isRegion ? "image_region" : isImage ? "selected_image" : isArtifact ? "project_artifact" : "selected_node";
   const contextId = isRegion
     ? `ctx-live-region-${selectedItem.id}-${compactGeometry(region.bounds)}`
     : `ctx-live-selected-${selectedItem.id}`;
@@ -151,6 +152,7 @@ function buildCanvasContextPreview(selectedItem, viewport) {
     source_node_title: selectedItem.title || `Node ${selectedItem.id}`,
     content_kind: selectedItem.content_kind,
     source_path: selectedItem.source_path || null,
+    artifact_ref: selectedItem.artifact_ref || null,
     node_bounds_world: bounds,
     region_bounds_world: isRegion ? region.bounds : null,
     region_bounds_node_percent: isRegion ? regionPercent(region.bounds, bounds) : null,
@@ -318,6 +320,8 @@ function renderPlannerContext(item) {
     : [
       contentKindLabel(item.content_kind),
       `id=${item.id}`,
+      item.artifact_ref?.artifact_id ? `artifact=${item.artifact_ref.artifact_id}` : null,
+      item.artifact_ref?.source_path || item.source_path ? `source=${item.artifact_ref?.source_path || item.source_path}` : null,
       item.source_path ? "source ready" : null,
       item.next_action,
       item.editor_route
@@ -337,6 +341,8 @@ function composePromptWithContext(prompt) {
     `source_node_id=${packet.source_node_id}`,
     `source_node_title=${packet.source_node_title}`,
     `source_path=${packet.source_path || "none"}`,
+    packet.artifact_ref?.artifact_id ? `artifact_id=${packet.artifact_ref.artifact_id}` : null,
+    packet.artifact_ref?.surface_node_id ? `surface_node_id=${packet.artifact_ref.surface_node_id}` : null,
     packet.region_bounds_world
       ? `region_world=${JSON.stringify(packet.region_bounds_world)}`
       : null,

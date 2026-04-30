@@ -328,6 +328,19 @@
   pointer-events: auto;
 }
 
+.node-label[data-capy-component-kind="project-artifact"] {
+  border-color: rgba(14, 116, 144, 0.34);
+  background:
+    linear-gradient(180deg, rgba(240, 249, 255, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.node-label[data-capy-component-kind="project-artifact"].is-selected {
+  border-color: rgba(2, 132, 199, 0.78);
+  box-shadow:
+    0 0 0 3px rgba(56, 189, 248, 0.22),
+    0 14px 30px rgba(12, 74, 110, 0.14);
+}
+
 .node-head {
   display: flex; align-items: center; gap: 7px;
 }

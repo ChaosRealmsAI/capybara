@@ -9,10 +9,12 @@ mod web {
     mod exports;
     mod idb_store;
     mod io;
+    mod project_artifacts;
     mod vector_style;
     mod viewport;
 
     pub use self::exports::*;
+    pub use self::project_artifacts::*;
     pub use self::viewport::*;
     use std::cell::RefCell;
     use std::num::NonZeroUsize;

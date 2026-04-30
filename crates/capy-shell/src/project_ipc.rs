@@ -6,11 +6,13 @@ use capy_agent_runtime::{AgentSdkRunRequest, run_sdk_json};
 use capy_contracts::ipc::{IpcRequest, IpcResponse};
 use capy_contracts::project::{
     OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY, OP_PROJECT_GENERATE,
-    OP_PROJECT_INSPECT, OP_PROJECT_WORKBENCH,
+    OP_PROJECT_INSPECT, OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES,
+    OP_PROJECT_WORKBENCH,
 };
 use capy_project::{
     ArtifactKind, ContextBuildRequest, GENERATE_RUN_SCHEMA_VERSION, PatchDocumentV1,
-    ProjectGenerateRequestV1, ProjectGenerateRunV1, ProjectPackage, parse_project_ai_response,
+    ProjectGenerateRequestV1, ProjectGenerateRunV1, ProjectPackage, SurfaceGeometryV1,
+    parse_project_ai_response,
 };
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -24,6 +26,8 @@ pub(crate) fn handles(op: &str) -> bool {
             | OP_CONTEXT_BUILD
             | OP_PATCH_APPLY
             | OP_PROJECT_WORKBENCH
+            | OP_PROJECT_SURFACE_NODES
+            | OP_PROJECT_SURFACE_NODE_UPDATE
             | OP_PROJECT_GENERATE
     )
 }
@@ -36,6 +40,8 @@ pub(crate) fn response(request: IpcRequest) -> IpcResponse {
         OP_CONTEXT_BUILD => context_build(&request.params),
         OP_PATCH_APPLY => patch_apply(&request.params),
         OP_PROJECT_WORKBENCH => project_workbench(&request.params),
+        OP_PROJECT_SURFACE_NODES => project_surface_nodes(&request.params),
+        OP_PROJECT_SURFACE_NODE_UPDATE => project_surface_node_update(&request.params),
         OP_PROJECT_GENERATE => project_generate(&request.params),
         _ => Err(format!("unknown project op: {}", request.op)),
     };
@@ -66,6 +72,39 @@ fn project_workbench(params: &Value) -> Result<Value, String> {
         ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
     serde_json::to_value(package.workbench().map_err(|err| err.to_string())?)
         .map_err(|err| err.to_string())
+}
+
+fn project_surface_nodes(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .ensure_surface_nodes()
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
+fn project_surface_node_update(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    let node_id = optional_string(params, "node_id")
+        .or_else(|| optional_string(params, "nodeId"))
+        .ok_or_else(|| "missing required parameter: node_id".to_string())?;
+    let geometry = params
+        .get("geometry")
+        .cloned()
+        .ok_or_else(|| "missing required parameter: geometry".to_string())
+        .and_then(|value| {
+            serde_json::from_value::<SurfaceGeometryV1>(value)
+                .map_err(|err| format!("parse geometry failed: {err}"))
+        })?;
+    serde_json::to_value(
+        package
+            .update_surface_node_geometry(&node_id, geometry)
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
 }
 
 fn project_generate(params: &Value) -> Result<Value, String> {

@@ -17,6 +17,8 @@ export function createStateSnapshot({ state, normalizeValue, posterDocumentsStat
         designLanguageSummary: state.projectPackage.inspection?.design_language_summary
           || state.projectPackage.workbench?.design_language_summary
           || null,
+        surfaceNodeCount: state.projectPackage.surfaceNodes?.nodes?.length || 0,
+        artifactNodes: state.projectPackage.artifactNodes,
         generation: state.projectPackage.generation,
         error: state.projectPackage.error
       },

@@ -54,6 +54,26 @@ impl AppState {
         Ok(idx)
     }
 
+    pub fn resize_shape_by_id(
+        &mut self,
+        id: u64,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) -> Result<usize, String> {
+        if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() {
+            return Err("shape geometry must be finite".to_string());
+        }
+        let idx = self
+            .shape_index_by_id(id)
+            .ok_or_else(|| format!("shape id {id} not found"))?;
+        self.push_undo();
+        self.shapes[idx].resize_to_bounds(x, y, w, h);
+        self.selected = vec![idx];
+        Ok(idx)
+    }
+
     pub fn delete_shape_by_id(&mut self, id: u64) -> Result<usize, String> {
         let idx = self
             .shape_index_by_id(id)

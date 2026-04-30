@@ -1,5 +1,5 @@
 use crate::content_card;
-use crate::state::{AppState, CanvasContentKind, Shape, ShapeKind};
+use crate::state::{AppState, CanvasArtifactRef, CanvasContentKind, Shape, ShapeKind};
 
 impl AppState {
     pub fn selected_context(&self) -> crate::shape::CanvasSelectionContext {
@@ -84,6 +84,50 @@ impl AppState {
             Some(content_card::default_next_action(CanvasContentKind::Poster).to_string());
         idx
     }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_project_artifact_card(
+        &mut self,
+        title: impl Into<String>,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        project_id: impl Into<String>,
+        surface_node_id: impl Into<String>,
+        artifact_id: impl Into<String>,
+        artifact_kind: impl Into<String>,
+        source_path: impl Into<String>,
+    ) -> usize {
+        let idx = self.create_content_card(CanvasContentKind::ProjectArtifact, title, x, y);
+        let project_id = project_id.into();
+        let surface_node_id = surface_node_id.into();
+        let artifact_id = artifact_id.into();
+        let artifact_kind = artifact_kind.into();
+        let source_path = source_path.into();
+        let shape = &mut self.shapes[idx];
+        shape.w = w.max(120.0);
+        shape.h = h.max(80.0);
+        shape.text = format!(
+            "{}\n{}",
+            shape.display_title(),
+            content_card::subtitle(CanvasContentKind::ProjectArtifact)
+        );
+        shape.metadata.status = Some("ready".to_string());
+        shape.metadata.source_path = Some(source_path.clone());
+        shape.metadata.artifact_ref = Some(CanvasArtifactRef {
+            project_id,
+            surface_node_id: surface_node_id.clone(),
+            artifact_id,
+            artifact_kind,
+            source_path,
+        });
+        shape.metadata.refs = vec!["project-artifact".to_string(), surface_node_id.clone()];
+        shape.metadata.editor_route = Some(format!("capy://project-artifact/{surface_node_id}"));
+        shape.metadata.next_action =
+            Some(content_card::default_next_action(CanvasContentKind::ProjectArtifact).to_string());
+        idx
+    }
 }
 
 fn normalize_card_title(kind: CanvasContentKind, title: String) -> String {
@@ -120,6 +164,15 @@ fn selection_item_text(item: &crate::shape::CanvasSelectionItem) -> String {
     push_optional_line(&mut lines, "next", item.next_action.as_deref());
     push_optional_line(&mut lines, "editor", item.editor_route.as_deref());
     push_optional_line(&mut lines, "source", item.source_path.as_deref());
+    if let Some(artifact_ref) = &item.artifact_ref {
+        lines.push(format!(
+            "  artifact: {} [{}] source={} surface_node={}",
+            artifact_ref.artifact_id,
+            artifact_ref.artifact_kind,
+            artifact_ref.source_path,
+            artifact_ref.surface_node_id
+        ));
+    }
     push_optional_line(
         &mut lines,
         "generation_provider",

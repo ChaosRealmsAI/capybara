@@ -12,9 +12,11 @@ export function createCanvasWorkbench(ctx) {
     refreshPlannerContext,
     create_content_card,
     create_poster_document_card,
+    create_project_artifact_card,
     select_node,
     focus_node,
     move_node_by_id,
+    resize_node_by_id,
     add_image_asset_at,
     base64ToBytes,
     cloneDefaultPosterDocument,
@@ -80,11 +82,37 @@ function moveNodeById(id, x, y) {
   return ok;
 }
 
+function resizeNodeById(id, x, y, w, h) {
+  const numeric = [id, x, y, w, h].map(Number);
+  if (numeric.some((value) => !Number.isFinite(value))) return false;
+  const ok = resize_node_by_id(...numeric);
+  refreshPlannerContext();
+  return ok;
+}
+
 function createContentCard(kind, title, x, y) {
   const nextX = Number(x);
   const nextY = Number(y);
   if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return { ok: false, error: "invalid position" };
   const idx = create_content_card(kind, title, nextX, nextY);
+  refreshPlannerContext();
+  return { ok: true, index: Number(idx), selected_node: state.canvas.selectedNode, snapshot: stateSnapshot() };
+}
+
+function createProjectArtifactNode(input = {}) {
+  const geometry = input.geometry || {};
+  const idx = create_project_artifact_card(
+    String(input.title || input.artifactId || "Project artifact"),
+    Number(geometry.x || 0),
+    Number(geometry.y || 0),
+    Number(geometry.w || 320),
+    Number(geometry.h || 180),
+    String(input.projectId || ""),
+    String(input.surfaceNodeId || ""),
+    String(input.artifactId || ""),
+    String(input.artifactKind || "other"),
+    String(input.sourcePath || "")
+  );
   refreshPlannerContext();
   return { ok: true, index: Number(idx), selected_node: state.canvas.selectedNode, snapshot: stateSnapshot() };
 }
@@ -341,7 +369,9 @@ function verifyCanvasImageTool() {
     selectNode,
     focusNode,
     moveNodeById,
+    resizeNodeById,
     createContentCard,
+    createProjectArtifactNode,
     loadPosterDocument,
     updatePosterDocument,
     insertImageFromBase64,

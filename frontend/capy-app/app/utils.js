@@ -7,6 +7,7 @@ export function base64ToBytes(base64) {
 
 export function contentKindLabel(value) {
   if (value === "poster") return "poster";
+  if (value === "project_artifact") return "project artifact";
   return String(value || "shape").replace(/_/g, " ");
 }
 

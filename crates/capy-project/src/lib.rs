@@ -9,6 +9,7 @@ mod generate;
 mod model;
 mod package;
 mod patch;
+mod surface_nodes;
 mod workbench;
 
 pub use ai::{parse_project_ai_response, project_ai_output_schema};
@@ -19,6 +20,8 @@ pub use model::{
     GENERATE_RUN_SCHEMA_VERSION, PatchApplyResultV1, PatchDocumentV1, PatchRunV1,
     ProjectAiArtifactV1, ProjectAiPromptV1, ProjectAiResponseV1, ProjectGenerateRequestV1,
     ProjectGenerateResultV1, ProjectGenerateRunV1, ProjectInspectionV1, ProjectManifestV1,
-    ProjectWorkbenchCardV1, ProjectWorkbenchV1, ReplaceExactTextOperationV1, WorkbenchPreviewV1,
+    ProjectSurfaceNodeV1, ProjectSurfaceNodesV1, ProjectWorkbenchCardV1, ProjectWorkbenchV1,
+    ReplaceExactTextOperationV1, SURFACE_NODES_SCHEMA_VERSION, SurfaceGeometryV1,
+    WorkbenchPreviewV1,
 };
 pub use package::{CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageResult};

@@ -21,6 +21,7 @@ export function createCanvasRenderer(ctx) {
 
 const TYPE_DOTS = {
   brand: "#fbbf24", image: "#f9a8d4", video: "#a78bfa", web: "#84cc16",
+  "project-artifact": "#38bdf8",
   "timeline-composition": "#34d399",
   text: "#9ca3af", default: "#a78bfa"
 };
@@ -28,6 +29,7 @@ const TYPE_ICONS = {
   brand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8.5" stroke-dasharray="2 3"/></svg>',
   image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17.5l4.5-4 4 3 3.5-2.5 3 2.5"/></svg>',
   video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M10.5 9.5l4.5 2.5-4.5 2.5z" fill="currentColor"/></svg>',
+  "project-artifact": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M8 9h8M8 13h5M8 17h7"/></svg>',
   "timeline-composition": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5M7 17h10"/></svg>',
   web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 3 2.6 14 0 17M12 3.5c-2.6 3-2.6 14 0 17"/></svg>',
   default: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>'
@@ -39,6 +41,7 @@ function inferType(node) {
   const k = String(node?.content_kind || "").toLowerCase();
   if (k === "brand") return "brand";
   if (k === "image") return "image";
+  if (k === "project_artifact") return "project-artifact";
   if (k === "video") return "video";
   if (k === "web") return "web";
   if (k === "text") return "text";
@@ -138,17 +141,20 @@ function renderNodeLabels(nodes, selectedId, viewport) {
     existing.delete(nodeId);
     skin.dataset.nodeId = nodeId;
     const type = inferType(node);
-    skin.dataset.capyComponentKind = type === "timeline-composition" ? type : "";
+    skin.dataset.capyComponentKind = type === "timeline-composition" || type === "project-artifact" ? type : "";
+    skin.dataset.artifactKind = node.artifact_ref?.artifact_kind || "";
     skin.dataset.capyTimelineState = node.timeline?.state || "";
     skin.classList.toggle("is-selected", String(node.id) === String(selectedId));
     skin.querySelector(".node-dot").style.background = TYPE_DOTS[type] || TYPE_DOTS.default;
     skin.querySelector(".node-icon").innerHTML = TYPE_ICONS[type] || TYPE_ICONS.default;
     skin.querySelector(".node-type").textContent = type === "timeline-composition"
       ? "timeline"
+      : type === "project-artifact" ? node.artifact_ref?.artifact_kind || "artifact"
       : String(node.content_kind || "node").toLowerCase();
     skin.querySelector(".node-title").textContent = node.title || `Node ${node.id}`;
     skin.querySelector(".node-meta").textContent = type === "timeline-composition"
       ? (node.timeline?.state || "preview-ready")
+      : type === "project-artifact" ? (node.artifact_ref?.source_path || node.source_path || "project artifact")
       : (node.next_action || "ready");
     const box = nodeLabelBox(node, viewport);
     const zoom = Number(viewport?.zoom) || 1;

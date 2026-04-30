@@ -4,6 +4,7 @@ import initCanvas, {
   ai_snapshot_text,
   create_content_card,
   create_poster_document_card,
+  create_project_artifact_card,
   center_view_on,
   current_tool,
   dark_mode,
@@ -13,6 +14,7 @@ import initCanvas, {
   move_node_by_id,
   pan_view_by,
   reset_view,
+  resize_node_by_id,
   select_node,
   selected_context,
   selected_context_text,
@@ -43,7 +45,6 @@ import { createPosterWorkspace } from "./app/poster-workspace.js";
 import { createTimelineWorkbench } from "./app/timeline-workbench.js";
 import { createVideoEditor } from "./app/video-editor.js";
 import { installWindowFacade } from "./app/window-facade.js";
-
 const {
   topbar, cmdkTriggerEl, listEl, messagesEl, newChatEl, stopEl, runStatusEl,
   formEl, promptEl, configSummaryEl, configDialogEl, configDialogCloseEl,
@@ -64,14 +65,12 @@ const {
   imageToolPromptEl, imageToolDryRunEl, imageToolLiveEl, imageToolStatusEl,
   imageToolMetaEl,
 } = dom;
-
 const rpc = createRpc(pending);
 const runtimeApi = createRuntimeControls({ state, dom });
 const {
   currentConfig, syncPolicyOptions, applyWriteCodeDefaults, updateConfigSummary,
   setRunStatus, renderRuntimeFoot, updateCanvasStatus, selectedModelValue,
 } = runtimeApi;
-
 let rendererApi;
 let contextApi;
 let controlsApi;
@@ -82,7 +81,6 @@ let posterWorkspaceApi;
 let gameAssetsWorkspaceApi;
 let conversationsApi;
 let projectPackageApi;
-
 conversationsApi = createConversations({
   state, rpc, currentConfig, syncPolicyOptions, applyWriteCodeDefaults,
   updateConfigSummary, selectedModelValue, setRunStatus, renderRuntimeFoot, stringifyError,
@@ -91,7 +89,6 @@ conversationsApi = createConversations({
   addDirsEl, allowedToolsEl, disallowedToolsEl, mcpConfigEl, modelProviderEl,
   approvalsReviewerEl, reasoningSummaryEl, outputSchemaEl, bareEl, searchEl, writeCodeEl,
 });
-
 rendererApi = createCanvasRenderer({
   state, posterDocuments, posterLayerEl, labelLayerEl, canvasEl, labelSync,
   renderPosterStage, buildPosterState, cloneDefaultPosterDocument, cloneDocument,
@@ -102,13 +99,11 @@ rendererApi = createCanvasRenderer({
   loadPosterDocument: (...args) => workbenchApi.loadPosterDocument(...args),
   updatePosterDocument: (...args) => workbenchApi.updatePosterDocument(...args),
 });
-
 const stateSnapshot = createStateSnapshot({
   state,
   normalizeValue,
   posterDocumentsState: () => rendererApi.posterDocumentsState()
 });
-
 timelineApi = createTimelineWorkbench({
   state, labelLayerEl, nextFrameInspectorEl, nextFrameInspectorTitleEl,
   nextFrameInspectorStatusEl, nextFrameInspectorStagesEl, rpc, stringifyError,
@@ -117,15 +112,12 @@ timelineApi = createTimelineWorkbench({
   scheduleCanvasLabelRefresh: (...args) => rendererApi.scheduleCanvasLabelRefresh(...args),
   inferType: (...args) => rendererApi.inferType(...args),
 });
-
 posterWorkspaceApi = createPosterWorkspace({
   state, dom, rpc, stringifyError,
 });
-
 gameAssetsWorkspaceApi = createGameAssetsWorkspace({
   state, dom, stringifyError,
 });
-
 videoEditorApi = createVideoEditor({
   state, dom, rpc, stringifyError, setRunStatus,
   renderPosterWorkspace: (...args) => posterWorkspaceApi.renderPosterWorkspace(...args),
@@ -142,6 +134,13 @@ projectPackageApi = createProjectPackageWiring({
   appendPlannerMessage: (message) => {
     state.messages.push({ id: `project-${Date.now()}`, ...message });
     conversationsApi.renderMessages();
+  },
+  canvasApi: {
+    createProjectArtifactNode: (...args) => workbenchApi.createProjectArtifactNode(...args),
+    resizeNodeById: (...args) => workbenchApi.resizeNodeById(...args),
+    selectNode: (...args) => workbenchApi.selectNode(...args),
+    refreshPlannerContext: () => refreshPlannerContext(),
+    scheduleCanvasLabelRefresh: (...args) => rendererApi.scheduleCanvasLabelRefresh(...args),
   },
 });
 
@@ -165,7 +164,7 @@ workbenchApi = createCanvasWorkbench({
   installCanvasRegionSelection: (...args) => contextApi.installCanvasRegionSelection(...args),
   nextFrame, stringifyError, renderError: (...args) => conversationsApi.renderError(...args),
   refreshPlannerContext: () => refreshPlannerContext(), create_content_card,
-  create_poster_document_card, select_node, focus_node, move_node_by_id,
+  create_poster_document_card, create_project_artifact_card, select_node, focus_node, move_node_by_id, resize_node_by_id,
   add_image_asset_at, base64ToBytes, cloneDefaultPosterDocument, cloneDocument,
   parsePosterDocument, validatePosterDocument, posterDocuments,
   posterStateForNode: (...args) => rendererApi.posterStateForNode(...args),
@@ -209,8 +208,8 @@ installWindowFacade({
   state,
   capyApi: {
     add_image_asset_at, ai_snapshot, ai_snapshot_text, create_content_card,
-    create_poster_document_card, center_view_on, current_tool, dark_mode, fit_view_to_content,
-    focus_node, list_shapes, move_node_by_id, pan_view_by, reset_view, select_node,
+    create_poster_document_card, create_project_artifact_card, center_view_on, current_tool, dark_mode, fit_view_to_content,
+    focus_node, list_shapes, move_node_by_id, resize_node_by_id, pan_view_by, reset_view, select_node,
     selected_context, selected_context_text, set_vector_style, set_tool, shape_count, zoom_view_at
   },
   workbenchApi: {
@@ -220,10 +219,12 @@ installWindowFacade({
     clearCanvasContextRegion: (...args) => contextApi.clearCanvasContextRegion(...args),
     refreshPlannerContext, seedDemoCanvas: (...args) => workbenchApi.seedDemoCanvas(...args),
     createContentCard: (...args) => workbenchApi.createContentCard(...args),
+    createProjectArtifactNode: (...args) => workbenchApi.createProjectArtifactNode(...args),
     insertImageFromBase64: (...args) => workbenchApi.insertImageFromBase64(...args),
     loadPosterDocument: (...args) => workbenchApi.loadPosterDocument(...args),
     updatePosterDocument: (...args) => workbenchApi.updatePosterDocument(...args),
     moveNodeById: (...args) => workbenchApi.moveNodeById(...args),
+    resizeNodeById: (...args) => workbenchApi.resizeNodeById(...args),
     focusNode: (...args) => workbenchApi.focusNode(...args),
     selectNode: (...args) => workbenchApi.selectNode(...args),
     scheduleCanvasLabelRefresh: (...args) => rendererApi.scheduleCanvasLabelRefresh(...args),
@@ -232,6 +233,8 @@ installWindowFacade({
     openTimelineComposition: (...args) => timelineApi.openTimelineComposition(...args),
     openTimelineInspector: (...args) => timelineApi.openTimelineInspector(...args),
     loadProjectPackage: (...args) => projectPackageApi.loadProjectPackage(...args),
+    syncProjectArtifactNodes: (...args) => projectPackageApi.syncProjectArtifactNodes(...args),
+    selectProjectArtifactNode: (...args) => projectPackageApi.selectArtifactNode(...args),
     buildSelectedProjectContext: (...args) => projectPackageApi.buildSelectedContext(...args),
     generateSelectedProjectArtifact: (...args) => projectPackageApi.generateSelectedArtifact(...args),
     switchWorkspaceTab: (...args) => videoEditorApi.switchWorkspace(...args),
@@ -382,6 +385,8 @@ function refreshPlannerContext() {
   state.planner.context = selectedNode ? context : { selected_count: 0, items: [] };
   state.planner.contextText = selectedNode ? selected_context_text() : "";
   contextApi.syncCanvasContext(selectedNode, snapshot.viewport || null);
+  projectPackageApi?.syncCanvasArtifactSelection?.();
+  projectPackageApi?.syncCanvasArtifactGeometry?.();
   rendererApi.renderPosterOverlays(semanticNodes, state.selectedId, snapshot.viewport || null);
   rendererApi.renderNodeLabels(semanticNodes, state.selectedId, snapshot.viewport || null);
   controlsApi?.renderCanvasControls(snapshot);

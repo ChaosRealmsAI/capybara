@@ -63,6 +63,8 @@ export const state = {
     status: "idle",
     inspection: null,
     workbench: null,
+    surfaceNodes: null,
+    artifactNodes: {},
     selectedArtifactId: null,
     selectedCardId: null,
     previewSource: "",
