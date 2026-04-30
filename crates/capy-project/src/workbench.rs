@@ -84,6 +84,9 @@ fn missing_card(kind: &str, title: &str) -> ProjectWorkbenchCardV1 {
         preview: WorkbenchPreviewV1 {
             kind: "none".to_string(),
             source_path: None,
+            poster_frame_path: None,
+            composition_path: None,
+            metadata: None,
             text: Some("等待项目源文件".to_string()),
         },
         next_actions: vec!["register-artifact".to_string()],
@@ -117,6 +120,9 @@ fn export_center_card(artifacts: &[ArtifactRefV1]) -> ProjectWorkbenchCardV1 {
         preview: WorkbenchPreviewV1 {
             kind: "summary".to_string(),
             source_path: None,
+            poster_frame_path: None,
+            composition_path: None,
+            metadata: None,
             text: Some("汇总导出文件、manifest 和 evidence".to_string()),
         },
         next_actions: vec!["review-evidence".to_string()],
@@ -132,15 +138,49 @@ fn preview_for(artifact: &ArtifactRefV1) -> WorkbenchPreviewV1 {
     let kind = match artifact.kind {
         ArtifactKind::Html => "html",
         ArtifactKind::Image => "image",
+        ArtifactKind::Video => "video",
         ArtifactKind::Markdown => "text",
         ArtifactKind::PosterJson | ArtifactKind::PptJson | ArtifactKind::CompositionJson => "json",
         _ => "none",
     };
+    let video = artifact
+        .provenance
+        .as_ref()
+        .and_then(|value| value.get("video_import"));
     WorkbenchPreviewV1 {
         kind: kind.to_string(),
         source_path: Some(artifact.source_path.clone()),
-        text: None,
+        poster_frame_path: video
+            .and_then(|value| value.get("poster_frame_path"))
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string),
+        composition_path: video
+            .and_then(|value| value.get("composition_path"))
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string),
+        metadata: video.cloned(),
+        text: video.map(video_preview_text),
     }
+}
+
+fn video_preview_text(value: &serde_json::Value) -> String {
+    let filename = value
+        .get("filename")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("video");
+    let duration = value
+        .get("duration_ms")
+        .and_then(serde_json::Value::as_u64)
+        .map(|ms| format!("{:.2}s", ms as f64 / 1000.0))
+        .unwrap_or_else(|| "duration unknown".to_string());
+    let size = match (
+        value.get("width").and_then(serde_json::Value::as_u64),
+        value.get("height").and_then(serde_json::Value::as_u64),
+    ) {
+        (Some(width), Some(height)) => format!("{width}x{height}"),
+        _ => "size unknown".to_string(),
+    };
+    format!("{filename} · {duration} · {size}")
 }
 
 fn product_kind(artifact: &ArtifactRefV1) -> &'static str {

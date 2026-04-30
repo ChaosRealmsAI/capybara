@@ -1,9 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use image::imageops::FilterType;
 use image::{ImageBuffer, Rgba, RgbaImage};
 use serde_json::Value;
+
+use crate::video_source::first_video_source;
 
 use self::placeholders::{
     has_component_tracks, has_scroll_chapter_component, render_component_placeholder,
@@ -23,10 +26,88 @@ pub struct SnapshotMetrics {
 pub fn snapshot_embedded(
     render_source_path: &Path,
     out: &Path,
+    frame_ms: u64,
 ) -> Result<SnapshotMetrics, SnapshotError> {
+    if snapshot_video_source(render_source_path, out, frame_ms)? {
+        return read_png_metrics(out);
+    }
     let image = render_frame(render_source_path)?;
     write_png(&image, out)?;
     read_png_metrics(out)
+}
+
+fn snapshot_video_source(
+    render_source_path: &Path,
+    out: &Path,
+    frame_ms: u64,
+) -> Result<bool, SnapshotError> {
+    let source = read_source(render_source_path)?;
+    let duration_ms = source
+        .get("duration_ms")
+        .or_else(|| source.get("duration"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let Some(video) = first_video_source(&source, duration_ms).map_err(|message| {
+        SnapshotError::new(
+            "SNAPSHOT_FAILED",
+            "$.tracks[].clips[].params.src",
+            message,
+            "next step · inspect video track src",
+        )
+    })?
+    else {
+        return Ok(false);
+    };
+    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent).map_err(|err| {
+            SnapshotError::new(
+                "SNAPSHOT_FAILED",
+                "$.snapshot_path",
+                format!("create snapshot parent failed: {err}"),
+                "next step · check snapshot output permissions",
+            )
+        })?;
+    }
+    let seek_ms = video
+        .start_ms
+        .saturating_add(frame_ms.min(video.duration_ms.saturating_sub(1)));
+    let output = Command::new(ffmpeg_path()?)
+        .args([
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            &format!("{:.3}", seek_ms as f64 / 1000.0),
+            "-i",
+            &video.path.display().to_string(),
+            "-frames:v",
+            "1",
+            &out.display().to_string(),
+        ])
+        .output()
+        .map_err(|err| {
+            SnapshotError::new(
+                "SNAPSHOT_FAILED",
+                "$.ffmpeg",
+                format!("spawn ffmpeg failed: {err}"),
+                "next step · check CAPY_FFMPEG or install ffmpeg",
+            )
+        })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(SnapshotError::new(
+            "SNAPSHOT_FAILED",
+            "$.ffmpeg",
+            if stderr.is_empty() {
+                format!("ffmpeg frame extraction failed: {}", output.status)
+            } else {
+                stderr
+            },
+            "next step · inspect the source video path and frame time",
+        ));
+    }
+    Ok(true)
 }
 
 pub fn render_frame(render_source_path: &Path) -> Result<RgbaImage, SnapshotError> {
@@ -80,6 +161,28 @@ pub fn read_png_metrics(path: &Path) -> Result<SnapshotMetrics, SnapshotError> {
         width: image.width(),
         height: image.height(),
         byte_size: metadata.len(),
+    })
+}
+
+fn ffmpeg_path() -> Result<PathBuf, SnapshotError> {
+    if let Some(path) = std::env::var_os("CAPY_FFMPEG").map(PathBuf::from) {
+        if path.is_file() {
+            return Ok(path);
+        }
+        return Err(SnapshotError::new(
+            "SNAPSHOT_FAILED",
+            "$.ffmpeg",
+            format!("CAPY_FFMPEG does not point to a file: {}", path.display()),
+            "next step · set CAPY_FFMPEG to ffmpeg or install ffmpeg on PATH",
+        ));
+    }
+    which::which("ffmpeg").map_err(|_| {
+        SnapshotError::new(
+            "SNAPSHOT_FAILED",
+            "$.ffmpeg",
+            "ffmpeg was not found on PATH or CAPY_FFMPEG",
+            "next step · install ffmpeg or set CAPY_FFMPEG",
+        )
     })
 }
 

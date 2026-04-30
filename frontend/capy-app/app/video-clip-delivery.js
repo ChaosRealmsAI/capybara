@@ -3,6 +3,8 @@ export function createVideoClipDeliveryController(ctx) {
 
   function install() {
     dom.videoProposalGenerateEl?.addEventListener("click", () => generateClipProposal());
+    dom.videoRangeStartEl?.addEventListener("input", () => updateRangeFromInputs());
+    dom.videoRangeEndEl?.addEventListener("input", () => updateRangeFromInputs());
   }
 
   function applyOpenResult(clips) {
@@ -16,6 +18,7 @@ export function createVideoClipDeliveryController(ctx) {
 
   function render() {
     const range = state.video.selectedRange;
+    syncRangeInputs(range);
     if (dom.videoRangeSummaryEl) {
       dom.videoRangeSummaryEl.textContent = range
         ? `${range.scene || range.clip_id} · ${formatTime(range.start_ms)} - ${formatTime(range.end_ms)}`
@@ -51,7 +54,7 @@ export function createVideoClipDeliveryController(ctx) {
   }
 
   function selectClipRange(clip) {
-    state.video.selectedRange = rangeFromClip(clip);
+    setSelectedRange(rangeFromClip(clip), false);
     state.video.clipProposal = null;
     state.video.proposalStatus = "idle";
     const track = firstTrackForClip(clip.id);
@@ -61,7 +64,7 @@ export function createVideoClipDeliveryController(ctx) {
   }
 
   function selectRangeFromTrack(track) {
-    state.video.selectedRange = rangeFromTrack(track);
+    setSelectedRange(rangeFromTrack(track), false);
     state.video.clipProposal = null;
     state.video.proposalStatus = "idle";
     seek(Number(track.start_ms || 0));
@@ -86,7 +89,8 @@ export function createVideoClipDeliveryController(ctx) {
       output_path: outputPathForProposal(state.video.compositionPath, outputFilename),
       source: {
         composition_path: state.video.compositionPath,
-        render_source_path: state.video.renderSourcePath
+        render_source_path: state.video.renderSourcePath,
+        video: videoSourceSummary(state.video.renderSource)
       }
     };
     state.video.proposalStatus = "ready";
@@ -110,7 +114,54 @@ export function createVideoClipDeliveryController(ctx) {
     });
   }
 
-  return { install, applyOpenResult, render, selectClipRange, selectRangeFromTrack };
+  function setSelectedRange(range, shouldRender = true) {
+    if (!range) return null;
+    const duration = Math.max(1, Number(state.video.durationMs || range.end_ms || 0));
+    const start = Math.max(0, Math.min(duration, Number(range.start_ms || 0)));
+    const end = Math.max(start + 1, Math.min(duration, Number(range.end_ms || start + 1)));
+    state.video.selectedRange = {
+      ...range,
+      start_ms: Math.round(start),
+      end_ms: Math.round(end),
+      duration_ms: Math.round(end - start)
+    };
+    state.video.clipProposal = null;
+    state.video.proposalStatus = "idle";
+    seek(state.video.selectedRange.start_ms);
+    if (shouldRender) renderVideoEditor();
+    return state.video.selectedRange;
+  }
+
+  function updateRangeFromInputs() {
+    const current = state.video.selectedRange || rangeFromTrack(selectedTrack());
+    if (!current) return;
+    const start = secondsInput(dom.videoRangeStartEl, Number(current.start_ms || 0) / 1000);
+    const end = secondsInput(dom.videoRangeEndEl, Number(current.end_ms || 0) / 1000);
+    setSelectedRange({
+      ...current,
+      start_ms: Math.round(start * 1000),
+      end_ms: Math.round(end * 1000)
+    });
+  }
+
+  function syncRangeInputs(range) {
+    if (!dom.videoRangeStartEl || !dom.videoRangeEndEl) return;
+    if (domInputLocked(dom.videoRangeStartEl) || domInputLocked(dom.videoRangeEndEl)) return;
+    dom.videoRangeStartEl.value = range ? secondsValue(range.start_ms) : "0";
+    dom.videoRangeEndEl.value = range ? secondsValue(range.end_ms) : "0";
+    const maxSeconds = Math.max(0, Number(state.video.durationMs || 0) / 1000);
+    dom.videoRangeStartEl.max = maxSeconds ? String(maxSeconds) : "";
+    dom.videoRangeEndEl.max = maxSeconds ? String(maxSeconds) : "";
+  }
+
+  return {
+    install,
+    applyOpenResult,
+    render,
+    selectClipRange,
+    selectRangeFromTrack,
+    setSelectedRange
+  };
 }
 
 export function rangeFromClip(clip) {
@@ -148,6 +199,42 @@ function outputPathForProposal(compositionPath, filename) {
   const slash = normalized.lastIndexOf("/");
   const directory = slash >= 0 ? normalized.slice(0, slash) : ".";
   return `${directory}/exports/${filename}`;
+}
+
+function videoSourceSummary(source) {
+  const tracks = Array.isArray(source?.tracks) ? source.tracks : [];
+  for (const track of tracks) {
+    const clips = Array.isArray(track.clips) ? track.clips : [];
+    for (const clip of clips) {
+      const params = clip.params || {};
+      const kind = track.kind || params.track?.kind || "";
+      if (kind !== "video" && !params.src) continue;
+      return {
+        src: params.src || "",
+        filename: params.filename || "",
+        duration_ms: Number(params.duration_ms || 0),
+        width: Number(params.width || 0),
+        height: Number(params.height || 0),
+        source_start_ms: Number(params.source_start_ms || 0),
+        source_end_ms: Number(params.source_end_ms || 0)
+      };
+    }
+  }
+  return null;
+}
+
+function secondsInput(input, fallback) {
+  const value = Number(input?.value || fallback || 0);
+  return Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+function secondsValue(ms) {
+  const seconds = Number(ms || 0) / 1000;
+  return seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.?0+$/, "");
+}
+
+function domInputLocked(input) {
+  return document.activeElement === input;
 }
 
 function safeSlug(value) {

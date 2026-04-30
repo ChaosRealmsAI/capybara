@@ -347,7 +347,7 @@ impl ProjectPackage {
         })
     }
 
-    fn relative_existing_path(&self, path: &Path) -> ProjectPackageResult<String> {
+    pub(crate) fn relative_existing_path(&self, path: &Path) -> ProjectPackageResult<String> {
         let candidate = if path.is_absolute() {
             path.to_path_buf()
         } else {

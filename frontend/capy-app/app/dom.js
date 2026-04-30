@@ -83,6 +83,8 @@ export const dom = {
   videoPlayheadEl: $("#video-playhead"),
   videoTimeEl: $("#video-time"),
   videoRangeSummaryEl: $("#video-range-summary"),
+  videoRangeStartEl: $("#video-range-start"),
+  videoRangeEndEl: $("#video-range-end"),
   videoProposalGenerateEl: $("#video-proposal-generate"),
   videoProposalEl: $("#video-proposal"),
   videoInspectorEl: $("#video-inspector"),

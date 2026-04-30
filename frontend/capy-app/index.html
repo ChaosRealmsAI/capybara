@@ -194,6 +194,16 @@
                 <span class="context-eyebrow">DELIVERY CLIP</span>
                 <strong id="video-range-summary">未选择片段</strong>
               </div>
+              <div class="video-range-fields" aria-label="Video clip range">
+                <label>
+                  <span>In</span>
+                  <input id="video-range-start" type="number" min="0" step="0.1" value="0">
+                </label>
+                <label>
+                  <span>Out</span>
+                  <input id="video-range-end" type="number" min="0" step="0.1" value="0">
+                </label>
+              </div>
               <button class="tool-button secondary" type="button" id="video-proposal-generate">生成 proposal</button>
             </div>
             <div id="video-proposal" class="video-proposal">选择左侧 scene 后生成可交付片段 proposal</div>

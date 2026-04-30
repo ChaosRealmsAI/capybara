@@ -292,6 +292,12 @@ pub struct WorkbenchPreviewV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poster_frame_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composition_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]

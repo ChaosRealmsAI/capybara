@@ -5,6 +5,7 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::snapshot;
+use crate::video_source::{RenderVideoSource, first_video_source};
 
 use super::report::ExportError;
 
@@ -24,6 +25,16 @@ pub fn export_embedded(
     let source = read_source(render_source_path)?;
     let duration_ms = duration_ms(&source)?;
     let frame_count = frame_count(duration_ms, fps)?;
+    if let Some(video) = first_video_source(&source, duration_ms).map_err(|message| {
+        ExportError::new(
+            "EXPORT_FAILED",
+            "$.tracks[].clips[].params.src",
+            message,
+            "next step · inspect video track src",
+        )
+    })? {
+        return export_video_source(&video, out, fps, frame_count);
+    }
     let frame_dir = frame_dir(out, job_id);
     fs::create_dir_all(&frame_dir).map_err(|err| {
         ExportError::new(
@@ -48,6 +59,88 @@ pub fn export_embedded(
         duration_ms,
         frame_count,
         byte_size: byte_size.len(),
+    })
+}
+
+fn export_video_source(
+    video: &RenderVideoSource,
+    out: &Path,
+    _fps: u32,
+    frame_count: u64,
+) -> Result<EmbeddedExportMetrics, ExportError> {
+    let ffmpeg = ffmpeg_path()?;
+    if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent).map_err(|err| {
+            ExportError::new(
+                "EXPORT_FAILED",
+                "$.output_path",
+                format!("create export parent failed: {err}"),
+                "next step · check output directory permissions",
+            )
+        })?;
+    }
+    let output = Command::new(&ffmpeg)
+        .args([
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            &seconds(video.start_ms),
+            "-i",
+            &video.path.display().to_string(),
+            "-t",
+            &seconds(video.duration_ms),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+            &out.display().to_string(),
+        ])
+        .output()
+        .map_err(|err| {
+            ExportError::new(
+                "EXPORT_FAILED",
+                "$.ffmpeg",
+                format!("spawn {} failed: {err}", ffmpeg.display()),
+                "next step · check CAPY_FFMPEG or install ffmpeg",
+            )
+        })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(ExportError::new(
+            "EXPORT_FAILED",
+            "$.ffmpeg",
+            if stderr.is_empty() {
+                format!("ffmpeg video trim failed: {}", output.status)
+            } else {
+                stderr
+            },
+            "next step · inspect the source video path and selected range",
+        ));
+    }
+    let metadata = fs::metadata(out).map_err(|err| {
+        ExportError::new(
+            "EXPORT_FAILED",
+            "$.output_path",
+            format!("read MP4 metadata failed: {err}"),
+            "next step · rerun capy timeline export",
+        )
+    })?;
+    Ok(EmbeddedExportMetrics {
+        duration_ms: video.duration_ms,
+        frame_count,
+        byte_size: metadata.len(),
     })
 }
 
@@ -157,6 +250,10 @@ fn ffmpeg_path() -> Result<PathBuf, ExportError> {
             "next step · install ffmpeg or set CAPY_FFMPEG",
         )
     })
+}
+
+fn seconds(ms: u64) -> String {
+    format!("{:.3}", ms as f64 / 1000.0)
 }
 
 fn read_source(path: &Path) -> Result<Value, ExportError> {

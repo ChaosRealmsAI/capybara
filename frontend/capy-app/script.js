@@ -242,7 +242,7 @@ installWindowFacade({
     retrySelectedProjectReview: (...args) => projectPackageApi.retrySelectedReview(...args),
     undoSelectedProjectReview: (...args) => projectPackageApi.undoSelectedReview(...args),
     switchWorkspaceTab: (...args) => videoEditorApi.switchWorkspace(...args),
-    openVideoComposition: (...args) => videoEditorApi.openComposition(...args),
+    openVideoComposition: (...args) => videoEditorApi.openComposition(...args), setVideoSelectedRange: (...args) => videoEditorApi.setVideoSelectedRange(...args),
     renderVideoEditor: (...args) => videoEditorApi.renderVideoEditor(...args),
     openPosterDocument: (...args) => posterWorkspaceApi.openDocument(...args),
     renderPosterWorkspace: (...args) => posterWorkspaceApi.renderPosterWorkspace(...args),

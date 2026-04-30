@@ -11,6 +11,7 @@ pub mod ports;
 pub mod snapshot;
 pub mod validate;
 pub mod verify;
+mod video_source;
 
 pub use adapters::timeline_engine::TimelineAdapter;
 pub use brand::{RebuildReport, RebuildRequest, rebuild};

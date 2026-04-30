@@ -183,6 +183,7 @@ Project Core is canonical for project-level context:
 
 ```bash
 target/debug/capy project inspect --project fixtures/project/html-context
+target/debug/capy project import-video --project <project-dir> --path media/source.webm [--title "Source video"]
 target/debug/capy context build --project <project-dir> --artifact <artifact-id> [--selector <selector>] [--out <path>]
 target/debug/capy patch apply --project <project-dir> --patch <patch.json> [--dry-run]
 ```

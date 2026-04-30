@@ -15,6 +15,7 @@ pub(super) fn editor_summary(composition: &Value, render_source: Option<&Value>)
             .unwrap_or("Composition"),
         "duration_ms": duration_ms,
         "viewport": composition.get("viewport").cloned().unwrap_or_else(|| json!({"w": 1920, "h": 1080, "ratio": "16:9"})),
+        "source_video": source_video_summary(composition),
         "clips": clips,
         "tracks": tracks,
         "render_source_tracks": render_source
@@ -22,6 +23,37 @@ pub(super) fn editor_summary(composition: &Value, render_source: Option<&Value>)
             .map(Vec::len)
             .unwrap_or(0)
     })
+}
+
+fn source_video_summary(composition: &Value) -> Option<Value> {
+    let source_artifact = composition.get("source_artifact").cloned();
+    let clips = composition.get("clips").and_then(Value::as_array)?;
+    for clip in clips {
+        let tracks = clip.get("tracks").and_then(Value::as_array)?;
+        for track in tracks {
+            if track.get("kind").and_then(Value::as_str) != Some("video") {
+                continue;
+            }
+            let params = track.get("params").unwrap_or(&Value::Null);
+            return Some(json!({
+                "filename": params
+                    .get("filename")
+                    .and_then(Value::as_str)
+                    .or_else(|| clip.get("name").and_then(Value::as_str))
+                    .unwrap_or("video"),
+                "duration_ms": params
+                    .get("duration_ms")
+                    .and_then(Value::as_u64)
+                    .or_else(|| clip_duration_ms(clip)),
+                "width": params.get("width").and_then(Value::as_u64),
+                "height": params.get("height").and_then(Value::as_u64),
+                "src": params.get("src").and_then(Value::as_str),
+                "source_path": params.get("source_path").and_then(Value::as_str),
+                "artifact": source_artifact
+            }));
+        }
+    }
+    None
 }
 
 pub(super) fn patch_track_field(

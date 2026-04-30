@@ -32,6 +32,18 @@ export function createVideoPreviewController({ state, dom, stringifyError }) {
           const end = clipEnd(clip);
           if (state.video.playheadMs < begin || state.video.playheadMs > end) continue;
           const params = clip.params || {};
+          const trackKind = track.kind || params.track?.kind || "";
+          if (trackKind === "video" || params.src) {
+            const key = `${state.video.renderSourcePath}::${track.id}::${clip.id}`;
+            active.add(key);
+            let entry = previewMounted.get(key);
+            if (!entry) {
+              entry = mountVideoLayer(stage, source, track, clip);
+              previewMounted.set(key, entry);
+            }
+            updateVideoLayer(entry, source, track, clip);
+            continue;
+          }
           const componentId = params.component;
           if (!componentId) continue;
           const key = `${state.video.renderSourcePath}::${track.id}::${clip.id}`;
@@ -120,6 +132,68 @@ export function createVideoPreviewController({ state, dom, stringifyError }) {
     };
   }
 
+  function mountVideoLayer(stage, source, track, clip) {
+    const el = document.createElement("div");
+    el.className = "video-preview-layer";
+    el.dataset.trackId = String(track.id || "");
+    el.dataset.clipId = String(clip.id || "");
+    el.style.zIndex = String(Number(track.z || 0));
+    const video = document.createElement("video");
+    video.className = "video-preview-video";
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.controls = false;
+    video.addEventListener("loadeddata", () => {
+      dom.videoPreviewEl?.setAttribute("data-video-ready", "true");
+    });
+    video.addEventListener("error", () => {
+      dom.videoPreviewEl?.setAttribute("data-video-error", video.error?.message || "video load failed");
+    });
+    el.append(video);
+    stage.appendChild(el);
+    const entry = {
+      el,
+      video,
+      sourceKey: "",
+      module: {
+        destroy() {
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+        }
+      }
+    };
+    updateVideoLayer(entry, source, track, clip);
+    return entry;
+  }
+
+  function updateVideoLayer(entry, source, track, clip) {
+    const params = clip.params || {};
+    const src = normalizeVideoSrc(params.src || "");
+    if (entry.sourceKey !== src) {
+      entry.sourceKey = src;
+      entry.video.src = src;
+      entry.video.load();
+    }
+    const begin = clipStart(clip);
+    const end = clipEnd(clip);
+    const duration = Math.max(1, end - begin);
+    const localTime = Math.max(0, Math.min(duration, (state.video.playheadMs || 0) - begin));
+    const sourceStart = Number(params.source_start_ms || 0);
+    const nextTime = (sourceStart + localTime) / 1000;
+    if (Number.isFinite(nextTime) && Math.abs((entry.video.currentTime || 0) - nextTime) > 0.08) {
+      try {
+        entry.video.currentTime = nextTime;
+      } catch {
+        entry.video.dataset.pendingTime = String(nextTime);
+      }
+    }
+    entry.video.pause();
+    entry.el.style.zIndex = String(Number(track.z || 0));
+    entry.video.style.objectFit = source?.meta?.video_fit || "contain";
+  }
+
   function clipStart(clip) {
     return Number(clip.begin_ms ?? clip.begin ?? 0);
   }
@@ -135,6 +209,41 @@ export function createVideoPreviewController({ state, dom, stringifyError }) {
   }
 
   return { renderPreviewFrame, resetPreviewRuntime };
+}
+
+function normalizeVideoSrc(src) {
+  const value = String(src || "");
+  if (!value) return "";
+  if (/^file:/i.test(value)) {
+    const localPath = decodeFileUrl(value);
+    return workspaceRelativeUrl(localPath) || value;
+  }
+  if (/^(https?|data|blob):/i.test(value)) return value;
+  const workspace = workspaceRelativeUrl(value);
+  if (workspace) return workspace;
+  if (value.startsWith("/")) return `file://${encodePath(value)}`;
+  return value;
+}
+
+function workspaceRelativeUrl(path) {
+  const cwd = String(window.CAPYBARA_SESSION?.cwd || "").replace(/\/+$/, "");
+  if (!cwd || !path.startsWith(`${cwd}/`)) return "";
+  return `/${path.slice(cwd.length + 1).split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function decodeFileUrl(value) {
+  try {
+    return decodeURIComponent(value.replace(/^file:\/\//i, ""));
+  } catch {
+    return value.replace(/^file:\/\//i, "");
+  }
+}
+
+function encodePath(path) {
+  return path
+    .split("/")
+    .map((part, index) => index === 0 ? "" : encodeURIComponent(part))
+    .join("/");
 }
 
 function escapeHtml(value) {

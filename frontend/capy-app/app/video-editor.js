@@ -180,6 +180,17 @@ export function createVideoEditor(ctx) {
       dom.videoStatusEl.dataset.status = "idle";
       return;
     }
+    const sourceVideo = editor.source_video || null;
+    if (sourceVideo) {
+      const filename = sourceVideo.filename || "video";
+      const duration = sourceVideo.duration_ms || editor.duration_ms || 0;
+      const dimensions = sourceVideo.width && sourceVideo.height
+        ? ` · ${sourceVideo.width}x${sourceVideo.height}`
+        : "";
+      dom.videoStatusEl.textContent = `${filename} · ${formatTime(duration)}${dimensions}`;
+      dom.videoStatusEl.dataset.status = state.video.status;
+      return;
+    }
     dom.videoStatusEl.textContent = `${editor.name || "Composition"} · ${formatTime(editor.duration_ms || 0)} · ${editor.tracks?.length || 0} tracks`;
     dom.videoStatusEl.dataset.status = state.video.status;
   }
@@ -380,6 +391,7 @@ export function createVideoEditor(ctx) {
     switchWorkspace,
     openComposition,
     renderVideoEditor,
+    setVideoSelectedRange: (...args) => clipDelivery.setSelectedRange(...args),
   };
 }
 

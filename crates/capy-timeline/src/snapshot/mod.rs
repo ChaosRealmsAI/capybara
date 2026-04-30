@@ -72,7 +72,7 @@ pub fn snapshot(req: SnapshotRequest) -> SnapshotReport {
         );
     }
 
-    match embedded::snapshot_embedded(&render_source_path, &snapshot_path) {
+    match embedded::snapshot_embedded(&render_source_path, &snapshot_path, req.frame_ms) {
         Ok(metrics) => SnapshotReport::success(SnapshotSuccess {
             trace_id,
             composition_path,

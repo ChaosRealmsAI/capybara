@@ -13,6 +13,7 @@ mod patch;
 mod review;
 mod selection_context;
 mod surface_nodes;
+mod video_import;
 mod workbench;
 
 pub use ai::{parse_project_ai_response, project_ai_output_schema};
@@ -34,3 +35,4 @@ pub use model::{
 };
 pub use package::{CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageResult};
 pub use selection_context::{SelectionBoundsV1, SelectionContextV1};
+pub use video_import::{VIDEO_IMPORT_SCHEMA_VERSION, VideoImportMetadataV1, VideoImportResultV1};

@@ -3,6 +3,15 @@ import { createProjectArtifactNodes } from "./project-artifact-nodes.js";
 import { createAiDiffReviewPanel, reviewRunId } from "./ai-diff.js";
 import { renderDesignLanguageSummary, renderSelectionContext } from "./project-context-panels.js";
 import { projectCampaignMessage, renderProjectCampaignSummary } from "./project-campaign-summary.js";
+import {
+  absoluteProjectPath,
+  assetFileUrl,
+  escapeText,
+  firstSelectableCard,
+  previewFrameSource,
+  selectedArtifactSummary,
+  selectedCardSummary
+} from "./project-package-helpers.js";
 
 export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage, canvasApi = {} }) {
   const {
@@ -180,7 +189,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     renderProjectCampaignSummary(projectCampaignSummaryEl, packageState.campaign);
     renderArtifactList(artifacts);
     if (projectPreviewFrameEl) {
-      projectPreviewFrameEl.srcdoc = previewFrameSource(selectedArtifact(), packageState.previewSource);
+      projectPreviewFrameEl.srcdoc = previewFrameSource(selectedArtifact(), packageState.previewSource, packageState);
     }
     aiDiffPanel.render(packageState.review, {
       accept: () => acceptSelectedReview().catch(() => {}),
@@ -286,6 +295,10 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
 
   function cardButton(card) {
     const button = document.createElement("button");
+    const isVideoCard = card.preview?.kind === "video" && card.preview?.composition_path;
+    const thumb = isVideoCard && card.preview?.poster_frame_path
+      ? `<img class="project-card-thumb" src="${escapeText(assetFileUrl(state.projectPackage.path, card.preview.poster_frame_path))}" alt="">`
+      : "";
     button.type = "button";
     button.className = "project-workbench-card";
     button.dataset.projectCardId = card.id;
@@ -293,6 +306,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     button.dataset.status = card.status;
     button.dataset.selected = card.id === state.projectPackage.selectedCardId ? "true" : "false";
     button.innerHTML = `
+      ${thumb}
       <span class="project-card-kind">${escapeText(card.kind)}</span>
       <strong>${escapeText(card.title || card.kind)}</strong>
       <small>${escapeText(card.source_path || card.preview?.text || "项目汇总")}</small>
@@ -302,14 +316,23 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     if (card.id?.startsWith("art_")) {
       const action = document.createElement("span");
       action.className = "project-card-action";
-      action.textContent = "AI 生成";
+      action.textContent = isVideoCard ? "打开视频" : "AI 生成";
       action.addEventListener("click", (event) => {
         event.stopPropagation();
-        generateSelectedAfter(card).catch(() => {});
+        if (isVideoCard) openVideoArtifact(card).catch(() => {});
+        else generateSelectedAfter(card).catch(() => {});
       });
       button.append(action);
     }
     return button;
+  }
+
+  async function openVideoArtifact(card) {
+    selectCard(card);
+    const composition = card.preview?.composition_path;
+    if (!composition || !state.projectPackage.path) return;
+    const path = absoluteProjectPath(state.projectPackage.path, composition);
+    await window.capyWorkbench?.openVideoComposition?.(path);
   }
 
   async function generateSelectedAfter(card) {
@@ -331,6 +354,10 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
   async function refreshSelectedPreview() {
     const artifact = selectedArtifact();
     if (!artifact || !state.projectPackage.path) {
+      state.projectPackage.previewSource = "";
+      return;
+    }
+    if (artifact.kind === "video") {
       state.projectPackage.previewSource = "";
       return;
     }
@@ -392,40 +419,6 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     refreshSelectedPreview().finally(() => renderProjectPackage());
     return true;
   }
-}
-
-function firstSelectableCard(workbench) {
-  const cards = workbench?.cards || [];
-  return cards.find((card) => card.kind === "web" && card.id?.startsWith("art_"))
-    || cards.find((card) => card.id?.startsWith("art_"))
-    || cards[0]
-    || null;
-}
-
-function escapeText(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function selectedCardSummary(rootState) {
-  const packageState = rootState.projectPackage;
-  const card = packageState?.workbench?.cards?.find((item) => item.id === packageState.selectedCardId);
-  return card ? `${card.title} · ${card.status}` : "";
-}
-
-function selectedArtifactSummary(rootState) {
-  const packageState = rootState.projectPackage;
-  const artifact = packageState?.inspection?.artifacts?.artifacts?.find((item) => item.id === packageState.selectedArtifactId);
-  return artifact ? `${artifact.kind} · ${artifact.source_path}` : "";
-}
-
-function previewFrameSource(artifact, source) {
-  if (!source) return "<!doctype html><p>No artifact preview</p>";
-  if (artifact?.kind === "html" || source.trimStart().startsWith("<svg")) return source;
-  return `<!doctype html><pre style="white-space:pre-wrap;font:12px ui-monospace,monospace;padding:16px;color:#2f2437">${escapeText(source)}</pre>`;
 }
 
 function projectGenerateMessage(result, artifact) {

@@ -13,7 +13,7 @@ fn embedded_snapshot_writes_png_with_viewport_dimensions() -> Result<(), Box<dyn
     let out = dir.join("frame.png");
     fs::write(&source, serde_json::to_vec_pretty(&render_source())?)?;
 
-    let metrics = snapshot_embedded(&source, &out)?;
+    let metrics = snapshot_embedded(&source, &out, 0)?;
 
     assert!(out.is_file());
     assert!(metrics.byte_size > 0);
@@ -34,7 +34,7 @@ fn embedded_snapshot_defaults_viewport() -> Result<(), Box<dyn std::error::Error
     value["viewport"] = json!({});
     fs::write(&source, serde_json::to_vec_pretty(&value)?)?;
 
-    let metrics = snapshot_embedded(&source, &out)?;
+    let metrics = snapshot_embedded(&source, &out, 0)?;
 
     assert_eq!(metrics.width, 1080);
     assert_eq!(metrics.height, 1080);
@@ -49,7 +49,7 @@ fn embedded_snapshot_reports_missing_poster() -> Result<(), Box<dyn std::error::
     let out = dir.join("frame.png");
     fs::write(&source, serde_json::to_vec_pretty(&json!({"tracks": []}))?)?;
 
-    let err = snapshot_embedded(&source, &out)
+    let err = snapshot_embedded(&source, &out, 0)
         .err()
         .ok_or("missing poster should fail")?;
 

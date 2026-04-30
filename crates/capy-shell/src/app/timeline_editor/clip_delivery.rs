@@ -30,11 +30,11 @@ pub(super) fn write_clip_proposal_composition(
     })?;
     object.insert(
         "id".to_string(),
-        json!(format!(
+        json!(safe_timeline_slug(&format!(
             "{}-{}-delivery",
             value_str(&composition, "id").unwrap_or("composition"),
             safe_id(&clip.id)
-        )),
+        ))),
     );
     object.insert(
         "name".to_string(),
@@ -51,6 +51,11 @@ pub(super) fn write_clip_proposal_composition(
         if let Some(Value::Object(selected)) = clips.first_mut() {
             selected.insert("duration".to_string(), json!(format!("{duration_ms}ms")));
             selected.insert("duration_ms".to_string(), json!(duration_ms));
+            apply_video_source_range(
+                selected,
+                start_ms.saturating_sub(clip.start_ms),
+                end_ms.saturating_sub(clip.start_ms),
+            );
             selected.insert(
                 "source_range".to_string(),
                 json!({
@@ -199,13 +204,48 @@ fn copy_project_components(source_root: &Path, temp_root: &Path) -> Result<(), S
     let source = source_root.join("components");
     let target = temp_root.join("components");
     if !source.is_dir() {
-        return Err(error_json(
-            "EXPORT_FAILED",
-            format!("component directory missing: {}", source.display()),
-            "next step · export from a composition project with components/",
-        ));
+        return Ok(());
     }
     copy_dir_recursive(&source, &target)
+}
+
+fn apply_video_source_range(clip: &mut serde_json::Map<String, Value>, start_ms: u64, end_ms: u64) {
+    let Some(tracks) = clip.get_mut("tracks").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for track in tracks {
+        let Some(track_object) = track.as_object_mut() else {
+            continue;
+        };
+        if track_object.get("kind").and_then(Value::as_str) != Some("video") {
+            continue;
+        }
+        set_video_range_params(track_object, start_ms, end_ms);
+        if let Some(items) = track_object.get_mut("items").and_then(Value::as_array_mut) {
+            for item in items {
+                if let Some(item_object) = item.as_object_mut() {
+                    set_video_range_params(item_object, start_ms, end_ms);
+                }
+            }
+        }
+    }
+}
+
+fn set_video_range_params(target: &mut serde_json::Map<String, Value>, start_ms: u64, end_ms: u64) {
+    let params = target
+        .entry("params".to_string())
+        .or_insert_with(|| json!({}));
+    let Some(object) = params.as_object_mut() else {
+        *params = json!({});
+        let Some(object) = params.as_object_mut() else {
+            return;
+        };
+        object.insert("source_start_ms".to_string(), json!(start_ms));
+        object.insert("source_end_ms".to_string(), json!(end_ms));
+        return;
+    };
+    object.insert("source_start_ms".to_string(), json!(start_ms));
+    object.insert("source_end_ms".to_string(), json!(end_ms));
 }
 
 fn copy_dir_recursive(source: &Path, target: &Path) -> Result<(), String> {
@@ -316,6 +356,33 @@ fn safe_id(value: &str) -> String {
     }
 }
 
+fn safe_timeline_slug(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|ch| {
+            let lower = ch.to_ascii_lowercase();
+            if lower.is_ascii_alphanumeric() || lower == '-' || lower == '.' {
+                lower
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+    let slug = if sanitized
+        .chars()
+        .next()
+        .map(|ch| ch.is_ascii_alphabetic())
+        .unwrap_or(false)
+    {
+        sanitized
+    } else {
+        format!("clip-{sanitized}")
+    };
+    slug.chars().take(64).collect()
+}
+
 fn read_json(path: &Path) -> Result<Value, String> {
     let text = fs::read_to_string(path).map_err(|err| {
         error_json(
@@ -361,97 +428,5 @@ fn error_json(code: &str, message: impl Into<String>, hint: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn clip_proposal_composition_contains_selected_scene_only()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let root = unique_dir("clip-proposal");
-        let project = root.join("demo");
-        fs::create_dir_all(project.join("components"))?;
-        fs::create_dir_all(project.join("compositions"))?;
-        fs::write(
-            project.join("components/html.capy-title.js"),
-            "export function mount() {}\nexport function update() {}\n",
-        )?;
-        let composition = project.join("compositions/main.json");
-        write_json(
-            &composition,
-            &json!({
-                "schema": "capy.timeline.composition.v2",
-                "schema_version": "capy.composition.v2",
-                "id": "demo",
-                "name": "Demo",
-                "viewport": { "w": 1920, "h": 1080, "ratio": "16:9" },
-                "theme": "default",
-                "clips": [
-                    {
-                        "id": "intro",
-                        "name": "Intro",
-                        "duration": "2s",
-                        "tracks": [{
-                            "id": "stage",
-                            "kind": "component",
-                            "component": "html.capy-title",
-                            "items": [{ "id": "headline", "params": { "title": "Intro" } }]
-                        }]
-                    },
-                    {
-                        "id": "export",
-                        "name": "Export",
-                        "duration": "3s",
-                        "tracks": [{
-                            "id": "stage",
-                            "kind": "component",
-                            "component": "html.capy-title",
-                            "items": [{ "id": "headline", "params": { "title": "Export" } }]
-                        }]
-                    }
-                ]
-            }),
-        )?;
-
-        let out = write_clip_proposal_composition(
-            &composition,
-            &json!({ "range": { "clip_id": "export", "start_ms": 2000, "end_ms": 5000 } }),
-            "job-test",
-        )?;
-        let clipped = read_json(&out)?;
-
-        assert_eq!(clipped["duration_ms"], json!(3000));
-        assert_eq!(clipped["clips"].as_array().map(Vec::len), Some(1));
-        assert_eq!(clipped["clips"][0]["id"], json!("export"));
-        assert!(
-            out.display()
-                .to_string()
-                .contains("exports/clip-proposals/job-test/compositions/main.json")
-        );
-        let proposal_root = out
-            .parent()
-            .and_then(Path::parent)
-            .ok_or("missing proposal root")?;
-        assert!(
-            proposal_root
-                .join("components/html.capy-title.js")
-                .is_file()
-        );
-        let _ = fs::remove_dir_all(root);
-        Ok(())
-    }
-
-    fn unique_dir(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "capy-timeline-editor-{label}-{}-{}",
-            std::process::id(),
-            timestamp_millis()
-        ))
-    }
-
-    fn timestamp_millis() -> u128 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_millis())
-            .unwrap_or(0)
-    }
-}
+#[path = "clip_delivery_tests.rs"]
+mod clip_delivery_tests;

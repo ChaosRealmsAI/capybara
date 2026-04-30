@@ -14,9 +14,9 @@ mod live;
     disable_help_subcommand = true,
     after_help = "AI quick start:
   Use `capy project --help` as the index and `capy help project` for the full workflow.
-  Common commands: init, inspect, design-language inspect, design-language validate, workbench, generate, campaign, run, add-design, add-artifact.
+  Common commands: init, inspect, design-language inspect, design-language validate, workbench, import-video, generate, campaign, run, add-design, add-artifact.
   Required params: all commands use --project <dir>; generate needs --artifact, --provider, and --prompt; selected target context uses --selector, --json-pointer, or --canvas-node; campaign needs --brief; live SDK generation also needs --live; run decisions need a run id.
-  Pitfalls: paths must live inside the project root; validate design language before live generation; use --review for AI proposals; accept is the only review action that mutates source files.
+  Pitfalls: paths must live inside the project root; import-video uses local ffprobe/ffmpeg only; validate design language before live generation; use --review for AI proposals; accept is the only review action that mutates source files.
   Help topic: `capy help project`."
 )]
 pub struct ProjectArgs {
@@ -34,6 +34,8 @@ enum ProjectCommand {
     DesignLanguage(ProjectDesignLanguageArgs),
     #[command(about = "Print the six-card project workbench view")]
     Workbench(ProjectPathArgs),
+    #[command(about = "Import one local project video and materialize preview metadata")]
+    ImportVideo(ProjectImportVideoArgs),
     #[command(about = "Generate or plan one project artifact through CLI providers")]
     Generate(ProjectGenerateArgs),
     #[command(about = "Review, accept, reject, retry, or undo AI project runs")]
@@ -102,6 +104,16 @@ struct ProjectAddArtifactArgs {
     title: String,
     #[arg(long = "design-ref")]
     design_refs: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+struct ProjectImportVideoArgs {
+    #[arg(long)]
+    project: PathBuf,
+    #[arg(long)]
+    path: PathBuf,
+    #[arg(long)]
+    title: Option<String>,
 }
 
 #[derive(Debug, Clone, ValueEnum)]
@@ -280,6 +292,14 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
         ProjectCommand::Workbench(args) => {
             let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
             serde_json::to_value(package.workbench().map_err(|err| err.to_string())?)
+        }
+        ProjectCommand::ImportVideo(args) => {
+            let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
+            serde_json::to_value(
+                package
+                    .import_video_artifact(args.path, args.title)
+                    .map_err(|err| err.to_string())?,
+            )
         }
         ProjectCommand::Generate(args) => {
             if [args.dry_run, args.write, args.review]
