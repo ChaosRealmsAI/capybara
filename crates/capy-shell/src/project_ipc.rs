@@ -10,7 +10,7 @@ use capy_contracts::project::{
     OP_PROJECT_GENERATE, OP_PROJECT_INSPECT, OP_PROJECT_RUN_ACCEPT, OP_PROJECT_RUN_LIST,
     OP_PROJECT_RUN_REJECT, OP_PROJECT_RUN_RETRY, OP_PROJECT_RUN_SHOW, OP_PROJECT_RUN_UNDO,
     OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES, OP_PROJECT_VIDEO_CLIP_QUEUE_GET,
-    OP_PROJECT_VIDEO_CLIP_QUEUE_SET, OP_PROJECT_WORKBENCH,
+    OP_PROJECT_VIDEO_CLIP_QUEUE_SET, OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST, OP_PROJECT_WORKBENCH,
 };
 use capy_project::{
     ArtifactKind, ContextBuildRequest, GENERATE_RUN_SCHEMA_VERSION, PatchDocumentV1,
@@ -32,6 +32,7 @@ pub(crate) fn handles(op: &str) -> bool {
             | OP_PROJECT_SURFACE_NODE_UPDATE
             | OP_PROJECT_VIDEO_CLIP_QUEUE_GET
             | OP_PROJECT_VIDEO_CLIP_QUEUE_SET
+            | OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST
             | OP_PROJECT_GENERATE
             | OP_PROJECT_RUN_LIST
             | OP_PROJECT_RUN_SHOW
@@ -57,6 +58,9 @@ pub(crate) fn response(request: IpcRequest) -> IpcResponse {
         OP_PROJECT_SURFACE_NODE_UPDATE => crate::project_ipc_surface::update(&request.params),
         OP_PROJECT_VIDEO_CLIP_QUEUE_GET => crate::project_ipc_clip_queue::get(&request.params),
         OP_PROJECT_VIDEO_CLIP_QUEUE_SET => crate::project_ipc_clip_queue::set(&request.params),
+        OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST => {
+            crate::project_ipc_clip_queue::suggest(&request.params)
+        }
         OP_PROJECT_GENERATE => project_generate(&request.params),
         OP_PROJECT_RUN_LIST => project_run_list(&request.params),
         OP_PROJECT_RUN_SHOW => project_run_show(&request.params),

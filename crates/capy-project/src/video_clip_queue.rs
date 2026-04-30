@@ -37,6 +37,10 @@ pub struct ProjectVideoClipQueueItemV1 {
     pub duration_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_video: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggestion_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggestion_reason: Option<String>,
     pub updated_at: u64,
 }
 
@@ -125,6 +129,10 @@ impl ProjectPackage {
             end_ms,
             duration_ms,
             source_video: item.source_video,
+            suggestion_id: item.suggestion_id.filter(|value| !value.trim().is_empty()),
+            suggestion_reason: item
+                .suggestion_reason
+                .filter(|value| !value.trim().is_empty()),
             updated_at: now,
         })
     }
@@ -215,6 +223,8 @@ mod tests {
             end_ms: 2000,
             duration_ms: 1,
             source_video: Some(serde_json::json!({ "filename": "camera-a.webm" })),
+            suggestion_id: Some("sug-demo".to_string()),
+            suggestion_reason: Some("保留已选开场".to_string()),
             updated_at: 0,
         }])?;
         assert_eq!(written.schema_version, VIDEO_CLIP_QUEUE_SCHEMA_VERSION);
@@ -232,6 +242,7 @@ mod tests {
             .as_ref()
             .ok_or("source video metadata should round-trip")?;
         assert_eq!(source_video["filename"], "camera-a.webm");
+        assert_eq!(reopened.items[0].suggestion_id.as_deref(), Some("sug-demo"));
         Ok(())
     }
 }

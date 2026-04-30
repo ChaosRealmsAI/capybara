@@ -1,20 +1,24 @@
-import {
-  normalizedQueue,
-  queueFromManifest,
-  queueExportRange,
-  queueItemFromRange,
-  queueManifestItem,
-  queueTotalDuration,
-  renumberQueue,
-  renderQueue
-} from "./video-clip-queue.js";
+import { normalizedQueue, queueFromManifest, queueExportRange, queueItemFromRange, queueManifestItem, queueTotalDuration, renumberQueue, renderQueue } from "./video-clip-queue.js";
+import { createVideoClipSuggestionController } from "./video-clip-suggestion.js";
 
 export function createVideoClipDeliveryController(ctx) {
   const { state, dom, rpc, projectPath, stringifyError, exportComposition, seek, renderVideoEditor, selectedTrack, firstTrackForClip } = ctx;
   let persistSerial = 0;
+  const clipSuggestion = createVideoClipSuggestionController({
+    state,
+    dom,
+    rpc,
+    projectPath,
+    stringifyError,
+    renderVideoEditor,
+    renderDelivery: render,
+    formatTime,
+    escapeHtml
+  });
 
   function install() {
     dom.videoProposalGenerateEl?.addEventListener("click", () => generateClipProposal());
+    dom.videoSuggestionGenerateEl?.addEventListener("click", () => clipSuggestion.generate());
     dom.videoQueueAddEl?.addEventListener("click", () => addCurrentRangeToQueue());
     dom.videoRangeStartEl?.addEventListener("input", () => updateRangeFromInputs());
     dom.videoRangeEndEl?.addEventListener("input", () => updateRangeFromInputs());
@@ -45,6 +49,7 @@ export function createVideoClipDeliveryController(ctx) {
     syncRangeInputs(range);
     renderRangeSummary(range);
     renderQueue({ state, dom, moveQueueItem, removeQueueItem, formatTime, escapeHtml });
+    clipSuggestion.render();
     renderProposal();
   }
 

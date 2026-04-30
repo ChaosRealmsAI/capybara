@@ -6,6 +6,12 @@ use clap::{Args, Subcommand};
 use serde_json::Value;
 
 #[derive(Debug, Args)]
+#[command(after_help = "AI quick start:
+  Use when: AI or desktop verification needs to inspect, seed, or locally suggest the project-level linear video clip queue.
+  Required params: every command needs --project <dir>; write also needs --manifest <queue.json>.
+  Outputs: inspect/write return capy.project-video-clip-queue.v1; suggest returns capy.project-video-clip-suggestion.v1 with ordered items and reasons.
+  Pitfalls: this is a linear edit queue, not a multi-track NLE; suggest is a no-spend deterministic planner and must not call paid providers; all paths must live inside the project root.
+  Next step: after suggest, adopt through desktop UI or write a queue manifest, then verify with project clip-queue inspect and a real export.")]
 pub(crate) struct ProjectClipQueueArgs {
     #[command(subcommand)]
     command: ProjectClipQueueCommand,
@@ -17,6 +23,17 @@ enum ProjectClipQueueCommand {
     Inspect(ProjectClipQueuePathArgs),
     #[command(about = "Write .capy/video-clip-queue.json from a manifest JSON file")]
     Write(ProjectClipQueueWriteArgs),
+    #[command(
+        about = "Suggest an explainable linear queue from project videos and the persisted queue",
+        after_help = "AI quick start:
+  Use when: a no-spend local planner should propose an explainable clip order before the user adopts it.
+  Required params: --project <dir>.
+  Output: capy.project-video-clip-suggestion.v1 JSON with suggestion_id, rationale, source_video_count, existing_queue_count, and items[] containing source, range, duration, and reason.
+  State effects: read-only; it does not mutate .capy/video-clip-queue.json.
+  Do not: treat this as creative model output, call provider SDKs, or add transitions/subtitles/audio mixing.
+  Verify: run project clip-queue inspect before and after adoption, then export the adopted queue."
+    )]
+    Suggest(ProjectClipQueuePathArgs),
 }
 
 #[derive(Debug, Args)]
@@ -46,6 +63,14 @@ pub(crate) fn handle_clip_queue(args: ProjectClipQueueArgs) -> Result<Value, ser
             serde_json::to_value(
                 package
                     .write_video_clip_queue(manifest.items)
+                    .map_err(string_json_error)?,
+            )
+        }
+        ProjectClipQueueCommand::Suggest(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .suggest_video_clip_queue()
                     .map_err(string_json_error)?,
             )
         }

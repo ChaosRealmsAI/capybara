@@ -85,7 +85,7 @@ pub(in crate::app::timeline_editor) fn write_clip_queue_proposal_composition(
             );
         }
         queued_clips.push(queued_clip);
-        delivery_items.push(json!({
+        let mut delivery_item = json!({
             "sequence": sequence,
             "clip_id": clip.id,
             "scene": scene,
@@ -93,7 +93,14 @@ pub(in crate::app::timeline_editor) fn write_clip_queue_proposal_composition(
             "end_ms": end_ms,
             "duration_ms": duration_ms,
             "source_composition_path": item_composition_path.display().to_string()
-        }));
+        });
+        if let Some(suggestion_id) = item.get("suggestion_id").and_then(Value::as_str) {
+            delivery_item["suggestion_id"] = json!(suggestion_id);
+        }
+        if let Some(reason) = item.get("suggestion_reason").and_then(Value::as_str) {
+            delivery_item["suggestion_reason"] = json!(reason);
+        }
+        delivery_items.push(delivery_item);
         total_duration_ms = total_duration_ms.saturating_add(duration_ms);
         let item_root = project_root_for_composition(&item_composition_path);
         if item_root != source_root {

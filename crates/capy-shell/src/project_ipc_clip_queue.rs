@@ -28,6 +28,17 @@ pub(crate) fn set(params: &Value) -> Result<Value, String> {
     .map_err(|err| err.to_string())
 }
 
+pub(crate) fn suggest(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .suggest_video_clip_queue()
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
 fn required_path(params: &Value, key: &str) -> Result<PathBuf, String> {
     params
         .get(key)

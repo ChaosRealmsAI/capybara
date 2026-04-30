@@ -2,7 +2,7 @@
   min-width: 0;
   min-height: 168px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) minmax(28px, auto);
+  grid-template-rows: auto auto minmax(0, 1fr) auto minmax(28px, auto);
   gap: 8px;
   padding: 10px;
   border-radius: 14px;
@@ -13,7 +13,7 @@
 .video-delivery-head {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   align-items: center;
   gap: 10px;
 }
@@ -125,6 +125,15 @@
   font: 10px/1.25 var(--f-mono);
 }
 
+.video-queue-copy em {
+  min-width: 0;
+  color: #8a4b5a;
+  font: 10px/1.35 var(--f-ui);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .video-queue-actions {
   grid-column: 1 / -1;
   display: flex;
@@ -143,6 +152,72 @@
   font-size: 12px;
   line-height: 1.4;
   overflow: auto;
+}
+
+.video-suggestion {
+  min-width: 0;
+  max-height: 172px;
+  padding: 9px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 0.5px solid rgba(138, 111, 174, 0.22);
+  color: #51445f;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: auto;
+}
+
+.video-suggestion p {
+  margin: 6px 0 8px;
+}
+
+.video-suggestion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.video-suggestion-head span,
+.video-suggestion-head strong {
+  display: block;
+}
+
+.video-suggestion-head span {
+  color: #7a6f66;
+  font: 10px/1.2 var(--f-mono);
+  text-transform: uppercase;
+}
+
+.video-suggestion-head strong {
+  margin-top: 2px;
+  color: #2a211a;
+  font-size: 12px;
+}
+
+.video-suggestion-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.video-suggestion-list li {
+  margin: 0 0 7px;
+}
+
+.video-suggestion-list strong,
+.video-suggestion-list span,
+.video-suggestion-list em {
+  display: block;
+}
+
+.video-suggestion-list span {
+  color: #6f6258;
+  font: 10px/1.35 var(--f-mono);
+}
+
+.video-suggestion-list em {
+  color: #8a4b5a;
+  font-style: normal;
 }
 
 .video-proposal p {

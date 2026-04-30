@@ -14,6 +14,7 @@ mod review;
 mod selection_context;
 mod surface_nodes;
 mod video_clip_queue;
+mod video_clip_suggestion;
 mod video_import;
 mod workbench;
 
@@ -38,5 +39,9 @@ pub use package::{CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageR
 pub use selection_context::{SelectionBoundsV1, SelectionContextV1};
 pub use video_clip_queue::{
     ProjectVideoClipQueueItemV1, ProjectVideoClipQueueManifestV1, VIDEO_CLIP_QUEUE_SCHEMA_VERSION,
+};
+pub use video_clip_suggestion::{
+    ProjectVideoClipSuggestionItemV1, ProjectVideoClipSuggestionV1,
+    VIDEO_CLIP_SUGGESTION_SCHEMA_VERSION,
 };
 pub use video_import::{VIDEO_IMPORT_SCHEMA_VERSION, VideoImportMetadataV1, VideoImportResultV1};
