@@ -69,6 +69,7 @@ export const state = {
     selectedCardId: null,
     previewSource: "",
     generation: null,
+    review: null,
     error: null
   },
   poster: {

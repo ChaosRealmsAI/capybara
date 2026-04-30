@@ -20,6 +20,7 @@ export function createStateSnapshot({ state, normalizeValue, posterDocumentsStat
         surfaceNodeCount: state.projectPackage.surfaceNodes?.nodes?.length || 0,
         artifactNodes: state.projectPackage.artifactNodes,
         generation: state.projectPackage.generation,
+        review: state.projectPackage.review,
         error: state.projectPackage.error
       },
       video: state.video,

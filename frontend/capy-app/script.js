@@ -125,7 +125,6 @@ videoEditorApi = createVideoEditor({
   renderGameAssetsWorkspace: (...args) => gameAssetsWorkspaceApi.renderGameAssetsWorkspace(...args),
   ensureGameAssetsPack: (...args) => gameAssetsWorkspaceApi.ensureDefaultPack(...args),
 });
-
 projectPackageApi = createProjectPackageWiring({
   state,
   rpc,
@@ -237,6 +236,10 @@ installWindowFacade({
     selectProjectArtifactNode: (...args) => projectPackageApi.selectArtifactNode(...args),
     buildSelectedProjectContext: (...args) => projectPackageApi.buildSelectedContext(...args),
     generateSelectedProjectArtifact: (...args) => projectPackageApi.generateSelectedArtifact(...args),
+    acceptSelectedProjectReview: (...args) => projectPackageApi.acceptSelectedReview(...args),
+    rejectSelectedProjectReview: (...args) => projectPackageApi.rejectSelectedReview(...args),
+    retrySelectedProjectReview: (...args) => projectPackageApi.retrySelectedReview(...args),
+    undoSelectedProjectReview: (...args) => projectPackageApi.undoSelectedReview(...args),
     switchWorkspaceTab: (...args) => videoEditorApi.switchWorkspace(...args),
     openVideoComposition: (...args) => videoEditorApi.openComposition(...args),
     renderVideoEditor: (...args) => videoEditorApi.renderVideoEditor(...args),
@@ -443,5 +446,4 @@ async function init() {
     conversationsApi.renderError(error);
   }
 }
-
 init();

@@ -28,6 +28,12 @@ require_canvas_tool() {
 require_text frontend/capy-app/script.js "setPlannerMessages"
 require_text frontend/capy-app/script.js "setPlannerStreaming"
 require_text frontend/capy-app/script.js "setPlannerRunStatus"
+require_text frontend/capy-app/app/ai-diff.js 'data-ai-diff-action="accept"'
+require_text frontend/capy-app/app/ai-diff.js 'data-ai-diff-action="reject"'
+require_text frontend/capy-app/app/ai-diff.js 'data-ai-diff-action="retry"'
+require_text frontend/capy-app/app/ai-diff.js 'data-ai-diff-action="undo"'
+require_text frontend/capy-app/script.js "acceptSelectedProjectReview"
+require_text frontend/capy-app/script.js "undoSelectedProjectReview"
 require_text frontend/capy-app/app/conversations.js "if (isRunning) messagesEl.append(loadingMessageNode())"
 require_text frontend/capy-app/app/html-preview-renderer.js "html-artifact"
 require_text frontend/capy-app/app/html-preview-renderer.js "html-source"

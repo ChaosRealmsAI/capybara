@@ -25,7 +25,7 @@ pub(super) const PROJECT_HELP: &str = r#"
 Topic: capy project
 
 Use when: AI or a workflow needs a local `.capy` file package that carries project metadata, design-language assets, source artifacts, runs, and evidence.
-Required parameters: every command needs `--project <dir>`. `generate` needs `--artifact <id>`, `--provider fixture|codex|claude`, and `--prompt <text>`. Add `--live` to actually call the Claude/Codex SDK. `design-language inspect|validate` needs only `--project`.
+Required parameters: every command needs `--project <dir>`. `generate` needs `--artifact <id>`, `--provider fixture|codex|claude`, and `--prompt <text>`. Add `--live` to actually call the Claude/Codex SDK. `design-language inspect|validate` needs only `--project`. Review decisions use `project run <accept|reject|retry|undo> --project <dir> <run_id>`.
 Recommended commands:
 1. `target/debug/capy project init --project <dir> --name "Campaign"`
 2. `target/debug/capy project add-design --project <dir> --path design/tokens.css --kind css --role tokens --title "Tokens"`
@@ -34,11 +34,12 @@ Recommended commands:
 5. `target/debug/capy project add-artifact --project <dir> --path web/index.html --kind html --title "Landing" --design-ref <dl_id>`
 6. `target/debug/capy project inspect --project <dir>`
 7. `target/debug/capy project workbench --project <dir>`
-8. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Make this clearer" --dry-run`
-9. For real AI prompt evidence, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --sdk-response <fixture.json> --dry-run --save-prompt <prompt.json>`
-10. Copy the project, then run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider fixture --prompt "Make this clearer" --write`
-Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact; let models edit `.capy` metadata directly; run live `codex` or `claude` provider commands when no-spend fixture mode is enough; claim a design language affects AI before validate/inspect and generate run records show the same `design_language_ref`.
-Next step: build context with `capy context build --project <dir> --artifact <art_id>`, or open the desktop workbench for visible card evidence.
+8. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Make this clearer" --review`
+9. `target/debug/capy project run show --project <dir> <run_id>`
+10. `target/debug/capy project run accept --project <dir> <run_id>`
+11. For real AI prompt evidence, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --sdk-response <fixture.json> --review --save-prompt <prompt.json>`
+Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact; let models edit `.capy` metadata directly; accept stale proposals after the source hash changed; run live `codex` or `claude` provider commands when no-spend fixture mode is enough; claim a design language affects AI before validate/inspect and generate run records show the same `design_language_ref`.
+Next step: review `run.review.diff_summary`, then accept, reject, retry, or undo through `capy project run`; or open the desktop workbench for visible card evidence.
 "#;
 
 pub(super) const PROJECT_CONTEXT_HELP: &str = r#"
@@ -61,9 +62,9 @@ Patch schema: `capy.patch.v1`; first operation is `replace_exact_text` with `art
 Recommended commands:
 1. `target/debug/capy patch apply --project <dir> --patch patch.json --dry-run`
 2. `target/debug/capy patch apply --project <dir> --patch patch.json`
-3. `target/debug/capy context build --project <dir> --artifact <art_id> --selector <css>`
-Do not: patch derived screenshots or outputs; skip dry-run for AI-generated patches; use vague text that matches multiple places.
-Next step: reopen or refresh the surface and capture evidence.
+3. Prefer `target/debug/capy project generate --project <dir> --artifact <art_id> --provider codex --live --review` when the edit comes from AI.
+Do not: patch derived screenshots or outputs; skip review for AI-generated patches; use vague text that matches multiple places.
+Next step: accept/reject the project review run or reopen the surface and capture evidence after a manual patch.
 "#;
 
 pub(super) const DOCTOR_HELP: &str = r#"

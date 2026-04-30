@@ -1,5 +1,6 @@
 import { projectGenerateMessageContent } from "./planner-message-whitelist.js";
 import { createProjectArtifactNodes } from "./project-artifact-nodes.js";
+import { createAiDiffReviewPanel, reviewRunId } from "./ai-diff.js";
 
 export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage, canvasApi = {} }) {
   const {
@@ -18,6 +19,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     effortEl,
   } = dom;
   const artifactNodes = createProjectArtifactNodes({ state, rpc, canvasApi, stringifyError });
+  const aiDiffPanel = createAiDiffReviewPanel(projectPackagePanelEl);
 
   async function loadProjectPackage(projectPath = window.CAPYBARA_SESSION?.project) {
     if (!projectPath || projectPath === "demo") {
@@ -40,6 +42,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       state.projectPackage.selectedCardId = firstCard?.id || null;
       state.projectPackage.selectedArtifactId = firstCard?.id?.startsWith("art_") ? firstCard.id : null;
       state.projectPackage.previewSource = "";
+      state.projectPackage.review = null;
       await refreshSelectedPreview();
       state.projectPackage.status = "ready";
       renderProjectPackage();
@@ -74,6 +77,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     const prompt = options.prompt || promptEl?.value.trim() || `Revise ${artifact.title || artifact.id} using project design language.`;
     const provider = options.provider || providerEl?.value || "codex";
     const live = options.live === undefined ? provider !== "fixture" : Boolean(options.live);
+    const review = options.review === undefined ? true : Boolean(options.review);
     state.projectPackage.status = "generating";
     renderProjectPackage();
     try {
@@ -83,12 +87,14 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
         provider,
         prompt,
         dry_run: options.dryRun === true ? true : false,
+        review,
         live,
         model: options.model || modelEl?.value || null,
         effort: options.effort || effortEl?.value || null,
         sdk_response: options.sdkResponse || null
       });
       state.projectPackage.generation = result;
+      state.projectPackage.review = result?.run?.review ? result : null;
       if (result.preview_source) state.projectPackage.previewSource = result.preview_source;
       state.projectPackage.workbench = await rpc("project-workbench", { project: state.projectPackage.path });
       state.projectPackage.status = "ready";
@@ -132,6 +138,92 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     if (projectPreviewFrameEl) {
       projectPreviewFrameEl.srcdoc = previewFrameSource(selectedArtifact(), packageState.previewSource);
     }
+    aiDiffPanel.render(packageState.review, {
+      accept: () => acceptSelectedReview().catch(() => {}),
+      reject: () => rejectSelectedReview().catch(() => {}),
+      retry: () => retrySelectedReview().catch(() => {}),
+      undo: () => undoSelectedReview().catch(() => {}),
+    });
+  }
+
+  async function acceptSelectedReview() {
+    const result = await decideReview("project-run-accept");
+    await refreshSelectedPreview();
+    renderProjectPackage();
+    appendPlannerMessage?.(projectReviewMessage(result, "接受"));
+    return result;
+  }
+
+  async function rejectSelectedReview() {
+    const result = await decideReview("project-run-reject");
+    await refreshSelectedPreview();
+    renderProjectPackage();
+    appendPlannerMessage?.(projectReviewMessage(result, "拒绝"));
+    return result;
+  }
+
+  async function retrySelectedReview() {
+    const runId = currentReviewRunId();
+    if (!runId || !state.projectPackage.path) throw new Error("No review run selected");
+    state.projectPackage.status = "generating";
+    renderProjectPackage();
+    try {
+      const result = await rpc("project-run-retry", {
+        project: state.projectPackage.path,
+        run_id: runId,
+        actor: "desktop"
+      });
+      state.projectPackage.generation = result;
+      state.projectPackage.review = result?.run?.review ? result : null;
+      if (result.preview_source) state.projectPackage.previewSource = result.preview_source;
+      state.projectPackage.status = "ready";
+      renderProjectPackage();
+      appendPlannerMessage?.(projectReviewMessage(result, "重试"));
+      return result;
+    } catch (error) {
+      state.projectPackage.status = "error";
+      state.projectPackage.error = stringifyError(error);
+      renderProjectPackage();
+      throw error;
+    }
+  }
+
+  async function undoSelectedReview() {
+    const result = await decideReview("project-run-undo");
+    await refreshSelectedPreview();
+    renderProjectPackage();
+    appendPlannerMessage?.(projectReviewMessage(result, "撤销"));
+    return result;
+  }
+
+  async function decideReview(op) {
+    const runId = currentReviewRunId();
+    if (!runId || !state.projectPackage.path) throw new Error("No review run selected");
+    state.projectPackage.status = "generating";
+    renderProjectPackage();
+    try {
+      const result = await rpc(op, {
+        project: state.projectPackage.path,
+        run_id: runId,
+        actor: "desktop"
+      });
+      state.projectPackage.generation = result;
+      state.projectPackage.review = result?.run?.review ? result : null;
+      if (result.preview_source) state.projectPackage.previewSource = result.preview_source;
+      state.projectPackage.workbench = await rpc("project-workbench", { project: state.projectPackage.path });
+      state.projectPackage.status = "ready";
+      renderProjectPackage();
+      return result;
+    } catch (error) {
+      state.projectPackage.status = "error";
+      state.projectPackage.error = stringifyError(error);
+      renderProjectPackage();
+      throw error;
+    }
+  }
+
+  function currentReviewRunId() {
+    return reviewRunId(state.projectPackage.review);
   }
 
   function renderWorkbench() {
@@ -259,6 +351,10 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     loadProjectPackage,
     buildSelectedContext,
     generateSelectedArtifact,
+    acceptSelectedReview,
+    rejectSelectedReview,
+    retrySelectedReview,
+    undoSelectedReview,
     selectedArtifact,
     renderProjectPackage,
     syncProjectArtifactNodes: artifactNodes.syncProjectArtifactNodes,
@@ -321,5 +417,15 @@ function projectGenerateMessage(result, artifact) {
   return {
     role: "assistant",
     content: projectGenerateMessageContent(result, artifact)
+  };
+}
+
+function projectReviewMessage(result, label) {
+  const run = result?.run || {};
+  const status = run?.review?.status || run.status || "";
+  const changed = (run.changed_artifact_refs || []).join(", ") || run.artifact_id || "";
+  return {
+    role: "assistant",
+    content: `### AI Diff ${label}\n\n- Artifact: ${changed}\n- Status: ${status}\n- Run: ${run.id || ""}`
   };
 }

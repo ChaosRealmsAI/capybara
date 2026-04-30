@@ -331,6 +331,7 @@ mod tests {
             provider: "codex".to_string(),
             prompt: "Improve the headline".to_string(),
             dry_run: true,
+            review: false,
         })?;
 
         assert!(prompt.prompt.contains(":root { --brand: red; }"));

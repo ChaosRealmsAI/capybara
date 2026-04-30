@@ -6,8 +6,9 @@ use capy_agent_runtime::{AgentSdkRunRequest, run_sdk_json};
 use capy_contracts::ipc::{IpcRequest, IpcResponse};
 use capy_contracts::project::{
     OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY, OP_PROJECT_GENERATE,
-    OP_PROJECT_INSPECT, OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES,
-    OP_PROJECT_WORKBENCH,
+    OP_PROJECT_INSPECT, OP_PROJECT_RUN_ACCEPT, OP_PROJECT_RUN_LIST, OP_PROJECT_RUN_REJECT,
+    OP_PROJECT_RUN_RETRY, OP_PROJECT_RUN_SHOW, OP_PROJECT_RUN_UNDO, OP_PROJECT_SURFACE_NODE_UPDATE,
+    OP_PROJECT_SURFACE_NODES, OP_PROJECT_WORKBENCH,
 };
 use capy_project::{
     ArtifactKind, ContextBuildRequest, GENERATE_RUN_SCHEMA_VERSION, PatchDocumentV1,
@@ -29,6 +30,12 @@ pub(crate) fn handles(op: &str) -> bool {
             | OP_PROJECT_SURFACE_NODES
             | OP_PROJECT_SURFACE_NODE_UPDATE
             | OP_PROJECT_GENERATE
+            | OP_PROJECT_RUN_LIST
+            | OP_PROJECT_RUN_SHOW
+            | OP_PROJECT_RUN_ACCEPT
+            | OP_PROJECT_RUN_REJECT
+            | OP_PROJECT_RUN_RETRY
+            | OP_PROJECT_RUN_UNDO
     )
 }
 
@@ -43,6 +50,12 @@ pub(crate) fn response(request: IpcRequest) -> IpcResponse {
         OP_PROJECT_SURFACE_NODES => project_surface_nodes(&request.params),
         OP_PROJECT_SURFACE_NODE_UPDATE => project_surface_node_update(&request.params),
         OP_PROJECT_GENERATE => project_generate(&request.params),
+        OP_PROJECT_RUN_LIST => project_run_list(&request.params),
+        OP_PROJECT_RUN_SHOW => project_run_show(&request.params),
+        OP_PROJECT_RUN_ACCEPT => project_run_accept(&request.params),
+        OP_PROJECT_RUN_REJECT => project_run_reject(&request.params),
+        OP_PROJECT_RUN_RETRY => project_run_retry(&request.params),
+        OP_PROJECT_RUN_UNDO => project_run_undo(&request.params),
         _ => Err(format!("unknown project op: {}", request.op)),
     };
     match result {
@@ -124,6 +137,10 @@ fn project_generate(params: &Value) -> Result<Value, String> {
         provider,
         prompt: required_string(params, "prompt")?,
         dry_run,
+        review: params
+            .get("review")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     };
     let result = if live {
         project_generate_live(&package, &project, request, params)?
@@ -169,13 +186,31 @@ fn project_generate_live(
             ai_response.clone(),
         )
         .map_err(|err| err.to_string())?;
-    let patch_result = package
-        .apply_patch(patch.clone(), None, request.dry_run)
-        .map_err(|err| err.to_string())?;
     let preview_source = ai_response
         .artifacts
         .first()
         .map(|artifact| artifact.new_source.clone());
+    if request.review {
+        return package
+            .record_review_proposal(
+                &request,
+                patch,
+                json!({
+                    "context_id": prompt.context_id,
+                    "design_language_ref": prompt.design_language_ref,
+                    "design_language_summary": prompt.design_language_summary,
+                    "summary_zh": ai_response.summary_zh,
+                    "verify_notes": ai_response.verify_notes,
+                    "sdk": summarize_sdk_output(&sdk_output)
+                }),
+                preview_source,
+                None,
+            )
+            .map_err(|err| err.to_string());
+    }
+    let patch_result = package
+        .apply_patch(patch.clone(), None, request.dry_run)
+        .map_err(|err| err.to_string())?;
     let inspection = package.inspect().map_err(|err| err.to_string())?;
     let run = ProjectGenerateRunV1 {
         schema_version: GENERATE_RUN_SCHEMA_VERSION.to_string(),
@@ -212,12 +247,87 @@ fn project_generate_live(
             "patch": patch,
             "sdk": summarize_sdk_output(&sdk_output)
         })),
+        review: None,
         error: None,
         generated_at: now_ms(),
     };
     package
         .record_external_generate_run(run, preview_source, !request.dry_run)
         .map_err(|err| err.to_string())
+}
+
+fn project_run_list(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(package.list_project_runs().map_err(|err| err.to_string())?)
+        .map_err(|err| err.to_string())
+}
+
+fn project_run_show(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .show_project_run(&required_string(params, "run_id")?)
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
+fn project_run_accept(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .accept_review_run(
+                &required_string(params, "run_id")?,
+                &optional_string(params, "actor").unwrap_or_else(|| "desktop".to_string()),
+            )
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
+fn project_run_reject(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .reject_review_run(
+                &required_string(params, "run_id")?,
+                &optional_string(params, "actor").unwrap_or_else(|| "desktop".to_string()),
+            )
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
+fn project_run_retry(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .retry_review_run(
+                &required_string(params, "run_id")?,
+                &optional_string(params, "actor").unwrap_or_else(|| "desktop".to_string()),
+            )
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
+fn project_run_undo(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .undo_review_run(
+                &required_string(params, "run_id")?,
+                &optional_string(params, "actor").unwrap_or_else(|| "desktop".to_string()),
+            )
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
 }
 
 fn live_command_preview(
