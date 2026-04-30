@@ -234,6 +234,54 @@ if grep -q 'Project Context Launch' target/capy-project-ai-live/web/index.html; 
   echo "project check failed: project AI dry-run must not mutate HTML source" >&2
   exit 1
 fi
+rm -rf target/capy-project-ai-review
+cp -R fixtures/project/html-context target/capy-project-ai-review
+review_before_hash="$(shasum -a 256 target/capy-project-ai-review/web/index.html | awk '{print $1}')"
+project_ai_review="$("$CAPY_BIN" project generate \
+  --project target/capy-project-ai-review \
+  --artifact art_00000000000000000000000000000001 \
+  --provider codex \
+  --prompt "Make the launch page clearer" \
+  --live \
+  --sdk-response fixtures/project/html-context/sdk-response/project-ai-html.json \
+  --review)"
+if ! jq -e '.run.schema_version == "capy.project-generate-run.v1" and .run.status == "proposed" and .run.review.diff_summary.changed == true' \
+  <<<"$project_ai_review" >/dev/null; then
+  echo "project check failed: project AI review must return a proposed diff run" >&2
+  exit 1
+fi
+review_after_hash="$(shasum -a 256 target/capy-project-ai-review/web/index.html | awk '{print $1}')"
+if [[ "$review_before_hash" != "$review_after_hash" ]]; then
+  echo "project check failed: project AI review must not mutate HTML source" >&2
+  exit 1
+fi
+review_run_id="$(jq -r '.run.id' <<<"$project_ai_review")"
+"$CAPY_BIN" project run accept --project target/capy-project-ai-review "$review_run_id" >/dev/null
+if ! grep -q 'Project Context Launch' target/capy-project-ai-review/web/index.html; then
+  echo "project check failed: project AI review accept must mutate HTML source" >&2
+  exit 1
+fi
+"$CAPY_BIN" project run undo --project target/capy-project-ai-review "$review_run_id" >/dev/null
+if grep -q 'Project Context Launch' target/capy-project-ai-review/web/index.html; then
+  echo "project check failed: project AI review undo must restore previous source" >&2
+  exit 1
+fi
+rm -rf target/capy-project-ai-reject
+cp -R fixtures/project/html-context target/capy-project-ai-reject
+reject_before_hash="$(shasum -a 256 target/capy-project-ai-reject/web/index.html | awk '{print $1}')"
+project_ai_reject="$("$CAPY_BIN" project generate \
+  --project target/capy-project-ai-reject \
+  --artifact art_00000000000000000000000000000001 \
+  --provider fixture \
+  --prompt "Make launch copy clearer" \
+  --review)"
+reject_run_id="$(jq -r '.run.id' <<<"$project_ai_reject")"
+"$CAPY_BIN" project run reject --project target/capy-project-ai-reject "$reject_run_id" >/dev/null
+reject_after_hash="$(shasum -a 256 target/capy-project-ai-reject/web/index.html | awk '{print $1}')"
+if [[ "$reject_before_hash" != "$reject_after_hash" ]]; then
+  echo "project check failed: project review reject must leave source unchanged" >&2
+  exit 1
+fi
 "$CAPY_BIN" project generate \
   --project target/capy-project-ai-live \
   --artifact art_00000000000000000000000000000001 \

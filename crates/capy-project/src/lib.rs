@@ -8,6 +8,7 @@ mod generate;
 mod model;
 mod package;
 mod patch;
+mod review;
 mod workbench;
 
 pub use ai::{parse_project_ai_response, project_ai_output_schema};
@@ -15,8 +16,9 @@ pub use model::{
     ArtifactKind, ArtifactRefV1, ArtifactRegistryV1, ContextBuildRequest, ContextPackageV1,
     DesignLanguageAssetV1, DesignLanguageManifestV1, GENERATE_RUN_SCHEMA_VERSION,
     PatchApplyResultV1, PatchDocumentV1, PatchRunV1, ProjectAiArtifactV1, ProjectAiPromptV1,
-    ProjectAiResponseV1, ProjectGenerateRequestV1, ProjectGenerateResultV1, ProjectGenerateRunV1,
-    ProjectInspectionV1, ProjectManifestV1, ProjectWorkbenchCardV1, ProjectWorkbenchV1,
+    ProjectAiResponseV1, ProjectDiffSummaryV1, ProjectGenerateRequestV1, ProjectGenerateResultV1,
+    ProjectGenerateRunV1, ProjectInspectionV1, ProjectManifestV1, ProjectRunDecisionResultV1,
+    ProjectRunDecisionV1, ProjectRunReviewV1, ProjectWorkbenchCardV1, ProjectWorkbenchV1,
     ReplaceExactTextOperationV1, WorkbenchPreviewV1,
 };
 pub use package::{CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageResult};

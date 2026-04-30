@@ -1,8 +1,9 @@
 use serde_json::{Value, json};
 
 use crate::model::{
-    ArtifactKind, ArtifactRefV1, GENERATE_RUN_SCHEMA_VERSION, ProjectGenerateRequestV1,
-    ProjectGenerateResultV1, ProjectGenerateRunV1,
+    ArtifactKind, ArtifactRefV1, GENERATE_RUN_SCHEMA_VERSION, PATCH_SCHEMA_VERSION,
+    PatchDocumentV1, ProjectGenerateRequestV1, ProjectGenerateResultV1, ProjectGenerateRunV1,
+    ReplaceExactTextOperationV1,
 };
 use crate::package::{ProjectPackage, ProjectPackageError, ProjectPackageResult};
 use crate::package::{new_id, now_ms, write_string};
@@ -22,7 +23,7 @@ impl ProjectPackage {
         let mut run = ProjectGenerateRunV1 {
             schema_version: GENERATE_RUN_SCHEMA_VERSION.to_string(),
             id: new_id("gen"),
-            project_id: manifest.id,
+            project_id: manifest.id.clone(),
             artifact_id: artifact.id.clone(),
             provider: request.provider.clone(),
             prompt: request.prompt.clone(),
@@ -37,9 +38,51 @@ impl ProjectPackage {
             changed_artifact_refs: Vec::new(),
             evidence_refs: Vec::new(),
             output: None,
+            review: None,
             error: None,
             generated_at,
         };
+
+        if request.review {
+            if request.provider != "fixture" {
+                run.output = Some(json!({
+                    "mode": "plan",
+                    "message": "Review proposals for codex/claude require --live or --sdk-response so Capybara can parse model output into a patch."
+                }));
+                return Ok(ProjectGenerateResultV1 {
+                    run,
+                    run_path: None,
+                    artifact: Some(artifact),
+                    preview_source: None,
+                });
+            }
+            let current_source = self.read_artifact_source(&artifact.id)?;
+            let new_source = fixture_source(&artifact, &current_source, &request.prompt)?;
+            let patch = PatchDocumentV1 {
+                schema_version: PATCH_SCHEMA_VERSION.to_string(),
+                project_id: Some(manifest.id.clone()),
+                input_context_ref: None,
+                actor: Some("project-ai:fixture".to_string()),
+                operations: vec![ReplaceExactTextOperationV1 {
+                    op: "replace_exact_text".to_string(),
+                    artifact_id: artifact.id.clone(),
+                    source_path: Some(artifact.source_path.clone()),
+                    old_text: current_source,
+                    new_text: new_source.clone(),
+                    selector_hint: None,
+                }],
+            };
+            return self.record_review_proposal(
+                &request,
+                patch,
+                json!({
+                    "summary_zh": "已生成待审阅的 fixture 修改。",
+                    "verify_notes": ["接受后检查源文件和预览。"]
+                }),
+                Some(new_source),
+                None,
+            );
+        }
 
         if request.dry_run || request.provider != "fixture" {
             run.output = Some(json!({
@@ -73,7 +116,10 @@ impl ProjectPackage {
         })
     }
 
-    fn write_generate_run(&self, run: &ProjectGenerateRunV1) -> ProjectPackageResult<String> {
+    pub(crate) fn write_generate_run(
+        &self,
+        run: &ProjectGenerateRunV1,
+    ) -> ProjectPackageResult<String> {
         let relative = format!(".capy/runs/{}.json", run.id);
         self.write_json(&self.root().join(&relative), run)?;
         Ok(relative)
@@ -106,7 +152,7 @@ impl ProjectPackage {
         })
     }
 
-    fn mark_generated_artifact(
+    pub(crate) fn mark_generated_artifact(
         &self,
         artifact_id: &str,
         run_path: &str,
@@ -254,6 +300,7 @@ mod tests {
             provider: "fixture".to_string(),
             prompt: "Make launch copy clearer".to_string(),
             dry_run: false,
+            review: false,
         })?;
         assert_eq!(result.run.status, "completed");
         let run_path = result

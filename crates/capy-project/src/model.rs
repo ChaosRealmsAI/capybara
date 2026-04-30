@@ -11,6 +11,7 @@ pub const WORKBENCH_SCHEMA_VERSION: &str = "capy.project-workbench.v1";
 pub const GENERATE_RUN_SCHEMA_VERSION: &str = "capy.project-generate-run.v1";
 pub const PROJECT_AI_PROMPT_SCHEMA_VERSION: &str = "capy.project-ai-prompt.v1";
 pub const PROJECT_AI_RESPONSE_SCHEMA_VERSION: &str = "capy.project-ai-response.v1";
+pub const PROJECT_REVIEW_MODE: &str = "review";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -257,6 +258,8 @@ pub struct ProjectGenerateRequestV1 {
     pub provider: String,
     pub prompt: String,
     pub dry_run: bool,
+    #[serde(default)]
+    pub review: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -279,6 +282,8 @@ pub struct ProjectGenerateRunV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<ProjectRunReviewV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub generated_at: u64,
 }
@@ -290,6 +295,56 @@ pub struct ProjectGenerateResultV1 {
     pub run_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub artifact: Option<ArtifactRefV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview_source: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectRunReviewV1 {
+    pub mode: String,
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_run_id: Option<String>,
+    pub base_hash: String,
+    pub proposed_hash: String,
+    pub diff_summary: ProjectDiffSummaryV1,
+    #[serde(default)]
+    pub decisions: Vec<ProjectRunDecisionV1>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectDiffSummaryV1 {
+    pub artifact_id: String,
+    pub source_path: String,
+    pub old_hash: String,
+    pub new_hash: String,
+    pub old_bytes: usize,
+    pub new_bytes: usize,
+    pub removed_lines: usize,
+    pub added_lines: usize,
+    pub changed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old_preview: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_preview: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectRunDecisionV1 {
+    pub actor: String,
+    pub decision: String,
+    pub status: String,
+    #[serde(default)]
+    pub artifact_refs: Vec<String>,
+    pub decided_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectRunDecisionResultV1 {
+    pub run: ProjectGenerateRunV1,
+    pub run_path: String,
+    #[serde(default)]
+    pub changed_files: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview_source: Option<String>,
 }

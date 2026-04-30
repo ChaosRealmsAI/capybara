@@ -16,9 +16,9 @@ use uuid::Uuid;
     disable_help_subcommand = true,
     after_help = "AI quick start:
   Use `capy project --help` as the index and `capy help project` for the full workflow.
-  Common commands: init, inspect, workbench, generate, add-design, add-artifact.
-  Required params: all commands use --project <dir>; generate needs --artifact, --provider, and --prompt; live SDK generation also needs --live.
-  Pitfalls: paths must live inside the project root; live codex/claude generation calls the Agent SDK, then Capybara applies a patch.
+  Common commands: init, inspect, workbench, generate, run, add-design, add-artifact.
+  Required params: all commands use --project <dir>; generate needs --artifact, --provider, and --prompt; run decisions need a run id.
+  Pitfalls: use --review for AI proposals; accept is the only review action that mutates source files.
   Help topic: `capy help project`."
 )]
 pub struct ProjectArgs {
@@ -36,6 +36,8 @@ enum ProjectCommand {
     Workbench(ProjectPathArgs),
     #[command(about = "Generate or plan one project artifact through CLI providers")]
     Generate(ProjectGenerateArgs),
+    #[command(about = "Review, accept, reject, retry, or undo AI project runs")]
+    Run(ProjectRunArgs),
     #[command(about = "Register an AI-readable design-language asset")]
     AddDesign(ProjectAddDesignArgs),
     #[command(about = "Register a source artifact")]
@@ -118,6 +120,11 @@ struct ProjectGenerateArgs {
     live: bool,
     #[arg(long)]
     dry_run: bool,
+    #[arg(
+        long,
+        help = "Record a proposed AI change for review without mutating source"
+    )]
+    review: bool,
     #[arg(long)]
     write: bool,
     #[arg(long, help = "Provider model override for live SDK generation")]
@@ -131,6 +138,44 @@ struct ProjectGenerateArgs {
     sdk_response: Option<PathBuf>,
     #[arg(long)]
     out: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct ProjectRunArgs {
+    #[command(subcommand)]
+    command: ProjectRunCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum ProjectRunCommand {
+    #[command(about = "List project AI/generation runs")]
+    List(ProjectPathArgs),
+    #[command(about = "Show one project run JSON")]
+    Show(ProjectRunIdArgs),
+    #[command(about = "Accept a proposed review run and mutate the artifact source")]
+    Accept(ProjectRunDecisionArgs),
+    #[command(about = "Reject a proposed review run without mutating source")]
+    Reject(ProjectRunDecisionArgs),
+    #[command(about = "Create a linked proposal from a previous proposed or rejected run")]
+    Retry(ProjectRunDecisionArgs),
+    #[command(about = "Undo an accepted run by restoring the prior artifact source")]
+    Undo(ProjectRunDecisionArgs),
+}
+
+#[derive(Debug, Args)]
+struct ProjectRunIdArgs {
+    #[arg(long)]
+    project: PathBuf,
+    run_id: String,
+}
+
+#[derive(Debug, Args)]
+struct ProjectRunDecisionArgs {
+    #[arg(long)]
+    project: PathBuf,
+    run_id: String,
+    #[arg(long, default_value = "cli")]
+    actor: String,
 }
 
 pub fn handle(args: ProjectArgs) -> Result<(), String> {
@@ -149,8 +194,13 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
             serde_json::to_value(package.workbench().map_err(|err| err.to_string())?)
         }
         ProjectCommand::Generate(args) => {
-            if args.dry_run && args.write {
-                return Err("choose either --dry-run or --write, not both".to_string());
+            if [args.dry_run, args.write, args.review]
+                .into_iter()
+                .filter(|enabled| *enabled)
+                .count()
+                > 1
+            {
+                return Err("choose only one of --dry-run, --write, or --review".to_string());
             }
             let out = args.out.clone();
             let live = args.live || args.sdk_response.is_some();
@@ -164,6 +214,7 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
                         provider: args.provider.as_str().to_string(),
                         prompt: args.prompt,
                         dry_run: !args.write,
+                        review: args.review,
                     })
                     .map_err(|err| err.to_string())?
             };
@@ -172,6 +223,7 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
             }
             serde_json::to_value(result)
         }
+        ProjectCommand::Run(args) => project_run(args),
         ProjectCommand::AddDesign(args) => {
             let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
             serde_json::to_value(
@@ -193,6 +245,60 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
     print_json(&data)
 }
 
+fn project_run(args: ProjectRunArgs) -> Result<serde_json::Value, serde_json::Error> {
+    let data = match args.command {
+        ProjectRunCommand::List(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(package.list_project_runs().map_err(string_json_error)?)?
+        }
+        ProjectRunCommand::Show(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .show_project_run(&args.run_id)
+                    .map_err(string_json_error)?,
+            )?
+        }
+        ProjectRunCommand::Accept(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .accept_review_run(&args.run_id, &args.actor)
+                    .map_err(string_json_error)?,
+            )?
+        }
+        ProjectRunCommand::Reject(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .reject_review_run(&args.run_id, &args.actor)
+                    .map_err(string_json_error)?,
+            )?
+        }
+        ProjectRunCommand::Retry(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .retry_review_run(&args.run_id, &args.actor)
+                    .map_err(string_json_error)?,
+            )?
+        }
+        ProjectRunCommand::Undo(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .undo_review_run(&args.run_id, &args.actor)
+                    .map_err(string_json_error)?,
+            )?
+        }
+    };
+    Ok(data)
+}
+
+fn string_json_error(error: impl ToString) -> serde_json::Error {
+    serde_json::Error::io(std::io::Error::other(error.to_string()))
+}
+
 fn generate_live(
     args: ProjectGenerateArgs,
 ) -> Result<capy_project::ProjectGenerateResultV1, String> {
@@ -211,7 +317,8 @@ fn generate_live(
         artifact_id: args.artifact.clone(),
         provider: provider.to_string(),
         prompt: args.prompt.clone(),
-        dry_run: !args.write,
+        dry_run: if args.review { true } else { !args.write },
+        review: args.review,
     };
     let prompt = package
         .build_ai_prompt(&request)
@@ -237,13 +344,29 @@ fn generate_live(
             ai_response.clone(),
         )
         .map_err(|err| err.to_string())?;
-    let patch_result = package
-        .apply_patch(patch.clone(), None, request.dry_run)
-        .map_err(|err| err.to_string())?;
     let preview_source = ai_response
         .artifacts
         .first()
         .map(|artifact| artifact.new_source.clone());
+    if request.review {
+        return package
+            .record_review_proposal(
+                &request,
+                patch,
+                json!({
+                    "context_id": prompt.context_id,
+                    "summary_zh": ai_response.summary_zh,
+                    "verify_notes": ai_response.verify_notes,
+                    "sdk": summarize_sdk_output(&sdk_output)
+                }),
+                preview_source,
+                None,
+            )
+            .map_err(|err| err.to_string());
+    }
+    let patch_result = package
+        .apply_patch(patch.clone(), None, request.dry_run)
+        .map_err(|err| err.to_string())?;
     let inspection = package.inspect().map_err(|err| err.to_string())?;
     let run = ProjectGenerateRunV1 {
         schema_version: GENERATE_RUN_SCHEMA_VERSION.to_string(),
@@ -272,6 +395,7 @@ fn generate_live(
             "patch": patch,
             "sdk": summarize_sdk_output(&sdk_output)
         })),
+        review: None,
         error: None,
         generated_at: now_ms(),
     };

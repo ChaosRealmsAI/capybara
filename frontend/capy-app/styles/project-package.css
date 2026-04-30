@@ -177,6 +177,86 @@
   background: #fff;
 }
 
+.ai-diff-review {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(61, 49, 75, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.ai-diff-head,
+.ai-diff-summary,
+.ai-diff-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-diff-head h3 {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2f2437;
+}
+
+.ai-diff-status {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(91, 138, 191, 0.14);
+  color: #365f92;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ai-diff-summary {
+  justify-content: flex-start;
+  color: #6b6072;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ai-diff-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.ai-diff-preview pre {
+  min-height: 52px;
+  max-height: 92px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  border-radius: 6px;
+  background: rgba(47, 36, 55, 0.06);
+  color: #2f2437;
+  padding: 8px;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ai-diff-actions {
+  justify-content: flex-end;
+}
+
+.ai-diff-actions button {
+  min-width: 54px;
+  border: 1px solid rgba(61, 49, 75, 0.14);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #2f2437;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+}
+
+.ai-diff-actions button:disabled {
+  opacity: 0.42;
+}
+
 @media (max-width: 1120px) {
   .project-workbench {
     right: 28px;
