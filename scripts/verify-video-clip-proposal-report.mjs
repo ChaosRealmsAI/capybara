@@ -6,6 +6,14 @@ import path from "node:path";
 export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
   const commandRows = logs.map(item => `<tr><td><code>${escapeHtml(item.command)}</code></td><td>${item.ok ? "通过" : "失败"}</td><td>${item.evidence ? `<a href="assets/${escapeHtml(item.evidence)}">${escapeHtml(item.evidence)}</a>` : ""}</td></tr>`).join("\n");
   const changeRows = summary.proposal.changes.map(change => `<tr><td>${escapeHtml(change.action_label_zh)}</td><td>${position(change.before_sequence)}</td><td>${position(change.after_sequence)}</td><td>${escapeHtml(change.scene)}</td><td>${escapeHtml(change.reason_summary)}</td><td>${escapeHtml(change.apply_status)}</td></tr>`).join("\n");
+  const captureRows = (summary.capture_verdicts || []).map(verdict => {
+    const statusClass = verdict.capture.blocking ? "danger" : verdict.capture.status === "captured" ? "ok" : "warn";
+    const attempts = (verdict.capture.attempts || []).map(attempt => `${escapeHtml(attempt.method)}:${attempt.ok ? "成功" : escapeHtml(attempt.failure_kind)}`).join(" / ");
+    return `<tr><td>${escapeHtml(verdict.stage)}</td><td><span class="badge ${statusClass}">${escapeHtml(verdict.capture.status)}</span></td><td>${verdict.capture.blocking ? "阻断" : "不阻断"}</td><td><a href="assets/${escapeHtml(verdict.capture.final_image || "")}">${escapeHtml(verdict.capture.final_image || "")}</a></td><td>${escapeHtml(verdict.capture.final_image_source || "")}</td><td>${escapeHtml(attempts)}</td><td>${escapeHtml(verdict.capture.rationale || "")}</td></tr>`;
+  }).join("\n");
+  const capturedCount = (summary.capture_verdicts || []).filter(verdict => verdict.capture.status === "captured").length;
+  const fallbackCount = (summary.capture_verdicts || []).filter(verdict => verdict.capture.final_image_source === "state-derived-fallback").length;
+  const captureBadgeClass = (summary.capture_verdicts || []).some(verdict => verdict.capture.blocking) ? "danger" : fallbackCount > 0 ? "warn" : "ok";
   writeFileSync(path.join(evidenceDir, "index.html"), `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -18,6 +26,7 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
     header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px}
     h1{margin:0;font-size:30px} h2{margin:0 0 12px;font-size:19px} p{line-height:1.7}
     .badge{padding:8px 12px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:800}
+    .badge.warn{background:#fef3c7;color:#92400e}.badge.danger{background:#fee2e2;color:#991b1b}.badge.ok{background:#dcfce7;color:#166534}
     section{margin-top:16px;padding:18px;border:1px solid #e5e7eb;border-radius:8px;background:white}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
     img{width:100%;border-radius:6px;border:1px solid #e5e7eb;background:#111827}
@@ -32,7 +41,7 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
     <header>
       <div>
         <h1>${escapeHtml(summary.version)} 片段反馈生成修改提案</h1>
-        <p>已用真实 CEF DOM/state 完成反馈输入、proposal diff、拒绝不改 queue、重新生成并接受后更新 queue 的闭环验证。全程本地 deterministic，无 live-spend provider。</p>
+        <p>已用真实 CEF DOM/state 完成反馈输入、proposal diff、拒绝不改 queue、重新生成并接受后更新 queue 的闭环验证。截图证据会单独标注真实 app-view capture 是否成功；fallback 不会被当作截图成功。</p>
       </div>
       <span class="badge">通过 · PM 明确决策后才写 queue</span>
     </header>
@@ -43,8 +52,14 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
         <dt>Reject 后 queue</dt><dd><a href="assets/video-clip-proposal-queue-after-reject.json">video-clip-proposal-queue-after-reject.json</a></dd>
         <dt>Accept 后 queue</dt><dd><a href="assets/video-clip-proposal-queue-after-accept.json">video-clip-proposal-queue-after-accept.json</a></dd>
         <dt>决策记录</dt><dd>先 rejected 保持原 queue，再 accepted 写入 after queue。</dd>
+        <dt>真实截图状态</dt><dd><span class="badge ${captureBadgeClass}">${capturedCount} 个真实截图成功 · ${fallbackCount} 个 fallback</span> · fallback 不是截图成功。</dd>
         <dt>红线</dt><dd>proposal 生成不改 queue；无 provider 调用；仍是线性 clip queue。</dd>
       </dl>
+    </section>
+    <section>
+      <h2>真实截图状态</h2>
+      <p>每个阶段都先尝试 CEF app-view capture / screenshot。若超时或失败，本页显示 state-derived fallback、原因和是否阻断；不会把 fallback 图伪装成真实截图成功。</p>
+      <table><thead><tr><th>阶段</th><th>状态</th><th>验收影响</th><th>最终图</th><th>图来源</th><th>尝试</th><th>原因</th></tr></thead><tbody>${captureRows}</tbody></table>
     </section>
     <section>
       <h2>可见证据</h2>
@@ -77,18 +92,21 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
 
 export function writeProposalManifest({ evidenceDir, summary }) {
   const version = summary.version;
+  const captureBlocking = (summary.capture_verdicts || []).some(verdict => verdict.capture.blocking);
+  const captureWarnings = (summary.capture_verdicts || []).flatMap(verdict => verdict.verdict.warnings || []);
   writeFileSync(path.join(evidenceDir, "manifest.json"), `${JSON.stringify({
     schema: "capy.evidence.manifest.v1",
     version,
-    status: "verified",
+    status: captureBlocking ? "blocked" : "verified",
     generated_at: new Date().toISOString(),
-    summary: "片段反馈生成 proposal diff、拒绝保持 queue、接受更新 queue 已通过真实 CEF DOM/state 验证。",
-    verdict: { status: "passed", blockers: [], warnings: ["desktop PNG is state-derived from CEF DOM/state because app-view capture can be unstable on this video surface"] },
+    summary: "片段反馈生成 proposal diff、拒绝保持 queue、接受更新 queue 已通过真实 CEF DOM/state 验证，并记录 app-view capture verdict。",
+    verdict: { status: captureBlocking ? "failed" : "passed", blockers: captureBlocking ? ["capture_blocked"] : [], warnings: captureWarnings },
     runs: [{ id: "video-clip-proposal-loop", command: `scripts/verify-video-clip-proposal.mjs spec/versions/${version}`, status: "passed", evidence: `spec/versions/${version}/evidence/assets/video-clip-proposal-summary.json` }],
     artifacts: [
       { path: `spec/versions/${version}/evidence/index.html`, kind: "html-report", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-diff.json`, kind: "project-manifest", status: "verified" },
-      { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-accepted-desktop.png`, kind: "state-derived-visual", status: "verified" },
+      { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-accepted-desktop.png`, kind: "desktop-visual", status: "verified" },
+      { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-accepted-capture-verdict.json`, kind: "capture-verdict", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/evidence-page-browser.png`, kind: "browser-screenshot", status: "verified" }
     ]
   }, null, 2)}\n`);
@@ -112,6 +130,8 @@ export async function verifyProposalEvidencePage({ evidenceDir, assetsDir }) {
     images: [...document.images].map(img => ({ complete: img.complete, w: img.naturalWidth, h: img.naturalHeight }))
   }));
   assert(state.title.includes(version), "evidence page title missing version");
+  assert(state.bodyText.includes("真实截图状态"), "capture verdict section missing");
+  assert(state.bodyText.includes("fallback 不是截图成功"), "fallback warning missing");
   assert(state.bodyText.includes("Proposal Diff 明细"), "proposal diff section missing");
   assert(state.bodyText.includes("接受：记录 accepted"), "accept evidence missing");
   assert(state.images.length >= 5 && state.images.every(img => img.complete && img.w > 0), "evidence images did not load");

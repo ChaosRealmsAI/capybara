@@ -7,6 +7,15 @@ import process from "node:process";
 import { initialQueue } from "./verify-ai-clip-suggestion-fixtures.mjs";
 import { proposalAcceptEval, proposalGenerateEval, proposalLoadEval, proposalRejectEval, proposalSaveFeedbackEval } from "./verify-video-clip-proposal-evals.mjs";
 import { verifyProposalEvidencePage, writeProposalEvidencePage, writeProposalManifest } from "./verify-video-clip-proposal-report.mjs";
+import {
+  assertQueueIdsChangedTo,
+  assertQueueIdsEqual,
+  captureAttempt,
+  copyFallbackImage,
+  summarizeQueueMutation,
+  summarizeVideoCapture,
+  writeStateDerivedImage
+} from "./video-verifier-shared.mjs";
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: scripts/verify-video-clip-proposal.mjs [spec/versions/v0.52]
@@ -32,12 +41,15 @@ Evidence outputs:
   video-clip-proposal-summary.json
   video-clip-proposal-*-state.json
   video-clip-proposal-*-desktop.png
+  video-clip-proposal-*-capture-verdict.json
 
 Pitfalls:
   Proposal generation must not mutate .capy/video-clip-queue.json.
   Only explicit accept may update the queue; reject must preserve the original queue ids.
   This verifies deterministic local proposal logic, not paid model interpretation.
-  State JSON is the primary proof; PNGs are state-derived because CEF app-view capture is unstable on this surface.
+  The verifier attempts real CEF app-view capture for each key stage.
+  If capture or screenshot times out, evidence records whether fallback is blocking or nonblocking.
+  State-derived fallback PNGs are not treated as real screenshot success.
 
 Next step:
   Review <version>/evidence/index.html and <version>/evidence/assets/video-clip-proposal-summary.json.`);
@@ -56,6 +68,7 @@ const projectProposalManifest = path.join(projectDir, ".capy", "video-clip-propo
 const uiComposition = "__queue_only__";
 const logs = [];
 const openInstanceIds = [];
+const stageCaptureVerdicts = [];
 let currentSocket = "";
 let shellBundleReady = false;
 
@@ -94,20 +107,20 @@ try {
   assertTextIncludes(proposedState.domProposalText, ["修改提案", "Before", "After"], "proposal DOM");
   copyFileSync(projectProposalManifest, path.join(assetsDir, "video-clip-proposal-diff.json"));
   const queueAfterProposal = capyJson(["project", "clip-queue", "inspect", "--project", projectDir], "video-clip-proposal-queue-after-proposal.json");
-  assertQueueIds(queueBeforeProposal, queueAfterProposal, "proposal generation mutated queue");
+  assertQueueIdsEqual(queueBeforeProposal, queueAfterProposal, "proposal generation mutated queue");
 
   const rejectedState = capyJson(["devtools", "--eval", proposalRejectEval()], "video-clip-proposal-rejected-state.json", capyEnv());
   assertDecision(rejectedState.proposal, "rejected");
   const queueAfterReject = capyJson(["project", "clip-queue", "inspect", "--project", projectDir], "video-clip-proposal-queue-after-reject.json");
-  assertQueueIds(queueBeforeProposal, queueAfterReject, "reject mutated queue");
+  assertQueueIdsEqual(queueBeforeProposal, queueAfterReject, "reject mutated queue");
 
   const acceptedState = capyJson(["devtools", "--eval", proposalAcceptEval()], "video-clip-proposal-accepted-state.json", capyEnv());
   assertDecision(acceptedState.proposal, "accepted");
   const queueAfterAccept = capyJson(["project", "clip-queue", "inspect", "--project", projectDir], "video-clip-proposal-queue-after-accept.json");
-  assertAcceptedQueue(queueAfterAccept);
+  assertQueueIdsChangedTo(queueAfterAccept, ["queue-initial-camera-b", "queue-initial-camera-a"], "accept did not update queue order");
   capyJson(["project", "clip-queue", "proposal-current", "--project", projectDir], "video-clip-proposal-current-accepted.json");
 
-  const summary = writeSummary({ loadedState, savedState, proposedState, rejectedState, acceptedState, feedbackCli, queueBeforeProposal, queueAfterReject, queueAfterAccept });
+  const summary = writeSummary({ loadedState, savedState, proposedState, rejectedState, acceptedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterAccept });
   writeProposalEvidencePage({ evidenceDir, logs, summary });
   writeProposalManifest({ evidenceDir, summary });
   await verifyProposalEvidencePage({ evidenceDir, assetsDir });
@@ -160,18 +173,22 @@ function launchShell(args, evidenceName, env) {
 }
 
 function optionalCommandResult(cmd, args, evidenceName, options = {}) {
-  try { command(cmd, args, evidenceName, options); return { ok: true }; } catch (error) {
+  const started = Date.now();
+  try {
+    command(cmd, args, evidenceName, options);
+    return { ok: true, evidence: evidenceName, elapsed_ms: Date.now() - started };
+  } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     writeFileSync(path.join(assetsDir, evidenceName), evidenceName.endsWith(".json") ? `${JSON.stringify({ ok: false, error: message }, null, 2)}\n` : `${message}\n`);
     logs.push({ command: [cmd, ...args].join(" "), evidence: evidenceName, ok: false, error: message });
-    return { ok: false, error: message };
+    return { ok: false, evidence: evidenceName, elapsed_ms: Date.now() - started, error: message };
   }
 }
 
 function capyJson(args, evidenceName, env = process.env) {
   const value = JSON.parse(command("target/debug/capy", args, evidenceName, { env }));
   writeJson(evidenceName, value);
-  writeStateImage(value);
+  writeStageVisual(value, evidenceName);
   return value;
 }
 
@@ -179,7 +196,7 @@ function writeJson(name, value) {
   writeFileSync(path.join(assetsDir, name), `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function writeStateImage(value) {
+function writeStageVisual(value, stateEvidenceName) {
   const imageName = {
     loaded: "video-clip-proposal-loaded-desktop.png",
     "feedback-saved": "video-clip-proposal-feedback-saved-desktop.png",
@@ -188,42 +205,91 @@ function writeStateImage(value) {
     "proposal-accepted": "video-clip-proposal-accepted-desktop.png"
   }[value?.stage];
   if (!imageName) return;
-  const svg = path.join(assetsDir, imageName.replace(/\.png$/, ".svg"));
+  const fallbackImage = imageName.replace(/-desktop\.png$/, "-state-derived.png");
+  const appViewImage = imageName.replace(/-desktop\.png$/, "-app-view.png");
   const panels = [
     ["Clip queue", value.domQueueText || ""],
     ["修改提案", value.domProposalText || "尚未生成提案"],
     ["AI 建议", value.domSuggestionText || "尚未生成建议"]
   ];
-  writeFileSync(svg, stateSvg(value.stage, panels));
-  execFileSync("magick", [svg, path.join(assetsDir, imageName)], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
-}
+  writeStateDerivedImage({
+    assetsDir,
+    imageName: fallbackImage,
+    title: "Capybara · 片段反馈修改提案",
+    subtitle: "state-derived fallback · real CEF DOM/state returned",
+    stage: value.stage,
+    panels
+  });
+  const attempts = [];
+  const captureEvidence = imageName.replace(/-desktop\.png$/, "-capture.json");
+  const captureResult = optionalCommandResult(
+    "target/debug/capy",
+    ["capture", `--out=${path.join(assetsDir, appViewImage)}`],
+    captureEvidence,
+    { env: capyEnv(), timeout: 12_000 }
+  );
+  const captureOk = captureResult.ok && existsSync(path.join(assetsDir, appViewImage));
+  attempts.push(captureAttempt({
+    method: "capture",
+    ok: captureOk,
+    evidence: captureEvidence,
+    image: appViewImage,
+    elapsed_ms: captureResult.elapsed_ms,
+    error: captureOk ? null : captureResult.error || "capture command returned without an image"
+  }));
 
-function stateSvg(stage, panels) {
-  const panelSvg = panels.map(([title, text], index) => {
-    const x = 24 + index * 312;
-    return `<g><rect x="${x}" y="104" width="${index === 2 ? 288 : 286}" height="452" rx="14" fill="#fff" stroke="#d8dee8"/><text x="${x + 20}" y="140" font-size="20" font-weight="700" fill="#0f172a">${xml(title)}</text>${textLines(text, x + 20, 172, index === 2 ? 248 : 246)}</g>`;
-  }).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600"><rect width="960" height="600" fill="#f6f8fb"/><text x="36" y="54" font-size="28" font-weight="700" fill="#101827">Capybara · 片段反馈修改提案</text><text x="38" y="82" font-size="14" fill="#64748b">state-derived evidence · CEF DOM/state · stage=${xml(stage || "")}</text>${panelSvg}</svg>`;
-}
-
-function textLines(text, x, y, width) {
-  const approx = Math.max(10, Math.floor(width / 8));
-  const words = String(text || "").replace(/\s+/g, " ").slice(0, 1400).split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (next.length > approx && line) { lines.push(line); line = word; } else { line = next; }
-    if (lines.length >= 17) break;
+  let finalIsAppView = captureOk;
+  if (!finalIsAppView) {
+    const screenshotEvidence = imageName.replace(/-desktop\.png$/, "-screenshot.json");
+    const screenshotResult = optionalCommandResult(
+      "target/debug/capy",
+      ["screenshot", `--out=${path.join(assetsDir, appViewImage)}`],
+      screenshotEvidence,
+      { env: capyEnv(), timeout: 12_000 }
+    );
+    const screenshotOk = screenshotResult.ok && existsSync(path.join(assetsDir, appViewImage));
+    attempts.push(captureAttempt({
+      method: "screenshot",
+      ok: screenshotOk,
+      evidence: screenshotEvidence,
+      image: appViewImage,
+      elapsed_ms: screenshotResult.elapsed_ms,
+      error: screenshotOk ? null : screenshotResult.error || "screenshot command returned without an image"
+    }));
+    finalIsAppView = screenshotOk;
   }
-  if (line && lines.length < 18) lines.push(line);
-  return lines.map((line, index) => `<text x="${x}" y="${y + index * 22}" font-size="14" fill="#334155">${xml(line)}</text>`).join("");
+  if (finalIsAppView) {
+    copyFallbackImage({ assetsDir, fallbackImage: appViewImage, finalImage: imageName });
+  } else {
+    copyFallbackImage({ assetsDir, fallbackImage, finalImage: imageName });
+  }
+  const verdict = summarizeVideoCapture({
+    version: versionId,
+    stage: value.stage,
+    attempts,
+    state_evidence: stateEvidenceName,
+    fallback_image: fallbackImage,
+    final_image: imageName,
+    real_dom_state: true,
+    ui_errors: [...(value.consoleErrors || []), ...(value.pageErrors || [])],
+    retry_command: `CAPYBARA_SOCKET=${currentSocket} target/debug/capy capture --out=${path.join(assetsDir, appViewImage)}`
+  });
+  const verdictName = imageName.replace(/-desktop\.png$/, "-capture-verdict.json");
+  writeJson(verdictName, verdict);
+  stageCaptureVerdicts.push(verdict);
+  logs.push({
+    command: `desktop capture verdict ${value.stage}`,
+    evidence: verdictName,
+    ok: verdict.verdict.status === "passed",
+    status: verdict.capture.status
+  });
+  if (verdict.capture.blocking) throw new Error(`desktop capture blocked ${value.stage}: ${verdict.capture.status}`);
 }
 
-function writeSummary({ loadedState, savedState, proposedState, rejectedState, acceptedState, feedbackCli, queueBeforeProposal, queueAfterReject, queueAfterAccept }) {
+function writeSummary({ loadedState, savedState, proposedState, rejectedState, acceptedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterAccept }) {
   const summary = {
     version: versionId,
-    verdict: "passed",
+    verdict: stageCaptureVerdicts.some(item => item.capture.blocking) ? "failed" : "passed",
     project: projectDir,
     feedback: feedbackCli,
     proposal: proposedState.proposal,
@@ -232,6 +298,12 @@ function writeSummary({ loadedState, savedState, proposedState, rejectedState, a
     queue_before_proposal: queueBeforeProposal.items || [],
     queue_after_reject: queueAfterReject.items || [],
     queue_after_accept: queueAfterAccept.items || [],
+    queue_mutation: {
+      generate: summarizeQueueMutation(queueBeforeProposal, queueAfterProposal),
+      reject: summarizeQueueMutation(queueBeforeProposal, queueAfterReject),
+      accept: summarizeQueueMutation(queueBeforeProposal, queueAfterAccept)
+    },
+    capture_verdicts: stageCaptureVerdicts,
     states: { loaded: summarizeState(loadedState), saved: summarizeState(savedState), proposed: summarizeState(proposedState), rejected: summarizeState(rejectedState), accepted: summarizeState(acceptedState) }
   };
   writeJson("video-clip-proposal-summary.json", summary);
@@ -264,15 +336,6 @@ function assertDecision(proposal, status) {
   assert(proposal?.decision?.decision === (status === "accepted" ? "accept" : "reject"), `proposal decision payload should be ${status}`);
 }
 
-function assertQueueIds(before, after, message) {
-  assert(JSON.stringify((before.items || []).map(item => item.id)) === JSON.stringify((after.items || []).map(item => item.id)), message);
-}
-
-function assertAcceptedQueue(queue) {
-  const ids = (queue.items || []).map(item => item.id);
-  assert(ids[0] === "queue-initial-camera-b" && ids[1] === "queue-initial-camera-a", `accept did not update queue order: ${ids.join(",")}`);
-}
-
 function assertNoPageErrors(state, label) {
   const errors = [...(state.consoleErrors || []), ...(state.pageErrors || [])];
   assert(errors.length === 0, `${label} has page/console errors: ${JSON.stringify(errors)}`);
@@ -299,10 +362,6 @@ function shutdown() {
 
 function writeLogs() {
   writeFileSync(path.join(assetsDir, "video-clip-proposal-command-log.json"), `${JSON.stringify(logs, null, 2)}\n`);
-}
-
-function xml(value) {
-  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
 function assert(condition, message) {

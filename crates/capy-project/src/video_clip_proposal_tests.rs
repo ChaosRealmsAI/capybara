@@ -81,8 +81,59 @@ fn video_clip_proposal_decision_rejects_or_accepts_queue_update() -> Result<(), 
     Ok(())
 }
 
+#[test]
+fn video_clip_proposal_queue_file_is_written_only_by_accept() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_project()?;
+    let package = &fixture.package;
+    package.analyze_video_clip_semantics()?;
+    package.record_video_clip_feedback("queue-a", "这段不适合开场")?;
+    let queue_before = queue_manifest_text(package)?;
+
+    let generated = package.generate_video_clip_proposal()?;
+    assert_eq!(
+        queue_manifest_text(package)?,
+        queue_before,
+        "proposal generation must not rewrite the queue file"
+    );
+
+    let rejected = package.decide_video_clip_proposal(&generated.proposal_id, "reject", "")?;
+    assert_eq!(rejected.proposal.status, "rejected");
+    assert_eq!(
+        queue_manifest_text(package)?,
+        queue_before,
+        "reject decision must not rewrite the queue file"
+    );
+
+    let generated_again = package.generate_video_clip_proposal()?;
+    assert_eq!(
+        queue_manifest_text(package)?,
+        queue_before,
+        "regenerating after reject must still leave the queue file unchanged"
+    );
+
+    let accepted =
+        package.decide_video_clip_proposal(&generated_again.proposal_id, "accept", "")?;
+    assert_eq!(accepted.proposal.status, "accepted");
+    let queue_after_accept = queue_manifest_text(package)?;
+    assert_ne!(
+        queue_after_accept, queue_before,
+        "accept decision must be the operation that writes the queue file"
+    );
+    assert_eq!(
+        queue_ids(&package.video_clip_queue()?),
+        vec!["queue-b", "queue-a"]
+    );
+    Ok(())
+}
+
 fn queue_ids(queue: &crate::ProjectVideoClipQueueManifestV1) -> Vec<&str> {
     queue.items.iter().map(|item| item.id.as_str()).collect()
+}
+
+fn queue_manifest_text(package: &ProjectPackage) -> Result<String, Box<dyn Error>> {
+    Ok(fs::read_to_string(
+        package.root().join(".capy/video-clip-queue.json"),
+    )?)
 }
 
 struct Fixture {

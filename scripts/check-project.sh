@@ -34,7 +34,7 @@ bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts
 scripts/check-code-sign-clones.sh
 scripts/build-canvas-for-app.sh >/dev/null
 scripts/check-frontend-js.sh >/dev/null
-node --test scripts/tests/post-export-capture-verdict.test.mjs
+node --test scripts/tests/*.test.mjs
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
