@@ -33,6 +33,22 @@ export function previewFrameSource(artifact, source, packageState = {}) {
   return `<!doctype html><pre style="white-space:pre-wrap;font:12px ui-monospace,monospace;padding:16px;color:#2f2437">${escapeText(source)}</pre>`;
 }
 
+export function projectCardMetaHtml(card, isVideoCard) {
+  if (!isVideoCard) {
+    return `<small>${escapeText(card.source_path || card.preview?.text || "项目汇总")}</small>`;
+  }
+  const metadata = card.preview?.metadata || {};
+  const filename = metadata.filename || card.source_path || "video";
+  const imported = card.status === "missing" ? "missing" : "imported";
+  return `
+    <span class="project-video-card-meta">
+      <span class="project-video-card-meta-row"><span>时长</span><b>${escapeText(formatDuration(metadata.duration_ms))}</b></span>
+      <span class="project-video-card-meta-row"><span>状态</span><b>${escapeText(imported)}</b></span>
+      <span class="project-video-card-meta-row"><span>源文件</span><b>${escapeText(filename)}</b></span>
+    </span>
+  `;
+}
+
 export function assetFileUrl(root, relativePath) {
   const path = absoluteProjectPath(root, relativePath);
   return path ? fileUrl(path) : "";

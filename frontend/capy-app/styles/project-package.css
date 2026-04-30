@@ -88,6 +88,38 @@
   overflow-wrap: anywhere;
 }
 
+.project-video-card-meta {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.project-video-card-meta-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 6px;
+}
+
+.project-video-card-meta-row span,
+.project-video-card-meta-row b {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.project-video-card-meta-row span {
+  color: var(--muted);
+}
+
+.project-video-card-meta-row b {
+  color: #2f2437;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .project-card-action {
   width: fit-content;
   margin-top: 2px;

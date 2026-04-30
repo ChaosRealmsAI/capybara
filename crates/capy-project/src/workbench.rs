@@ -19,7 +19,7 @@ impl ProjectPackage {
         let artifacts = self.artifacts()?.artifacts;
         let cards = CARD_ORDER
             .iter()
-            .map(|(kind, title)| card_for_kind(kind, title, &artifacts))
+            .flat_map(|(kind, title)| cards_for_kind(kind, title, &artifacts))
             .collect();
         Ok(ProjectWorkbenchV1 {
             schema_version: WORKBENCH_SCHEMA_VERSION.to_string(),
@@ -32,16 +32,32 @@ impl ProjectPackage {
     }
 }
 
-fn card_for_kind(kind: &str, title: &str, artifacts: &[ArtifactRefV1]) -> ProjectWorkbenchCardV1 {
+fn cards_for_kind(
+    kind: &str,
+    title: &str,
+    artifacts: &[ArtifactRefV1],
+) -> Vec<ProjectWorkbenchCardV1> {
     if kind == "export_center" {
-        return export_center_card(artifacts);
+        return vec![export_center_card(artifacts)];
+    }
+    if kind == "video" {
+        let video_cards = artifacts
+            .iter()
+            .filter(|artifact| product_kind(artifact) == "video")
+            .map(|artifact| artifact_card(kind, title, artifact))
+            .collect::<Vec<_>>();
+        return if video_cards.is_empty() {
+            vec![missing_card(kind, title)]
+        } else {
+            video_cards
+        };
     }
     let artifact = artifacts
         .iter()
         .find(|artifact| product_kind(artifact) == kind);
     match artifact {
-        Some(artifact) => artifact_card(kind, title, artifact),
-        None => missing_card(kind, title),
+        Some(artifact) => vec![artifact_card(kind, title, artifact)],
+        None => vec![missing_card(kind, title)],
     }
 }
 
@@ -227,5 +243,94 @@ mod tests {
                 .any(|card| card.kind == "export_center")
         );
         Ok(())
+    }
+
+    #[test]
+    fn workbench_returns_multiple_video_cards() -> Result<(), Box<dyn Error>> {
+        if command_missing("ffmpeg") || command_missing("ffprobe") {
+            return Ok(());
+        }
+        let dir = std::env::temp_dir().join(format!(
+            "capy-project-multi-video-workbench-{}-{}",
+            std::process::id(),
+            crate::package::now_ms()
+        ));
+        let media_dir = dir.join("media");
+        std::fs::create_dir_all(&media_dir)?;
+        generate_test_video(
+            &media_dir.join("alpha.webm"),
+            "testsrc2=size=320x180:rate=12",
+        )?;
+        generate_test_video(
+            &media_dir.join("beta.webm"),
+            "smptebars=size=480x270:rate=15",
+        )?;
+
+        let package = ProjectPackage::init(&dir, Some("Multi Video".to_string()))?;
+        package.import_video_artifact("media/alpha.webm", Some("Alpha Source".to_string()))?;
+        package.import_video_artifact("media/beta.webm", Some("Beta Source".to_string()))?;
+
+        let workbench = package.workbench()?;
+        let video_cards = workbench
+            .cards
+            .iter()
+            .filter(|card| card.kind == "video")
+            .collect::<Vec<_>>();
+        assert_eq!(video_cards.len(), 2);
+        assert!(video_cards.iter().all(|card| card.preview.kind == "video"));
+        assert!(
+            video_cards
+                .iter()
+                .all(|card| card.preview.poster_frame_path.is_some())
+        );
+        assert!(
+            video_cards
+                .iter()
+                .all(|card| card.preview.composition_path.is_some())
+        );
+        assert!(video_cards.iter().any(|card| card.title == "Alpha Source"));
+        assert!(video_cards.iter().any(|card| card.title == "Beta Source"));
+
+        let _ = std::fs::remove_dir_all(dir);
+        Ok(())
+    }
+
+    fn command_missing(binary: &str) -> bool {
+        std::process::Command::new(binary)
+            .arg("-version")
+            .output()
+            .is_err()
+    }
+
+    fn generate_test_video(path: &std::path::Path, source: &str) -> Result<(), Box<dyn Error>> {
+        let output = std::process::Command::new("ffmpeg")
+            .args([
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                source,
+                "-t",
+                "1",
+                "-c:v",
+                "libvpx-vp9",
+                "-pix_fmt",
+                "yuv420p",
+                &path.display().to_string(),
+            ])
+            .output()?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "ffmpeg failed for {}: {}",
+                path.display(),
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into())
+        }
     }
 }

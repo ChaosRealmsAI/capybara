@@ -9,6 +9,7 @@ import {
   escapeText,
   firstSelectableCard,
   previewFrameSource,
+  projectCardMetaHtml,
   selectedArtifactSummary,
   selectedCardSummary
 } from "./project-package-helpers.js";
@@ -305,14 +306,22 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     button.dataset.projectCardKind = card.kind;
     button.dataset.status = card.status;
     button.dataset.selected = card.id === state.projectPackage.selectedCardId ? "true" : "false";
+    if (isVideoCard) {
+      button.dataset.videoCompositionPath = card.preview.composition_path || "";
+      button.dataset.videoDurationMs = String(card.preview?.metadata?.duration_ms || 0);
+      button.dataset.videoFilename = card.preview?.metadata?.filename || "";
+    }
     button.innerHTML = `
       ${thumb}
       <span class="project-card-kind">${escapeText(card.kind)}</span>
       <strong>${escapeText(card.title || card.kind)}</strong>
-      <small>${escapeText(card.source_path || card.preview?.text || "项目汇总")}</small>
+      ${projectCardMetaHtml(card, isVideoCard)}
       <em>${escapeText(card.status || "ready")}</em>
     `;
-    button.addEventListener("click", () => selectCard(card));
+    button.addEventListener("click", () => {
+      if (isVideoCard) openVideoArtifact(card).catch(() => {});
+      else selectCard(card);
+    });
     if (card.id?.startsWith("art_")) {
       const action = document.createElement("span");
       action.className = "project-card-action";
