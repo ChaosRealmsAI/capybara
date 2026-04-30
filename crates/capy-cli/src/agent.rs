@@ -10,6 +10,7 @@ use clap::{Args, Subcommand, ValueEnum};
   Use `capy agent --help` as the index and `capy agent help doctor` for the full runtime check workflow.
   Common command: `capy agent doctor`.
   SDK command: `capy agent sdk doctor`; full-auto smoke: `capy agent sdk run --provider codex --write-code --prompt ...`.
+  Segment stream: `capy agent sdk run-stream --provider claude --prompt ...` emits normalized JSONL.
   Required params: none.
   Pitfalls: check runtime availability before starting long chat runs.
   Help topics: `capy agent help doctor`, `capy agent help sdk`."
@@ -24,7 +25,7 @@ enum AgentCommand {
     #[command(about = "Check Claude and Codex runtime availability")]
     Doctor,
     #[command(about = "Operate the standalone Claude/Codex SDK runtime")]
-    Sdk(SdkArgs),
+    Sdk(Box<SdkArgs>),
     #[command(about = "Show self-contained AI help topics for agent runtime")]
     Help(AgentHelpArgs),
 }
@@ -46,9 +47,11 @@ enum SdkCommand {
     #[command(about = "Check SDK packages and local provider runtimes")]
     Doctor,
     #[command(about = "Print normalized SDK runtime options as JSON")]
-    Normalize(SdkRuntimeArgs),
+    Normalize(Box<SdkRuntimeArgs>),
     #[command(about = "Run one prompt through Claude Agent SDK or Codex SDK")]
-    Run(SdkRunArgs),
+    Run(Box<SdkRunArgs>),
+    #[command(about = "Run one prompt and stream normalized SDK segment JSONL")]
+    RunStream(Box<SdkRunArgs>),
 }
 
 #[derive(Debug, Clone, ValueEnum)]
@@ -148,7 +151,7 @@ pub fn handle(args: AgentArgs) -> Result<(), String> {
             println!("{}", capy_shell::agent::doctor());
             Ok(())
         }
-        AgentCommand::Sdk(args) => handle_sdk(args),
+        AgentCommand::Sdk(args) => handle_sdk(*args),
         AgentCommand::Help(args) => crate::help_topics::print_agent_topic(args.topic.as_deref()),
     }
 }
@@ -158,33 +161,36 @@ fn handle_sdk(args: SdkArgs) -> Result<(), String> {
         SdkCommand::Doctor => run_node_sdk(["doctor"]),
         SdkCommand::Normalize(args) => {
             let mut node_args = vec!["normalize".to_string()];
-            append_runtime_args(&mut node_args, args)?;
+            append_runtime_args(&mut node_args, *args)?;
             run_node_sdk(node_args)
         }
-        SdkCommand::Run(args) => {
-            let prompt = args
-                .prompt
-                .or_else(|| {
-                    if args.prompt_tail.is_empty() {
-                        None
-                    } else {
-                        Some(args.prompt_tail.join(" "))
-                    }
-                })
-                .ok_or_else(|| "missing --prompt or positional prompt".to_string())?;
-            let mut node_args = vec!["run".to_string()];
-            append_runtime_args(&mut node_args, args.runtime)?;
-            node_args.push("--prompt".to_string());
-            node_args.push(prompt);
-            if args.json {
-                node_args.push("--json".to_string());
-            }
-            if args.raw {
-                node_args.push("--raw".to_string());
-            }
-            run_node_sdk(node_args)
-        }
+        SdkCommand::Run(args) => run_sdk_prompt("run", *args),
+        SdkCommand::RunStream(args) => run_sdk_prompt("run-stream", *args),
     }
+}
+
+fn run_sdk_prompt(command: &str, args: SdkRunArgs) -> Result<(), String> {
+    let prompt = args
+        .prompt
+        .or_else(|| {
+            if args.prompt_tail.is_empty() {
+                None
+            } else {
+                Some(args.prompt_tail.join(" "))
+            }
+        })
+        .ok_or_else(|| "missing --prompt or positional prompt".to_string())?;
+    let mut node_args = vec![command.to_string()];
+    append_runtime_args(&mut node_args, args.runtime)?;
+    node_args.push("--prompt".to_string());
+    node_args.push(prompt);
+    if args.json {
+        node_args.push("--json".to_string());
+    }
+    if args.raw {
+        node_args.push("--raw".to_string());
+    }
+    run_node_sdk(node_args)
 }
 
 fn append_runtime_args(target: &mut Vec<String>, args: SdkRuntimeArgs) -> Result<(), String> {

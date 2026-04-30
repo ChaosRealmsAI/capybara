@@ -9,6 +9,7 @@
   "scripts": {
     "doctor": "node src/cli.mjs doctor",
     "normalize": "node src/cli.mjs normalize",
+    "test": "node --test",
     "smoke:codex": "node src/cli.mjs run --provider codex --prompt \"Reply with exactly: codex-sdk-ok\" --cwd ../.. --json --max-turns 1",
     "smoke:claude": "node src/cli.mjs run --provider claude --prompt \"Reply with exactly: claude-sdk-ok\" --cwd ../.. --json --max-turns 1"
   },

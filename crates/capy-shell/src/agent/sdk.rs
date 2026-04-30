@@ -1,13 +1,18 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::{io::BufRead, io::BufReader, io::Read, thread};
 
-use serde_json::Value;
+use serde_json::{Value, json};
+use tao::event_loop::EventLoopProxy;
 
+use super::{event, record_and_emit};
+use crate::app::ShellEvent;
 use crate::store::{Conversation, Provider, Store};
 
 pub(super) struct SdkRunOutput {
     pub content: String,
     pub native_thread_id: Option<String>,
+    pub event_json: Value,
 }
 
 pub(super) fn enabled(config: &Value) -> bool {
@@ -21,6 +26,7 @@ pub(super) fn enabled(config: &Value) -> bool {
 
 pub(super) fn run(
     store: &Store,
+    proxy: &EventLoopProxy<ShellEvent>,
     conversation: &Conversation,
     run_id: &str,
     prompt: &str,
@@ -33,32 +39,89 @@ pub(super) fn run(
     let mut command = Command::new("node");
     command
         .arg(&script)
-        .args(args(conversation, prompt, use_resume))
+        .arg("run-stream")
+        .args(stream_args(conversation, prompt, use_resume))
         .current_dir(repo_root())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let child = command.spawn().map_err(|err| {
+    let mut child = command.spawn().map_err(|err| {
         format!(
             "agent SDK bridge failed to start at {}: {err}",
             script.display()
         )
     })?;
     store.set_run_pid(run_id, child.id())?;
-    let output = child
-        .wait_with_output()
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "agent SDK bridge stdout missing".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "agent SDK bridge stderr missing".to_string())?;
+    let stderr_handle = thread::spawn(move || {
+        let mut reader = stderr;
+        let mut output = String::new();
+        let _ = reader.read_to_string(&mut output);
+        output
+    });
+    let reader = BufReader::new(stdout);
+    let mut final_value = None;
+    let mut failure = None;
+
+    for line in reader.lines() {
+        let line = line.map_err(|err| format!("agent SDK bridge stdout failed: {err}"))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: Value = serde_json::from_str(&line)
+            .map_err(|err| format!("agent SDK bridge returned invalid JSONL: {err}: {line}"))?;
+        match value.get("type").and_then(Value::as_str) {
+            Some("segment") => {
+                emit_sdk_event(store, proxy, conversation, run_id, "segment", &value)
+            }
+            Some("run_completed") => {
+                emit_sdk_event(
+                    store,
+                    proxy,
+                    conversation,
+                    run_id,
+                    "sdk_run_completed",
+                    &value,
+                );
+                final_value = Some(value);
+            }
+            Some("run_failed") => {
+                emit_sdk_event(store, proxy, conversation, run_id, "sdk_run_failed", &value);
+                failure = value
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+                    .or_else(|| Some(value.to_string()));
+            }
+            _ => emit_sdk_event(store, proxy, conversation, run_id, "sdk_event", &value),
+        }
+    }
+
+    let status = child
+        .wait()
         .map_err(|err| format!("agent SDK bridge wait failed: {err}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = stderr_handle.join().unwrap_or_default();
+    if let Some(error) = failure {
+        return Err(error);
+    }
+    if !status.success() {
         return Err(format!(
-            "agent SDK bridge exited with {}: {}{}",
-            output.status,
-            stdout.trim(),
+            "agent SDK bridge exited with {status}: {}",
             stderr.trim()
         ));
     }
-    let value: Value = serde_json::from_str(&stdout)
-        .map_err(|err| format!("agent SDK bridge returned invalid JSON: {err}: {stdout}"))?;
+    let value = final_value.ok_or_else(|| {
+        format!(
+            "agent SDK bridge ended without run_completed: {}",
+            stderr.trim()
+        )
+    })?;
     if value.get("ok").and_then(Value::as_bool) != Some(true) {
         return Err(format!("agent SDK bridge returned failure: {value}"));
     }
@@ -67,9 +130,16 @@ pub(super) fn run(
         .get("thread_id")
         .and_then(Value::as_str)
         .map(ToString::to_string);
+    let event_json = json!({
+        "provider": conversation.provider.as_str(),
+        "runtime": "sdk",
+        "segments": value.get("segments").cloned().unwrap_or_else(|| json!([])),
+        "raw": value
+    });
     Ok(SdkRunOutput {
         content,
         native_thread_id,
+        event_json,
     })
 }
 
@@ -80,6 +150,36 @@ pub(super) fn content_from_output(value: &Value) -> String {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string()
+}
+
+fn emit_sdk_event(
+    store: &Store,
+    proxy: &EventLoopProxy<ShellEvent>,
+    conversation: &Conversation,
+    run_id: &str,
+    kind: &str,
+    value: &Value,
+) {
+    let segment = value.get("segment").unwrap_or(value);
+    let status = segment
+        .get("status")
+        .and_then(Value::as_str)
+        .or_else(|| value.get("status").and_then(Value::as_str))
+        .unwrap_or("running");
+    let content = segment
+        .get("summary")
+        .or_else(|| segment.get("title"))
+        .or_else(|| segment.get("text"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    record_and_emit(
+        store,
+        proxy,
+        event(conversation, run_id, kind)
+            .with_status(status)
+            .with_content(content)
+            .with_event(value.clone()),
+    );
 }
 
 pub(super) fn args(
@@ -207,6 +307,13 @@ pub(super) fn args(
         }
     }
     args
+}
+
+fn stream_args(conversation: &Conversation, prompt: &str, use_claude_resume: bool) -> Vec<String> {
+    args(conversation, prompt, use_claude_resume)
+        .into_iter()
+        .filter(|value| value != "--json")
+        .collect()
 }
 
 fn sdk_script_path() -> PathBuf {

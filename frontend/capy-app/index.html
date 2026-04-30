@@ -17,14 +17,12 @@
         <span class="brand-stamp" aria-hidden="true">C</span>
         <div class="brand-text">
           <div class="brand-title">Capybara</div>
-          <div class="brand-subtitle">Demo Project / Canvas</div>
+          <div class="brand-subtitle">Canvas</div>
         </div>
       </div>
-      <nav class="project-tabs" aria-label="Project views">
-        <button class="view-tab active" type="button" data-view="canvas">画布</button>
-        <button class="view-tab" type="button" data-view="hero">主视觉</button>
-        <button class="view-tab" type="button" data-view="web">网页</button>
-        <button class="view-tab" type="button" data-view="brand">Brand Kit</button>
+      <nav class="workspace-tabs" aria-label="Workspace tabs">
+        <button class="workspace-tab active" type="button" data-workspace-tab="canvas" aria-selected="true">画布</button>
+        <button class="workspace-tab" type="button" data-workspace-tab="video" aria-selected="false">视频剪辑</button>
       </nav>
       <div class="top-actions">
         <button class="icon-action" type="button" id="cmdk-trigger" aria-label="Command palette">⌘K</button>
@@ -40,35 +38,44 @@
         <div id="node-label-layer" class="node-label-layer" data-component="node-label-layer" data-capy-component-kind=""></div>
 
         <div class="canvas-toolbar" data-component="canvas-toolbar">
-          <button class="seg active" type="button" data-tool="select">Select</button>
+          <button class="seg active" type="button" data-canvas-tool="select">Select</button>
           <button class="seg region-toggle" id="region-mode" type="button" aria-pressed="false">Region</button>
-          <button class="seg" type="button" data-tool="node">Node</button>
-          <button class="seg" type="button" data-tool="link">Link</button>
           <span class="seg-info" id="canvas-status">Canvas loading</span>
         </div>
 
-        <div class="canvas-bottom" data-component="canvas-bottom">
-          <button class="bt active" type="button" data-tool="cursor" aria-label="Select"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 5-4.5 1.5L7 13z"/></svg></button>
-          <button class="bt" type="button" data-tool="hand" aria-label="Hand"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M5 9V4a1.2 1.2 0 0 1 2.4 0V8M7.4 8V3a1.2 1.2 0 0 1 2.4 0v6M9.8 9V5a1.2 1.2 0 0 1 2.4 0v6.5c0 2.2-1.8 3.5-3.6 3.5h-2c-1 0-1.7-.4-2.4-1.1L2 11.5l1-1c.4-.4 1-.5 1.5-.2L5 11"/></svg></button>
-          <span class="bt-sep"></span>
-          <button class="bt" type="button" data-tool="rect" aria-label="Rectangle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3.5" width="11" height="9" rx="1.5"/></svg></button>
-          <button class="bt" type="button" data-tool="circle" aria-label="Circle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/></svg></button>
-          <button class="bt" type="button" data-tool="tri" aria-label="Triangle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3l5.5 9.5h-11z"/></svg></button>
-          <button class="bt" type="button" data-tool="diamond" aria-label="Diamond"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z"/></svg></button>
-          <span class="bt-sep"></span>
-          <button class="bt" type="button" data-tool="line" aria-label="Line"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13L13 3"/></svg></button>
-          <button class="bt" type="button" data-tool="arrow" aria-label="Arrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13L13 3M9 3h4v4"/></svg></button>
-          <button class="bt" type="button" data-tool="curve" aria-label="Curve"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 9c2-3 4-3 6 0s4 3 6 0"/></svg></button>
-          <button class="bt" type="button" data-tool="pen" aria-label="Pen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 14l3-1 8-8-2-2-8 8z"/></svg></button>
-          <span class="bt-sep"></span>
-          <button class="bt" type="button" data-tool="text" aria-label="Text"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 4h10M8 4v9M5 13h6"/></svg></button>
-          <button class="bt" type="button" data-tool="sticky" aria-label="Sticky"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3h10v8l-3 2H3z"/><path d="M10 13v-2h3"/></svg></button>
-          <button class="bt" type="button" data-tool="frame" aria-label="Frame"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M5 2v12M11 2v12M2 5h12M2 11h12"/></svg></button>
+        <div class="canvas-bottom" data-component="canvas-tool-bar" aria-label="Canvas tools">
+          <button class="bt active" type="button" data-canvas-tool="select" aria-label="Select" title="Select"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 5-4.5 1.5L7 13z"/></svg></button>
+          <span class="bt-sep" aria-hidden="true"></span>
+          <button class="bt" type="button" data-canvas-tool="rect" aria-label="Rectangle" title="Rectangle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="3.5" width="11" height="9" rx="1.5"/></svg></button>
+          <button class="bt" type="button" data-canvas-tool="ellipse" aria-label="Ellipse" title="Ellipse"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/></svg></button>
+          <button class="bt" type="button" data-canvas-tool="triangle" aria-label="Triangle" title="Triangle"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3l5.5 9.5h-11z"/></svg></button>
+          <button class="bt" type="button" data-canvas-tool="diamond" aria-label="Diamond" title="Diamond"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.5l5.5 5.5L8 13.5 2.5 8z"/></svg></button>
+          <span class="bt-sep" aria-hidden="true"></span>
+          <button class="bt" type="button" data-canvas-tool="line" aria-label="Line" title="Line"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13L13 3"/></svg></button>
+          <button class="bt" type="button" data-canvas-tool="arrow" aria-label="Arrow" title="Arrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13L13 3M9 3h4v4"/></svg></button>
+          <button class="bt" type="button" data-canvas-tool="freehand" aria-label="Pen" title="Pen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 14l3-1 8-8-2-2-8 8z"/></svg></button>
+          <button class="bt" type="button" data-canvas-tool="highlighter" aria-label="Highlighter" title="Highlighter"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 11l7-7 2 2-7 7H3z"/><path d="M2 14h7"/></svg></button>
+          <span class="bt-sep" aria-hidden="true"></span>
+          <button class="bt" type="button" data-canvas-tool="eraser" aria-label="Eraser" title="Eraser"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 10l6-6 3 3-6 6H4z"/><path d="M2 14h10"/></svg></button>
+          <button class="bt" type="button" data-canvas-tool="lasso" aria-label="Lasso" title="Lasso"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 8c0-3 10-3 10 0s-10 3-10 0z"/><path d="M9 10c1 1 2 2 3 3"/></svg></button>
+          <span class="bt-sep" aria-hidden="true"></span>
+          <button class="color-swatch active" type="button" data-canvas-color data-stroke="#8a6fae" data-fill="#fef3c7" data-fill-style="hachure" aria-label="Warm sketch color" title="Warm sketch color" style="--swatch-stroke:#8a6fae;--swatch-fill:#fef3c7"></button>
+          <button class="color-swatch" type="button" data-canvas-color data-stroke="#d94f5c" data-fill="#fde2e7" data-fill-style="hachure" aria-label="Coral sketch color" title="Coral sketch color" style="--swatch-stroke:#d94f5c;--swatch-fill:#fde2e7"></button>
+          <button class="color-swatch" type="button" data-canvas-color data-stroke="#3da065" data-fill="#e8f7d3" data-fill-style="hachure" aria-label="Mint sketch color" title="Mint sketch color" style="--swatch-stroke:#3da065;--swatch-fill:#e8f7d3"></button>
+          <button class="color-swatch" type="button" data-canvas-color data-stroke="#5b8abf" data-fill="#dbeafe" data-fill-style="hachure" aria-label="Blue sketch color" title="Blue sketch color" style="--swatch-stroke:#5b8abf;--swatch-fill:#dbeafe"></button>
+        </div>
+
+        <div class="canvas-zoom-controls" data-component="canvas-zoom-controls" aria-label="Canvas zoom controls">
+          <button class="zoom-btn" type="button" data-canvas-zoom="out" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8h8"/></svg></button>
+          <button class="zoom-value" type="button" id="canvas-zoom-value" data-canvas-zoom="reset" aria-label="Reset zoom" title="Reset zoom">100%</button>
+          <button class="zoom-btn" type="button" data-canvas-zoom="in" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 4v8M4 8h8"/></svg></button>
+          <button class="zoom-btn" type="button" data-canvas-zoom="fit" aria-label="Fit to content" title="Fit to content"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M5.5 2.5h-3v3M10.5 2.5h3v3M13.5 10.5v3h-3M2.5 10.5v3h3"/></svg></button>
         </div>
 
         <div id="context-region-layer" class="context-region-layer" data-component="context-region-layer"></div>
-        <div class="mini-map" data-component="mini-map">
-          <span></span><span></span><span></span>
+        <div class="mini-map" id="canvas-mini-map" data-component="canvas-mini-map" aria-label="Canvas minimap" role="button" tabindex="0">
+          <div class="mini-map-nodes" id="mini-map-nodes"></div>
+          <div class="mini-map-viewport" id="mini-map-viewport"></div>
         </div>
       </section>
 
@@ -85,7 +92,7 @@
           </div>
         </header>
 
-        <section class="planner-context" data-section="planner-context" id="planner-context">
+        <section class="planner-context" data-section="planner-context" id="planner-context" hidden aria-hidden="true">
           <span class="context-eyebrow" id="context-eyebrow">CONTEXT</span>
           <span class="context-title" id="context-title">No selection</span>
           <span class="context-meta" id="context-meta">选择左侧节点 · Planner 围绕该对象工作</span>
@@ -99,7 +106,7 @@
             <textarea id="prompt" rows="2" placeholder="继续聊 · 或 @ 选中画布节点"></textarea>
           </div>
           <div class="composer-foot">
-            <button class="config-summary" id="config-summary" type="button" aria-haspopup="dialog">claude · medium · bypass</button>
+            <button class="config-summary" id="config-summary" type="button" aria-haspopup="dialog">Claude · 默认模型 · 标准 · capybara</button>
             <button class="send" type="submit">Send</button>
           </div>
           <div class="runtime-foot" id="runtime-foot">SQLite store: waiting for shell</div>
@@ -116,6 +123,51 @@
         </header>
         <div class="inspector-stages" id="timeline-inspector-stages"></div>
       </aside>
+
+      <section class="video-editor" data-section="video-editor" aria-label="Video editor" hidden>
+        <header class="video-editor-head">
+          <div class="video-source">
+            <span class="context-eyebrow">COMPOSITION</span>
+            <input id="video-composition-path" class="video-path" placeholder="composition.json 路径">
+          </div>
+          <div class="video-actions">
+            <button class="tool-button secondary" type="button" id="video-open-sample">示例</button>
+            <button class="tool-button secondary" type="button" id="video-open">打开 JSON</button>
+            <button class="tool-button secondary" type="button" id="video-record">录制</button>
+            <button class="tool-button primary" type="button" id="video-export">导出</button>
+          </div>
+        </header>
+
+        <aside class="video-sidebar">
+          <div class="video-status" id="video-status" data-status="idle">等待 composition.json</div>
+          <div class="video-clip-list" id="video-clips"></div>
+        </aside>
+
+        <section class="video-stage">
+          <div class="video-preview-shell">
+            <div id="video-preview" class="video-preview-frame" data-component="video-preview" aria-label="Timeline preview"></div>
+          </div>
+          <div class="video-transport">
+            <span id="video-time">0.00s / 0.00s</span>
+            <input id="video-playhead" type="range" min="0" max="1" value="0" step="16">
+          </div>
+          <div class="video-timeline" id="video-timeline" data-component="video-timeline"></div>
+        </section>
+
+        <aside class="video-inspector-panel">
+          <header class="inspector-head">
+            <div>
+              <span class="context-eyebrow">TRACK</span>
+              <h2>属性</h2>
+            </div>
+          </header>
+          <div id="video-inspector" class="video-inspector"></div>
+          <div class="video-inspector-actions">
+            <button class="tool-button secondary" type="button" id="video-field-save">保存字段</button>
+          </div>
+          <div class="video-export-status" id="video-export-status">未导出</div>
+        </aside>
+      </section>
     </section>
   </main>
 
@@ -124,32 +176,34 @@
       <header class="config-dialog-head">
         <div>
           <span class="context-eyebrow">RUNTIME</span>
-          <span class="config-dialog-title">Conversation 配置</span>
+          <span class="config-dialog-title">会话模型</span>
         </div>
         <button class="cmd-close" type="button" id="config-dialog-close" aria-label="Close">esc</button>
       </header>
-      <div class="advanced-grid">
-        <label><span>Provider</span><select id="provider"><option value="claude">Claude</option><option value="codex">Codex</option></select></label>
-        <label><span>cwd</span><input id="cwd" placeholder="/Users/.../capybara"></label>
-        <label><span>Model</span><input id="model" placeholder="model"></label>
-        <label><span>Effort</span><select id="effort"><option value="">effort</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option></select></label>
-        <label><span>Policy</span><select id="policy"><option value="">policy</option></select></label>
-        <label><span>Sandbox</span><select id="sandbox"><option value="">sandbox</option><option value="read-only">read only</option><option value="workspace-write">workspace write</option><option value="danger-full-access">danger full</option></select></label>
-        <label class="grid-toggle"><input id="write-code" type="checkbox"><span>Write code</span></label>
-        <label class="grid-wide"><span>System</span><textarea id="system-prompt" rows="2"></textarea></label>
-        <label class="grid-wide"><span>Append system</span><textarea id="append-system-prompt" rows="2"></textarea></label>
-        <label class="grid-wide"><span>Developer</span><textarea id="developer-instructions" rows="2"></textarea></label>
-        <label><span>Add dirs</span><input id="add-dirs"></label>
-        <label><span>Allowed tools</span><input id="allowed-tools"></label>
-        <label><span>Disallowed tools</span><input id="disallowed-tools"></label>
-        <label><span>MCP config</span><input id="mcp-config"></label>
-        <label><span>Codex provider</span><input id="model-provider"></label>
-        <label><span>Approval reviewer</span><select id="approvals-reviewer"><option value="">reviewer</option><option value="user">user</option><option value="auto_review">auto review</option></select></label>
-        <label><span>Reasoning summary</span><select id="reasoning-summary"><option value="">summary</option><option value="auto">auto</option><option value="concise">concise</option><option value="detailed">detailed</option><option value="none">none</option></select></label>
-        <label class="grid-wide"><span>Output schema</span><input id="output-schema"></label>
-        <label class="grid-toggle"><input id="bare" type="checkbox"><span>Claude bare</span></label>
-        <label class="grid-toggle"><input id="search" type="checkbox"><span>Codex search</span></label>
-        <label><span>Service tier</span><input id="service-tier" placeholder="service tier"></label>
+      <div class="advanced-grid runtime-simple-grid">
+        <label><span>模型切换</span><select id="provider"><option value="claude">Claude</option><option value="codex">Codex</option></select></label>
+        <label><span>思考深度</span><select id="effort"><option value="medium" selected>medium</option><option value="low">low</option><option value="high">high</option><option value="xhigh">xhigh</option></select></label>
+        <label><span>权限</span><select id="policy"><option value="bypassPermissions">全自动</option><option value="auto">auto 模式</option></select></label>
+        <label class="grid-wide"><span>模型</span><select id="model"></select></label>
+        <label class="grid-wide"><span>cwd</span><input id="cwd" placeholder="/Users/.../capybara"></label>
+      </div>
+      <div class="runtime-hidden-fields" hidden aria-hidden="true">
+        <select id="sandbox" tabindex="-1"><option value="danger-full-access">danger full</option></select>
+        <input id="write-code" type="checkbox" checked tabindex="-1">
+        <textarea id="system-prompt" rows="1" tabindex="-1"></textarea>
+        <textarea id="append-system-prompt" rows="1" tabindex="-1"></textarea>
+        <textarea id="developer-instructions" rows="1" tabindex="-1"></textarea>
+        <input id="add-dirs" tabindex="-1">
+        <input id="allowed-tools" tabindex="-1">
+        <input id="disallowed-tools" tabindex="-1">
+        <input id="mcp-config" tabindex="-1">
+        <input id="model-provider" tabindex="-1">
+        <select id="approvals-reviewer" tabindex="-1"><option value=""></option><option value="user">user</option><option value="auto_review">auto review</option></select>
+        <select id="reasoning-summary" tabindex="-1"><option value=""></option><option value="auto">auto</option><option value="concise">concise</option><option value="detailed">detailed</option><option value="none">none</option></select>
+        <input id="output-schema" tabindex="-1">
+        <input id="bare" type="checkbox" tabindex="-1">
+        <input id="search" type="checkbox" tabindex="-1">
+        <input id="service-tier" tabindex="-1">
       </div>
       <footer class="config-dialog-foot">
         <button class="tool-button primary" type="button" id="config-dialog-done">完成</button>
@@ -178,13 +232,6 @@
           <span class="cmd-text">
             <span class="cmd-name">Toggle canvas dark mode</span>
             <span class="cmd-desc">切换 WASM canvas 暗色显示</span>
-          </span>
-        </button>
-        <button class="cmd-row" data-cmd="seed-demo" type="button">
-          <span class="cmd-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v6M5 8h6"/></svg></span>
-          <span class="cmd-text">
-            <span class="cmd-name">Seed demo nodes</span>
-            <span class="cmd-desc">画布为空时填默认 4 节点</span>
           </span>
         </button>
       </div>

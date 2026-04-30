@@ -7,6 +7,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 mod rows;
+mod run_queries;
 mod schema;
 mod util;
 

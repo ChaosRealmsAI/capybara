@@ -4,15 +4,22 @@ import initCanvas, {
   ai_snapshot_text,
   create_content_card,
   create_poster_document_card,
+  center_view_on,
   current_tool,
   dark_mode,
+  fit_view_to_content,
   focus_node,
   list_shapes,
   move_node_by_id,
+  pan_view_by,
+  reset_view,
   select_node,
   selected_context,
   selected_context_text,
+  set_vector_style,
+  set_tool,
   shape_count,
+  zoom_view_at,
   start as startCanvas
 } from "./canvas-pkg/capy_canvas_web.js";
 import {
@@ -44,6 +51,7 @@ import {
   stageLabel,
 } from "./timeline/inspector-render.js";
 import { createCanvasContext } from "./app/canvas-context.js";
+import { createCanvasControls } from "./app/canvas-controls.js";
 import { createCanvasRenderer } from "./app/canvas-renderer.js";
 import { createCanvasWorkbench } from "./app/canvas-workbench.js";
 import { createConversations } from "./app/conversations.js";
@@ -54,6 +62,7 @@ import { installShellUi } from "./app/shell-ui.js";
 import { labelSync, nodeRegistry, pending, posterDocuments, state } from "./app/state.js";
 import { base64ToBytes, contentKindLabel, nextFrame, normalizeValue, stringifyError } from "./app/utils.js";
 import { createTimelineWorkbench } from "./app/timeline-workbench.js";
+import { createVideoEditor } from "./app/video-editor.js";
 import { installWindowFacade } from "./app/window-facade.js";
 
 const {
@@ -64,6 +73,8 @@ const {
   addDirsEl, allowedToolsEl, disallowedToolsEl, mcpConfigEl, modelProviderEl,
   approvalsReviewerEl, reasoningSummaryEl, outputSchemaEl, bareEl, searchEl,
   writeCodeEl, runtimeFootEl, canvasEl, canvasPanelEl, canvasStatusEl,
+  canvasToolButtonsEl, canvasColorButtonsEl, canvasZoomButtonsEl, canvasZoomValueEl,
+  miniMapEl, miniMapNodesEl, miniMapViewportEl,
   posterLayerEl, labelLayerEl, regionLayerEl, regionModeEl, plannerContextEl,
   contextTitleEl, contextMetaEl, contextAttachmentsEl,
   timelineInspectorEl: nextFrameInspectorEl,
@@ -84,8 +95,10 @@ const {
 
 let rendererApi;
 let contextApi;
+let controlsApi;
 let workbenchApi;
 let timelineApi;
+let videoEditorApi;
 let conversationsApi;
 
 conversationsApi = createConversations({
@@ -117,6 +130,10 @@ timelineApi = createTimelineWorkbench({
   inferType: (...args) => rendererApi.inferType(...args),
 });
 
+videoEditorApi = createVideoEditor({
+  state, dom, rpc, stringifyError, setRunStatus,
+});
+
 contextApi = createCanvasContext({
   state, canvasEl, canvasPanelEl, regionLayerEl, regionModeEl, plannerContextEl,
   contextTitleEl, contextMetaEl, contextAttachmentsEl, clampRectToBounds,
@@ -144,6 +161,28 @@ workbenchApi = createCanvasWorkbench({
   stateSnapshot: () => stateSnapshot(), rpc, imageToolPromptEl, imageToolStatusEl, imageToolMetaEl,
 });
 
+controlsApi = createCanvasControls({
+  state,
+  canvasToolButtonsEl,
+  canvasColorButtonsEl,
+  canvasZoomButtonsEl,
+  canvasZoomValueEl,
+  miniMapEl,
+  miniMapNodesEl,
+  miniMapViewportEl,
+  set_tool,
+  set_vector_style,
+  center_view_on,
+  zoom_view_at,
+  pan_view_by,
+  reset_view,
+  fit_view_to_content,
+  refreshPlannerContext: () => refreshPlannerContext(),
+  stringifyError,
+});
+controlsApi.installCanvasControls();
+videoEditorApi.installVideoEditor();
+
 const shellUi = installShellUi({
   state, configDialogEl, configSummaryEl, configDialogCloseEl, configDialogDoneEl,
   cmdkTriggerEl, cmdPaletteEl, cmdSearchEl, cmdCloseEl, cmdListEl, cmdToolEl,
@@ -151,15 +190,15 @@ const shellUi = installShellUi({
   updateConversationConfig: (...args) => conversationsApi.updateConversationConfig(...args),
   renderRuntimeFoot, renderError: (...args) => conversationsApi.renderError(...args),
   defaultImagePrompt: (...args) => workbenchApi.defaultImagePrompt(...args),
-  seedDemoCanvas: (...args) => workbenchApi.seedDemoCanvas(...args),
 });
 
 installWindowFacade({
   state,
   capyApi: {
     add_image_asset_at, ai_snapshot, ai_snapshot_text, create_content_card,
-    create_poster_document_card, current_tool, dark_mode, focus_node, list_shapes,
-    move_node_by_id, select_node, selected_context, selected_context_text, shape_count
+    create_poster_document_card, center_view_on, current_tool, dark_mode, fit_view_to_content,
+    focus_node, list_shapes, move_node_by_id, pan_view_by, reset_view, select_node,
+    selected_context, selected_context_text, set_vector_style, set_tool, shape_count, zoom_view_at
   },
   workbenchApi: {
     composePromptWithContext: (...args) => contextApi.composePromptWithContext(...args),
@@ -179,12 +218,37 @@ installWindowFacade({
     stateSnapshot, attachTimelineComposition: (...args) => timelineApi.attachTimelineComposition(...args),
     openTimelineComposition: (...args) => timelineApi.openTimelineComposition(...args),
     openTimelineInspector: (...args) => timelineApi.openTimelineInspector(...args),
+    switchWorkspaceTab: (...args) => videoEditorApi.switchWorkspace(...args),
+    openVideoComposition: (...args) => videoEditorApi.openComposition(...args),
+    renderVideoEditor: (...args) => videoEditorApi.renderVideoEditor(...args),
     startCanvasImageTool: (...args) => workbenchApi.startCanvasImageTool(...args),
     verifyCanvasImageTool: (...args) => workbenchApi.verifyCanvasImageTool(...args),
     verifyLabelMoveSync: (...args) => contextApi.verifyLabelMoveSync(...args),
     verifyPosterRenderer: (...args) => rendererApi.verifyPosterRenderer(...args),
+    setCanvasTool: (...args) => controlsApi.setCanvasTool(...args),
+    setCanvasZoom: (...args) => controlsApi.setCanvasZoom(...args),
+    centerFromMiniMapPoint: (...args) => controlsApi.centerFromMiniMapPoint(...args),
     openCmdPalette: (...args) => shellUi.openCmdPalette(...args),
     closeCmdPalette: (...args) => shellUi.closeCmdPalette(...args),
+    setPlannerMessages: (messages = []) => {
+      state.messages = Array.isArray(messages) ? messages : [];
+      state.streaming.clear();
+      conversationsApi.renderMessages();
+      return { messages: state.messages.length, streaming: state.streaming.size };
+    },
+    setPlannerStreaming: (content = "") => {
+      state.streaming.clear();
+      state.streaming.set("verify", { content: String(content || ""), segments: [] });
+      setRunStatus("running");
+      conversationsApi.renderMessages();
+      return { runStatus: state.planner.runStatus, streaming: state.streaming.size };
+    },
+    setPlannerRunStatus: (status = "idle") => {
+      setRunStatus(status);
+      if (status !== "running") state.streaming.clear();
+      conversationsApi.renderMessages();
+      return { runStatus: state.planner.runStatus, streaming: state.streaming.size };
+    },
   }
 });
 
@@ -255,20 +319,13 @@ providerEl?.addEventListener("change", () => {
   updateConfigSummary();
 });
 
-[effortEl, policyEl, sandboxEl, writeCodeEl].forEach((el) => {
-  el?.addEventListener("change", () => {
-    if (el === writeCodeEl) applyWriteCodeDefaults();
-    updateConfigSummary();
-  });
+[effortEl, modelEl, cwdEl, policyEl].forEach((el) => {
+  const eventName = el === modelEl || el === cwdEl ? "input" : "change";
+  el?.addEventListener(eventName, () => updateConfigSummary());
 });
 
 imageToolDryRunEl?.addEventListener("click", () => runImageTool(false));
 imageToolLiveEl?.addEventListener("click", () => runImageTool(true));
-document.querySelectorAll(".view-tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".view-tab").forEach((b) => b.classList.toggle("active", b === btn));
-  });
-});
 
 function runImageTool(live) {
   workbenchApi.startCanvasImageTool({ live }).catch((error) => {
@@ -282,28 +339,49 @@ function refreshPlannerContext() {
   const snapshot = normalizeValue(ai_snapshot()) || {};
   const context = normalizeValue(selected_context()) || { selected_count: 0, items: [] };
   const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
+  const semanticNodes = nodes.filter((node) => !isVectorGraphic(node));
+  const vectorNodes = nodes.filter(isVectorGraphic);
   const selectedItem = Array.isArray(context.items) ? context.items[0] || null : null;
-  registerCanvasNodes(nodes);
-  timelineApi.applyTimelineAttachments(nodes);
-  state.blocks = nodes;
-  state.selectedId = selectedItem?.id || null;
+  const selectedNode = selectedItem && !isVectorGraphic(selectedItem) ? selectedItem : null;
+  const selectedVector = selectedItem && isVectorGraphic(selectedItem) ? selectedItem : null;
+  registerCanvasNodes(semanticNodes);
+  timelineApi.applyTimelineAttachments(semanticNodes);
+  state.blocks = semanticNodes;
+  state.selectedId = selectedNode?.id || null;
   state.canvas.ready = true;
-  state.canvas.nodeCount = Number(shape_count()) || nodes.length;
-  state.canvas.selectedNode = selectedItem;
+  state.canvas.nodeCount = semanticNodes.length;
+  state.canvas.vectorCount = vectorNodes.length;
+  state.canvas.objectCount = Number(shape_count()) || nodes.length;
+  state.canvas.objects = nodes;
+  state.canvas.selectedNode = selectedNode;
+  state.canvas.selectedVector = selectedVector;
   state.canvas.currentTool = current_tool();
   state.canvas.darkMode = Boolean(dark_mode());
   state.canvas.viewport = snapshot.viewport || null;
   state.canvas.snapshotText = ai_snapshot_text();
-  state.planner.context = context;
-  state.planner.contextText = selected_context_text();
-  contextApi.syncCanvasContext(selectedItem, snapshot.viewport || null);
-  rendererApi.renderPosterOverlays(nodes, state.selectedId, snapshot.viewport || null);
-  rendererApi.renderNodeLabels(nodes, state.selectedId, snapshot.viewport || null);
+  state.planner.context = selectedNode ? context : { selected_count: 0, items: [] };
+  state.planner.contextText = selectedNode ? selected_context_text() : "";
+  contextApi.syncCanvasContext(selectedNode, snapshot.viewport || null);
+  rendererApi.renderPosterOverlays(semanticNodes, state.selectedId, snapshot.viewport || null);
+  rendererApi.renderNodeLabels(semanticNodes, state.selectedId, snapshot.viewport || null);
+  controlsApi?.renderCanvasControls(snapshot);
   contextApi.renderRegionOverlay();
-  contextApi.renderPlannerContext(selectedItem);
-  timelineApi.syncTimelineInspector(selectedItem);
-  updateCanvasStatus(`${state.canvas.nodeCount} nodes · ${state.canvas.currentTool}`);
+  contextApi.renderPlannerContext(selectedNode);
+  timelineApi.syncTimelineInspector(selectedNode);
+  updateCanvasStatus(canvasStatusLabel(state.canvas));
   return stateSnapshot();
+}
+
+function isVectorGraphic(node) {
+  return String(node?.content_kind || "").toLowerCase() === "shape";
+}
+
+function canvasStatusLabel(canvas) {
+  const parts = [];
+  if (canvas.nodeCount) parts.push(`${canvas.nodeCount} ${canvas.nodeCount === 1 ? "node" : "nodes"}`);
+  if (canvas.vectorCount) parts.push(`${canvas.vectorCount} ${canvas.vectorCount === 1 ? "vector" : "vectors"}`);
+  if (!parts.length) parts.push("empty");
+  return `${parts.join(" · ")} · ${canvas.currentTool || "select"}`;
 }
 
 function registerCanvasNodes(nodes) {
@@ -325,6 +403,8 @@ function stateSnapshot() {
     selectedId: state.selectedId,
     blocks: state.blocks,
     planner: state.planner,
+    workspace: state.workspace,
+    video: state.video,
     poster: {
       ...state.poster,
       documents: rendererApi.posterDocumentsState()
@@ -336,6 +416,7 @@ function stateSnapshot() {
 async function init() {
   cwdEl.value = window.CAPYBARA_SESSION?.cwd || "/Users/Zhuanz/workspace/capybara";
   syncPolicyOptions();
+  applyWriteCodeDefaults();
   setRunStatus("idle");
   workbenchApi.renderCanvasToolStatus();
   conversationsApi.renderMessages();

@@ -1,3 +1,5 @@
+import { renderMessageContent, renderMessageSegments } from "./message-renderer.js";
+
 export function createConversations(ctx) {
   const {
     state,
@@ -60,13 +62,14 @@ async function openConversation(id) {
   state.messages = detail.messages || [];
   providerEl.value = detail.conversation.provider;
   cwdEl.value = detail.conversation.cwd;
-  modelEl.value = detail.conversation.model || "";
   effortEl.value = detail.conversation.config?.effort || "";
+  syncPolicyOptions();
+  setSelectValue(modelEl, detail.conversation.model || modelEl.value);
   const policy = detail.conversation.provider === "claude"
     ? detail.conversation.config?.permissionMode
-    : detail.conversation.config?.approvalPolicy;
-  policyEl.value = policy || "";
-  sandboxEl.value = detail.conversation.config?.sandbox || "";
+    : codexPermissionPreset(detail.conversation.config);
+  setSelectValue(policyEl, policy || policyEl.value);
+  sandboxEl.value = detail.conversation.config?.sandbox || sandboxEl.value;
   serviceTierEl.value = detail.conversation.config?.serviceTier || "";
   systemPromptEl.value = detail.conversation.config?.systemPrompt || "";
   appendSystemPromptEl.value = detail.conversation.config?.appendSystemPrompt || "";
@@ -83,12 +86,27 @@ async function openConversation(id) {
   searchEl.checked = Boolean(detail.conversation.config?.search);
   writeCodeEl.checked = Boolean(detail.conversation.config?.writeCode);
   setRunStatus(detail.conversation.status || "idle");
-  syncPolicyOptions();
   applyWriteCodeDefaults();
   renderConversations();
   renderMessages();
   renderRuntimeFoot();
   updateConfigSummary();
+}
+
+function codexPermissionPreset(config = {}) {
+  if (config?.sandbox === "workspace-write") return "codex-project-auto";
+  return "codex-full-auto";
+}
+
+function setSelectValue(select, value) {
+  if (!select || !value) return;
+  if (![...select.options].some((option) => option.value === value)) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+  select.value = value;
 }
 
 async function updateConversationConfig() {
@@ -118,21 +136,28 @@ function renderConversations() {
 
 function renderMessages() {
   messagesEl.innerHTML = "";
-  if (state.messages.length === 0 && state.streaming.size === 0) {
+  const isRunning = state.planner.runStatus === "running";
+  if (state.messages.length === 0 && state.streaming.size === 0 && !isRunning) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
+    empty.dataset.component = "chat-empty-state";
     empty.textContent = "选中画布上的节点 · Planner 会围绕该对象工作。试试 ⌘K 打开生图工具。";
     messagesEl.append(empty);
     return;
   }
-  for (const message of state.messages) messagesEl.append(messageNode(message.role, message.content));
-  for (const content of state.streaming.values()) messagesEl.append(messageNode("assistant", content || "..."));
+  for (const message of state.messages) messagesEl.append(messageNode(message.role, message.content, message.event_json));
+  for (const entry of state.streaming.values()) {
+    if (entry) messagesEl.append(messageNode("assistant", streamingContent(entry), streamingEventJson(entry), true));
+  }
+  if (isRunning) messagesEl.append(loadingMessageNode());
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function messageNode(role, content) {
+function messageNode(role, content, eventJson = null, streaming = false) {
   const node = document.createElement("article");
   node.className = `message ${role}`;
+  node.dataset.role = role;
+  if (streaming) node.classList.add("is-streaming");
   if (role !== "user") {
     const label = document.createElement("div");
     label.className = "role";
@@ -141,14 +166,37 @@ function messageNode(role, content) {
   }
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = content;
+  bubble.dataset.component = "message-bubble";
+  const segments = eventJson?.segments;
+  if (Array.isArray(segments) && segments.length) {
+    bubble.append(renderMessageSegments(segments, { loading: streaming, fallback: content }));
+  } else {
+    bubble.append(renderMessageContent(content));
+  }
   node.append(bubble);
+  return node;
+}
+
+function loadingMessageNode() {
+  const node = messageNode("assistant", "");
+  node.classList.add("is-loading");
+  node.querySelector(".bubble")?.replaceChildren(renderMessageContent("", { loading: true }));
   return node;
 }
 
 function renderError(error) {
   state.messages = [{ role: "system", content: stringifyError(error) }];
   renderMessages();
+}
+
+function streamingContent(entry) {
+  if (typeof entry === "string") return entry;
+  return entry?.content || "";
+}
+
+function streamingEventJson(entry) {
+  if (typeof entry === "string") return null;
+  return { segments: entry?.segments || [] };
 }
 
 

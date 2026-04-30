@@ -1,104 +1,87 @@
 export function createRuntimeControls({ state, dom }) {
   const {
     providerEl,
+    cwdEl,
+    modelEl,
     effortEl,
     policyEl,
     sandboxEl,
-    serviceTierEl,
-    systemPromptEl,
-    appendSystemPromptEl,
-    developerInstructionsEl,
-    addDirsEl,
-    allowedToolsEl,
-    disallowedToolsEl,
-    mcpConfigEl,
-    modelProviderEl,
-    approvalsReviewerEl,
-    reasoningSummaryEl,
-    outputSchemaEl,
-    bareEl,
-    searchEl,
     writeCodeEl,
     configSummaryEl,
     runStatusEl,
+    stopEl,
     runtimeFootEl,
     canvasStatusEl,
   } = dom;
 
   function currentConfig() {
+    const provider = providerEl.value || "claude";
+    const permission = policyEl.value || defaultPermission(provider);
     const config = {
       runtimeBackend: "sdk",
       capyCanvasTools: true,
+      effort: effortEl.value || "medium",
+      writeCode: true,
     };
-    if (effortEl.value) config.effort = effortEl.value;
-    if (providerEl.value === "claude" && policyEl.value) config.permissionMode = policyEl.value;
-    if (providerEl.value === "codex" && policyEl.value) config.approvalPolicy = policyEl.value;
-    if (sandboxEl.value) config.sandbox = sandboxEl.value;
-    if (serviceTierEl.value.trim()) config.serviceTier = serviceTierEl.value.trim();
-    if (systemPromptEl.value.trim()) config.systemPrompt = systemPromptEl.value.trim();
-    if (appendSystemPromptEl.value.trim()) config.appendSystemPrompt = appendSystemPromptEl.value.trim();
-    if (developerInstructionsEl.value.trim()) config.developerInstructions = developerInstructionsEl.value.trim();
-    const addDirs = addDirsEl.value.split(",").map((value) => value.trim()).filter(Boolean);
-    if (addDirs.length) config.addDirs = addDirs;
-    if (allowedToolsEl.value.trim()) config.allowedTools = allowedToolsEl.value.trim();
-    if (disallowedToolsEl.value.trim()) config.disallowedTools = disallowedToolsEl.value.trim();
-    if (mcpConfigEl.value.trim()) config.mcpConfig = mcpConfigEl.value.trim();
-    if (modelProviderEl.value.trim()) config.modelProvider = modelProviderEl.value.trim();
-    if (approvalsReviewerEl.value) config.approvalsReviewer = approvalsReviewerEl.value;
-    if (reasoningSummaryEl.value) config.reasoningSummary = reasoningSummaryEl.value;
-    if (outputSchemaEl.value.trim()) config.outputSchema = outputSchemaEl.value.trim();
-    if (bareEl.checked) config.bare = true;
-    if (searchEl.checked) config.search = true;
-    if (writeCodeEl.checked) {
-      config.writeCode = true;
-      if (providerEl.value === "codex" && !config.approvalPolicy) config.approvalPolicy = "never";
-      if (providerEl.value === "claude" && !config.permissionMode) config.permissionMode = "bypassPermissions";
-      if (!config.sandbox) config.sandbox = "danger-full-access";
-      config.allowDangerouslySkipPermissions = true;
-      config.dangerouslySkipPermissions = true;
+    if (provider === "codex") {
+      config.approvalPolicy = "never";
+      config.sandbox = permission === "codex-project-auto" ? "workspace-write" : "danger-full-access";
+      config.capyProjectInstructions = true;
+    } else {
+      config.permissionMode = permission === "auto" ? "auto" : "bypassPermissions";
+      config.allowDangerouslySkipPermissions = config.permissionMode === "bypassPermissions";
+      config.dangerouslySkipPermissions = config.permissionMode === "bypassPermissions";
     }
     return config;
   }
 
   function syncPolicyOptions() {
-    const provider = providerEl.value;
-    const options = provider === "claude"
-      ? [["", "policy"], ["default", "default"], ["acceptEdits", "accept edits"], ["plan", "plan"], ["dontAsk", "dont ask"], ["bypassPermissions", "bypass"]]
-      : [["", "policy"], ["on-request", "on request"], ["never", "never"], ["untrusted", "untrusted"]];
-    const current = policyEl.value;
+    const provider = providerEl.value || "claude";
+    const previousPermission = policyEl.value;
     policyEl.innerHTML = "";
-    for (const [value, label] of options) {
+    for (const optionDef of permissionsFor(provider)) {
       const option = document.createElement("option");
-      option.value = value;
-      option.textContent = label;
+      option.value = optionDef.value;
+      option.textContent = optionDef.label;
       policyEl.append(option);
     }
-    policyEl.value = options.some(([value]) => value === current) ? current : "";
+    policyEl.value = [...policyEl.options].some((option) => option.value === previousPermission)
+      ? previousPermission
+      : defaultPermission(provider);
+    syncModelOptions(modelEl, provider);
+    syncSandbox(sandboxEl, policyEl);
+    if (writeCodeEl) writeCodeEl.checked = true;
   }
 
   function applyWriteCodeDefaults() {
-    if (!writeCodeEl.checked) return;
-    if (providerEl.value === "codex") policyEl.value = "never";
-    else policyEl.value = "bypassPermissions";
-    sandboxEl.value = "danger-full-access";
+    if (writeCodeEl) writeCodeEl.checked = true;
+    if (!effortEl.value) effortEl.value = "medium";
+    if (!policyEl.value) policyEl.value = defaultPermission(providerEl.value || "claude");
+    syncSandbox(sandboxEl, policyEl);
   }
 
   function updateConfigSummary() {
     if (!configSummaryEl) return;
-    const provider = providerEl?.value || "claude";
-    const effort = effortEl?.value || "default";
-    const policy = policyEl?.value || "default";
-    configSummaryEl.textContent = `${provider} · ${effort} · ${policy}`;
+    const provider = providerEl?.value === "codex" ? "Codex" : "Claude";
+    const model = selectedModelLabel(modelEl);
+    const effort = effortEl?.value || "medium";
+    const permission = selectedPermissionLabel(policyEl);
+    const cwd = cwdEl?.value.trim() || DEFAULT_CWD;
+    configSummaryEl.textContent = `${provider} · ${model} · ${effort} · ${permission}`;
+    configSummaryEl.title = `SDK 全自动 · ${cwd}`;
   }
 
   function setRunStatus(status) {
-    runStatusEl.textContent = status || "idle";
-    runStatusEl.dataset.status = status || "idle";
+    const next = status || "idle";
+    state.planner.runStatus = next;
+    runStatusEl.textContent = next;
+    runStatusEl.dataset.status = next;
+    if (stopEl) stopEl.disabled = next !== "running";
   }
 
   function renderRuntimeFoot() {
-    const provider = providerEl.value === "claude" ? "Claude Agent SDK" : "Codex SDK";
-    runtimeFootEl.textContent = `${provider} · SDK 后端 · Canvas CLI tools active · ${state.dbPath || "SQLite store pending"}`;
+    runtimeFootEl.hidden = true;
+    runtimeFootEl.textContent = "";
   }
 
   function updateCanvasStatus(text) {
@@ -114,4 +97,68 @@ export function createRuntimeControls({ state, dom }) {
     renderRuntimeFoot,
     updateCanvasStatus,
   };
+}
+
+const DEFAULT_CWD = "/Users/Zhuanz/workspace/capybara";
+const PROVIDER_OPTIONS = {
+  claude: {
+    models: [
+      { value: "sonnet", label: "sonnet-4.7" },
+      { value: "opus", label: "opus-4.7" },
+    ],
+    permissions: [
+      { value: "bypassPermissions", label: "全自动" },
+      { value: "auto", label: "auto 模式" },
+    ],
+  },
+  codex: {
+    models: [
+      { value: "gpt-5.5", label: "gpt-5.5" },
+      { value: "gpt-5.4", label: "gpt-5.4" },
+      { value: "gpt-5.4-mini", label: "gpt-5.4-mini" },
+    ],
+    permissions: [
+      { value: "codex-full-auto", label: "全自动" },
+      { value: "codex-project-auto", label: "项目内自动" },
+    ],
+  },
+};
+
+function syncModelOptions(modelEl, provider) {
+  if (!modelEl) return;
+  const previous = modelEl.value;
+  const models = modelsFor(provider);
+  modelEl.innerHTML = "";
+  for (const model of models) {
+    const option = document.createElement("option");
+    option.value = model.value;
+    option.textContent = model.label;
+    modelEl.append(option);
+  }
+  modelEl.value = models.some((model) => model.value === previous) ? previous : models[0]?.value || "";
+}
+
+function modelsFor(provider) {
+  return PROVIDER_OPTIONS[provider]?.models || PROVIDER_OPTIONS.claude.models;
+}
+
+function permissionsFor(provider) {
+  return PROVIDER_OPTIONS[provider]?.permissions || PROVIDER_OPTIONS.claude.permissions;
+}
+
+function defaultPermission(provider) {
+  return permissionsFor(provider)[0]?.value || "bypassPermissions";
+}
+
+function selectedModelLabel(modelEl) {
+  return modelEl?.selectedOptions?.[0]?.textContent || modelEl?.value || "默认模型";
+}
+
+function selectedPermissionLabel(policyEl) {
+  return policyEl?.selectedOptions?.[0]?.textContent || policyEl?.value || "全自动";
+}
+
+function syncSandbox(sandboxEl, policyEl) {
+  if (!sandboxEl) return;
+  sandboxEl.value = policyEl.value === "codex-project-auto" ? "workspace-write" : "danger-full-access";
 }

@@ -40,9 +40,15 @@ export function installShellEventListeners(handlers) {
     const detail = event.detail;
     if (!detail || detail.conversation_id !== state.activeId) return;
     if (detail.status) setRunStatus(detail.status);
-    if (detail.kind === "assistant_delta") {
-      const current = state.streaming.get(detail.run_id) || "";
-      state.streaming.set(detail.run_id, current + (detail.delta || ""));
+    if (detail.kind === "segment" && detail.event?.type === "segment") {
+      const entry = streamingEntry(state, detail.run_id);
+      upsertSegment(entry, detail.event.segment);
+      state.streaming.set(detail.run_id, entry);
+      renderMessages();
+    } else if (detail.kind === "assistant_delta") {
+      const entry = streamingEntry(state, detail.run_id);
+      entry.content += detail.delta || "";
+      state.streaming.set(detail.run_id, entry);
       renderMessages();
     } else if (detail.kind === "assistant_done" || detail.kind === "error") {
       state.streaming.delete(detail.run_id);
@@ -65,6 +71,24 @@ export function installShellEventListeners(handlers) {
   window.addEventListener("capy:timeline-opened", (event) => {
     handleTimelineOpened(event.detail);
   });
+}
+
+function streamingEntry(state, runId) {
+  const current = state.streaming.get(runId);
+  if (typeof current === "string") return { content: current, segments: [] };
+  return current || { content: "", segments: [] };
+}
+
+function upsertSegment(entry, segment) {
+  if (!segment?.id) return;
+  const index = entry.segments.findIndex((item) => item.id === segment.id);
+  if (index === -1) entry.segments.push(segment);
+  else entry.segments.splice(index, 1, { ...entry.segments[index], ...segment });
+  entry.content = entry.segments
+    .filter((item) => item.kind === "text")
+    .map((item) => item.text || "")
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function installNativeWindowDrag(topbar) {

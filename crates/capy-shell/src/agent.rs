@@ -2,7 +2,6 @@ use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
-use serde::Serialize;
 use serde_json::{Value, json};
 use tao::event_loop::EventLoopProxy;
 
@@ -13,10 +12,13 @@ use crate::store::{Conversation, CreateRunEvent, Provider, Store};
 mod claude;
 mod codex;
 mod jsonrpc;
+mod runtime_event;
 mod sdk;
 mod tool_path;
 
 use jsonrpc::{read_json_line, read_until_response, send_json};
+pub use runtime_event::AgentRuntimeEvent;
+use runtime_event::event;
 use tool_path::{tool_launch, tool_version};
 
 #[cfg(test)]
@@ -34,29 +36,11 @@ use sdk::args as sdk_args;
 #[cfg(test)]
 use tool_path::{desktop_tool_path_env, resolve_tool_path};
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct AgentRuntimeEvent {
-    pub conversation_id: String,
-    pub run_id: String,
-    pub provider: String,
-    pub kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub delta: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(default, skip_serializing_if = "Value::is_null")]
-    pub event: Value,
-}
-
 #[derive(Debug)]
 struct RunOutput {
     content: String,
     native_thread_id: Option<String>,
+    event_json: Value,
 }
 
 pub fn spawn_turn(
@@ -92,7 +76,7 @@ pub fn spawn_turn(
     let run_id = run.id.clone();
     std::thread::spawn(move || {
         let result = if sdk::enabled(&conversation.config) {
-            run_sdk(&store, &conversation, &run_id, &prompt)
+            run_sdk(&store, &proxy, &conversation, &run_id, &prompt)
         } else {
             match conversation.provider {
                 Provider::Claude => run_claude(&store, &proxy, &conversation, &run_id, &prompt),
@@ -107,7 +91,7 @@ pub fn spawn_turn(
                         &conversation.id,
                         "assistant",
                         output.content.trim_end(),
-                        json!({ "provider": conversation.provider.as_str() }),
+                        output.event_json,
                     );
                 }
                 if let Some(thread_id) = output.native_thread_id {
@@ -124,6 +108,23 @@ pub fn spawn_turn(
                 );
             }
             Err(error) => {
+                let was_stopped = store
+                    .get_run(&run_id)
+                    .ok()
+                    .flatten()
+                    .map(|run| run.status == "stopped")
+                    .unwrap_or(false);
+                if was_stopped {
+                    let _status_result = store.update_status(&conversation.id, "idle");
+                    record_and_emit(
+                        &store,
+                        &proxy,
+                        event(&conversation, &run_id, "run_status")
+                            .with_status("stopped")
+                            .with_content("Agent run stopped"),
+                    );
+                    return;
+                }
                 let _status_result = store.update_status(&conversation.id, "error");
                 let _run_result = store.finish_run(&run_id, "failed", Some(&error));
                 let _message_result = store.add_message(
@@ -188,14 +189,16 @@ pub fn doctor() -> Value {
 
 fn run_sdk(
     store: &Store,
+    proxy: &EventLoopProxy<ShellEvent>,
     conversation: &Conversation,
     run_id: &str,
     prompt: &str,
 ) -> Result<RunOutput, String> {
-    let output = sdk::run(store, conversation, run_id, prompt)?;
+    let output = sdk::run(store, proxy, conversation, run_id, prompt)?;
     Ok(RunOutput {
         content: output.content,
         native_thread_id: output.native_thread_id,
+        event_json: output.event_json,
     })
 }
 
@@ -275,6 +278,7 @@ fn run_claude(
     Ok(RunOutput {
         content,
         native_thread_id: None,
+        event_json: json!({ "provider": conversation.provider.as_str() }),
     })
 }
 
@@ -392,6 +396,7 @@ fn run_codex(
     Ok(RunOutput {
         content,
         native_thread_id: Some(thread_id),
+        event_json: json!({ "provider": conversation.provider.as_str() }),
     })
 }
 
@@ -420,42 +425,6 @@ fn config_array(config: &Value, key: &str) -> Vec<String> {
 
 fn non_empty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
-}
-
-fn event(conversation: &Conversation, run_id: &str, kind: &str) -> AgentRuntimeEvent {
-    AgentRuntimeEvent {
-        conversation_id: conversation.id.clone(),
-        run_id: run_id.to_string(),
-        provider: conversation.provider.as_str().to_string(),
-        kind: kind.to_string(),
-        delta: None,
-        content: None,
-        status: None,
-        error: None,
-        event: Value::Null,
-    }
-}
-
-impl AgentRuntimeEvent {
-    fn with_status(mut self, status: impl Into<String>) -> Self {
-        self.status = Some(status.into());
-        self
-    }
-
-    fn with_content(mut self, content: impl Into<String>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-
-    fn with_error(mut self, error: impl Into<String>) -> Self {
-        self.error = Some(error.into());
-        self
-    }
-
-    fn with_delta(mut self, delta: impl Into<String>) -> Self {
-        self.delta = Some(delta.into());
-        self
-    }
 }
 
 fn record_and_emit(store: &Store, proxy: &EventLoopProxy<ShellEvent>, event: AgentRuntimeEvent) {

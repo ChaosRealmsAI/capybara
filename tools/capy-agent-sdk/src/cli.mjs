@@ -3,8 +3,8 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { normalize, parseArgs, SDK_ROOT } from "./normalize.mjs";
-import { runClaude } from "./providers/claude.mjs";
-import { runCodex } from "./providers/codex.mjs";
+import { runClaude, runClaudeStream } from "./providers/claude.mjs";
+import { runCodex, runCodexStream } from "./providers/codex.mjs";
 
 const [command = "help", ...rest] = process.argv.slice(2);
 
@@ -13,6 +13,7 @@ try {
   if (command === "doctor") printJson(doctor());
   else if (command === "normalize") printJson(normalize(args));
   else if (command === "run") await run(args);
+  else if (command === "run-stream") await runStream(args);
   else if (command === "help" || command === "--help" || command === "-h") printHelp();
   else throw new Error(`unknown command: ${command}`);
 } catch (error) {
@@ -34,6 +35,29 @@ async function run(args) {
     delete output.messages;
   }
   printJson(output);
+}
+
+async function runStream(args) {
+  const prompt = args.prompt ?? args._.join(" ");
+  if (!prompt || String(prompt).trim().length === 0) {
+    throw new Error("run-stream requires --prompt or positional prompt text");
+  }
+  const normalized = normalize({ ...args, prompt });
+  const emit = (event) => printJsonLine(event);
+  try {
+    const output = normalized.provider === "codex"
+      ? await runCodexStream(normalized, emit)
+      : await runClaudeStream(normalized, emit);
+    if (!args.raw) {
+      delete output.items;
+      delete output.messages;
+    }
+    printJsonLine({ ok: true, type: "run_completed", ...output });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    printJsonLine({ ok: false, type: "run_failed", provider: normalized.provider, error: message, normalized });
+    process.exitCode = 1;
+  }
 }
 
 function doctor() {
@@ -77,6 +101,10 @@ function printJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function printJsonLine(value) {
+  process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
 function printHelp() {
   process.stdout.write(`Capybara Agent SDK Runtime
 
@@ -84,6 +112,7 @@ Commands:
   doctor
   normalize --provider <claude|codex> [options]
   run --provider <claude|codex> --prompt <text> [options]
+  run-stream --provider <claude|codex> --prompt <text> [options]
 
 Shared options:
   --cwd <path>
@@ -98,6 +127,16 @@ Shared options:
   --output-schema <json-or-path>
   --max-turns <n>
   --raw
+
+Stream output:
+  run-stream emits JSONL. Each line is one of:
+    {"type":"segment","op":"upsert","segment":{...}}
+    {"type":"run_completed","segments":[...],"content":"..."}
+    {"type":"run_failed","error":"..."}
+
+Normalized segment kinds:
+  text, frontend_artifact, thinking, todo, command, file_change,
+  tool_call, web_search, progress, usage, error
 
 Codex options:
   --approval-policy <never|on-request|on-failure|untrusted>
