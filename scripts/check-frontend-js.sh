@@ -8,6 +8,8 @@ while IFS= read -r js_file; do
   node --input-type=module --check < "$js_file" >/dev/null
 done < <(find frontend/capy-app -path 'frontend/capy-app/canvas-pkg' -prune -o -name '*.js' -print | sort)
 
+node scripts/verify-runtime-models.mjs >/dev/null
+
 require_text() {
   local file="$1"
   local needle="$2"

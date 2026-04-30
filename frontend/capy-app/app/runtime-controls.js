@@ -63,7 +63,7 @@ export function createRuntimeControls({ state, dom }) {
   function updateConfigSummary() {
     if (!configSummaryEl) return;
     const provider = providerEl?.value === "codex" ? "Codex" : "Claude";
-    const model = selectedModelLabel(modelEl);
+    const model = selectedModelLabel(modelEl, providerEl?.value || "claude");
     const effort = effortEl?.value || "medium";
     const permission = selectedPermissionLabel(policyEl);
     const cwd = cwdEl?.value.trim() || DEFAULT_CWD;
@@ -88,6 +88,10 @@ export function createRuntimeControls({ state, dom }) {
     if (canvasStatusEl) canvasStatusEl.textContent = text;
   }
 
+  function selectedModelValue(provider = providerEl?.value || "claude") {
+    return safeProviderModelValue(provider, modelEl?.value);
+  }
+
   return {
     currentConfig,
     syncPolicyOptions,
@@ -96,11 +100,12 @@ export function createRuntimeControls({ state, dom }) {
     setRunStatus,
     renderRuntimeFoot,
     updateCanvasStatus,
+    selectedModelValue,
   };
 }
 
 const DEFAULT_CWD = "/Users/Zhuanz/workspace/capybara";
-const PROVIDER_OPTIONS = {
+export const PROVIDER_OPTIONS = {
   claude: {
     models: [
       { value: "sonnet", label: "sonnet-4.7" },
@@ -124,9 +129,27 @@ const PROVIDER_OPTIONS = {
   },
 };
 
+export function providerDefaultModel(provider) {
+  return modelsFor(provider)[0]?.value || "";
+}
+
+export function isCrossProviderModel(provider, value) {
+  const model = String(value || "").trim().toLowerCase();
+  if (!model) return false;
+  if (provider === "codex") return model === "sonnet" || model === "opus" || model.startsWith("claude");
+  if (provider === "claude") return model.startsWith("gpt-") || /^o[0-9-]/.test(model);
+  return false;
+}
+
+export function safeProviderModelValue(provider, value) {
+  const model = String(value || "").trim();
+  if (!model || isCrossProviderModel(provider, model)) return providerDefaultModel(provider);
+  return model;
+}
+
 function syncModelOptions(modelEl, provider) {
   if (!modelEl) return;
-  const previous = modelEl.value;
+  const previous = safeProviderModelValue(provider, modelEl.value);
   const models = modelsFor(provider);
   modelEl.innerHTML = "";
   for (const model of models) {
@@ -135,7 +158,13 @@ function syncModelOptions(modelEl, provider) {
     option.textContent = model.label;
     modelEl.append(option);
   }
-  modelEl.value = models.some((model) => model.value === previous) ? previous : models[0]?.value || "";
+  if (previous && !models.some((model) => model.value === previous)) {
+    const option = document.createElement("option");
+    option.value = previous;
+    option.textContent = previous;
+    modelEl.append(option);
+  }
+  modelEl.value = previous || models[0]?.value || "";
 }
 
 function modelsFor(provider) {
@@ -150,8 +179,10 @@ function defaultPermission(provider) {
   return permissionsFor(provider)[0]?.value || "bypassPermissions";
 }
 
-function selectedModelLabel(modelEl) {
-  return modelEl?.selectedOptions?.[0]?.textContent || modelEl?.value || "默认模型";
+function selectedModelLabel(modelEl, provider) {
+  const model = safeProviderModelValue(provider, modelEl?.value);
+  const option = [...(modelEl?.options || [])].find((item) => item.value === model);
+  return option?.textContent || model || "默认模型";
 }
 
 function selectedPermissionLabel(policyEl) {

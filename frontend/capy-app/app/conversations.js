@@ -1,4 +1,5 @@
 import { renderMessageContent, renderMessageSegments } from "./message-renderer.js";
+import { safeProviderModelValue } from "./runtime-controls.js";
 
 export function createConversations(ctx) {
   const {
@@ -8,6 +9,7 @@ export function createConversations(ctx) {
     syncPolicyOptions,
     applyWriteCodeDefaults,
     updateConfigSummary,
+    selectedModelValue,
     setRunStatus,
     renderRuntimeFoot,
     stringifyError,
@@ -37,10 +39,11 @@ export function createConversations(ctx) {
   } = ctx;
 
 async function createConversation() {
+  const provider = providerEl.value || "claude";
   const data = await rpc("conversation-create", {
-    provider: providerEl.value,
+    provider,
     cwd: cwdEl.value.trim() || "/Users/Zhuanz/workspace/capybara",
-    model: modelEl.value.trim() || null,
+    model: selectedModelValue(provider) || null,
     config: currentConfig()
   });
   await refreshList();
@@ -64,7 +67,7 @@ async function openConversation(id) {
   cwdEl.value = detail.conversation.cwd;
   effortEl.value = detail.conversation.config?.effort || "";
   syncPolicyOptions();
-  setSelectValue(modelEl, detail.conversation.model || modelEl.value);
+  setModelSelectValue(detail.conversation.provider, detail.conversation.model || modelEl.value);
   const policy = detail.conversation.provider === "claude"
     ? detail.conversation.config?.permissionMode
     : codexPermissionPreset(detail.conversation.config);
@@ -111,12 +114,25 @@ function setSelectValue(select, value) {
 
 async function updateConversationConfig() {
   if (!state.activeId) return;
+  const provider = providerEl.value || "claude";
   await rpc("conversation-update-config", {
     id: state.activeId,
-    model: modelEl.value.trim() || null,
+    model: selectedModelValue(provider) || null,
     config: currentConfig()
   });
   await refreshList();
+}
+
+function setModelSelectValue(provider, value) {
+  if (!modelEl) return;
+  const model = safeProviderModelValue(provider, value);
+  if (model && ![...modelEl.options].some((option) => option.value === model)) {
+    const option = document.createElement("option");
+    option.value = model;
+    option.textContent = model;
+    modelEl.append(option);
+  }
+  modelEl.value = model || modelEl.options[0]?.value || "";
 }
 
 function renderConversations() {

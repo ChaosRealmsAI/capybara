@@ -69,7 +69,7 @@ const rpc = createRpc(pending);
 const runtimeApi = createRuntimeControls({ state, dom });
 const {
   currentConfig, syncPolicyOptions, applyWriteCodeDefaults, updateConfigSummary,
-  setRunStatus, renderRuntimeFoot, updateCanvasStatus,
+  setRunStatus, renderRuntimeFoot, updateCanvasStatus, selectedModelValue,
 } = runtimeApi;
 
 let rendererApi;
@@ -85,7 +85,7 @@ let projectPackageApi;
 
 conversationsApi = createConversations({
   state, rpc, currentConfig, syncPolicyOptions, applyWriteCodeDefaults,
-  updateConfigSummary, setRunStatus, renderRuntimeFoot, stringifyError,
+  updateConfigSummary, selectedModelValue, setRunStatus, renderRuntimeFoot, stringifyError,
   listEl, messagesEl, providerEl, cwdEl, modelEl, effortEl, policyEl, sandboxEl,
   serviceTierEl, systemPromptEl, appendSystemPromptEl, developerInstructionsEl,
   addDirsEl, allowedToolsEl, disallowedToolsEl, mcpConfigEl, modelProviderEl,
@@ -323,7 +323,7 @@ formEl?.addEventListener("submit", async (event) => {
       id: state.activeId,
       prompt: outboundPrompt,
       config: currentConfig(),
-      model: modelEl.value.trim() || null,
+      model: selectedModelValue(providerEl.value || "claude") || null,
       canvas_context: canvasContext
     });
   } catch (error) {
