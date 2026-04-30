@@ -259,7 +259,9 @@ fn draw_content_kind_icon(
                 &Line::new((cx + 8.0, cy - 8.0), (cx, cy - 13.0)),
             );
         }
-        CanvasContentKind::Project | CanvasContentKind::Shape => {
+        CanvasContentKind::Project
+        | CanvasContentKind::ProjectArtifact
+        | CanvasContentKind::Shape => {
             let frame =
                 RoundedRect::from_rect(Rect::new(cx - 11.0, cy - 10.0, cx + 11.0, cy + 10.0), 4.0);
             scene.stroke(&Stroke::new(1.5), camera_tf, color, None, &frame);

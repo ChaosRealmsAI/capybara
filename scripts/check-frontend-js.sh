@@ -105,6 +105,10 @@ require_text frontend/capy-app/script.js "center_view_on"
 require_text frontend/capy-app/script.js "zoom_view_at"
 require_text frontend/capy-app/script.js "pan_view_by"
 require_text frontend/capy-app/script.js "fit_view_to_content"
+require_text frontend/capy-app/script.js "create_project_artifact_card"
+require_text frontend/capy-app/script.js "resize_node_by_id"
+require_text frontend/capy-app/app/project-artifact-nodes.js '"project-surface-nodes"'
+require_text frontend/capy-app/app/project-artifact-nodes.js '"project-surface-node-update"'
 require_text frontend/capy-app/app/canvas-controls.js 'miniMapEl?.addEventListener("pointerdown"'
 require_text frontend/capy-app/app/canvas-controls.js "set_vector_style"
 require_text frontend/capy-app/app/canvas-controls.js "zoom_view_at"

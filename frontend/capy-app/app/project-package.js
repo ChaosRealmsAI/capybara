@@ -1,4 +1,6 @@
-export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage }) {
+import { createProjectArtifactNodes } from "./project-artifact-nodes.js";
+
+export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage, canvasApi = {} }) {
   const {
     projectPackagePanelEl,
     projectPackageTitleEl,
@@ -13,6 +15,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     modelEl,
     effortEl,
   } = dom;
+  const artifactNodes = createProjectArtifactNodes({ state, rpc, canvasApi, stringifyError });
 
   async function loadProjectPackage(projectPath = window.CAPYBARA_SESSION?.project) {
     if (!projectPath || projectPath === "demo") {
@@ -27,8 +30,10 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     try {
       const inspection = await rpc("project-inspect", { project: projectPath });
       const workbench = await rpc("project-workbench", { project: projectPath });
+      const surfaceNodes = await artifactNodes.loadSurfaceNodes(projectPath);
       state.projectPackage.inspection = inspection;
       state.projectPackage.workbench = workbench;
+      state.projectPackage.surfaceNodes = surfaceNodes;
       const firstCard = firstSelectableCard(workbench);
       state.projectPackage.selectedCardId = firstCard?.id || null;
       state.projectPackage.selectedArtifactId = firstCard?.id?.startsWith("art_") ? firstCard.id : null;
@@ -36,6 +41,8 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       await refreshSelectedPreview();
       state.projectPackage.status = "ready";
       renderProjectPackage();
+      await artifactNodes.syncProjectArtifactNodes();
+      if (state.projectPackage.selectedArtifactId) artifactNodes.selectArtifactNode(state.projectPackage.selectedArtifactId);
       return { loaded: true, inspection };
     } catch (error) {
       state.projectPackage.status = "error";
@@ -176,6 +183,9 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
   function selectCard(card) {
     state.projectPackage.selectedCardId = card.id;
     state.projectPackage.selectedArtifactId = card.id?.startsWith("art_") ? card.id : null;
+    if (state.projectPackage.selectedArtifactId) {
+      artifactNodes.selectArtifactNode(state.projectPackage.selectedArtifactId);
+    }
     refreshSelectedPreview().finally(() => renderProjectPackage());
   }
 
@@ -210,6 +220,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       button.addEventListener("click", async () => {
         state.projectPackage.selectedCardId = artifact.id;
         state.projectPackage.selectedArtifactId = artifact.id;
+        artifactNodes.selectArtifactNode(artifact.id);
         await refreshSelectedPreview();
         renderProjectPackage();
       });
@@ -223,7 +234,20 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     generateSelectedArtifact,
     selectedArtifact,
     renderProjectPackage,
+    syncProjectArtifactNodes: artifactNodes.syncProjectArtifactNodes,
+    syncCanvasArtifactGeometry: artifactNodes.syncCanvasGeometry,
+    syncCanvasArtifactSelection,
+    selectArtifactNode: artifactNodes.selectArtifactNode,
   };
+
+  function syncCanvasArtifactSelection() {
+    const artifactRef = artifactNodes.selectedCanvasArtifact();
+    if (!artifactRef || artifactRef.artifact_id === state.projectPackage.selectedArtifactId) return false;
+    state.projectPackage.selectedArtifactId = artifactRef.artifact_id;
+    state.projectPackage.selectedCardId = artifactRef.artifact_id;
+    refreshSelectedPreview().finally(() => renderProjectPackage());
+    return true;
+  }
 }
 
 function firstSelectableCard(workbench) {

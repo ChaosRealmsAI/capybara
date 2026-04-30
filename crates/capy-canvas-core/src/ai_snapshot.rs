@@ -55,6 +55,7 @@ pub struct CanvasAiNode {
     pub next_action: Option<String>,
     pub editor_route: Option<String>,
     pub source_path: Option<String>,
+    pub artifact_ref: Option<crate::state::CanvasArtifactRef>,
     pub mime: Option<String>,
     pub generation_provider: Option<String>,
     pub generation_prompt: Option<String>,
@@ -214,6 +215,7 @@ impl AppState {
                         .source_path
                         .clone()
                         .or_else(|| shape.image_path.clone()),
+                    artifact_ref: shape.metadata.artifact_ref.clone(),
                     mime: shape
                         .metadata
                         .mime

@@ -3,6 +3,7 @@ use crate::state::CanvasContentKind;
 pub(crate) fn default_title(kind: CanvasContentKind) -> &'static str {
     match kind {
         CanvasContentKind::Project => "Project hub",
+        CanvasContentKind::ProjectArtifact => "Project artifact",
         CanvasContentKind::Brand => "Brand system",
         CanvasContentKind::Image => "Image direction",
         CanvasContentKind::Poster => "Poster document",
@@ -18,6 +19,7 @@ pub(crate) fn default_title(kind: CanvasContentKind) -> &'static str {
 pub(crate) fn subtitle(kind: CanvasContentKind) -> &'static str {
     match kind {
         CanvasContentKind::Project => "brief · scope · assets",
+        CanvasContentKind::ProjectArtifact => "source · preview · context",
         CanvasContentKind::Brand => "logo · palette · mascot",
         CanvasContentKind::Image => "prompt · references · variants",
         CanvasContentKind::Poster => "JSON · layers · HTML preview",
@@ -33,6 +35,7 @@ pub(crate) fn subtitle(kind: CanvasContentKind) -> &'static str {
 pub(crate) fn default_next_action(kind: CanvasContentKind) -> &'static str {
     match kind {
         CanvasContentKind::Project => "open project detail and plan next assets",
+        CanvasContentKind::ProjectArtifact => "select artifact and ask Planner for changes",
         CanvasContentKind::Brand => "generate brand directions and lock tokens",
         CanvasContentKind::Image => "generate image variants from references",
         CanvasContentKind::Poster => "edit poster JSON and render HTML preview",
@@ -48,6 +51,7 @@ pub(crate) fn default_next_action(kind: CanvasContentKind) -> &'static str {
 pub(crate) fn fill_color(kind: CanvasContentKind) -> u32 {
     match kind {
         CanvasContentKind::Project => 0xfff3bf,
+        CanvasContentKind::ProjectArtifact => 0xe0f2fe,
         CanvasContentKind::Brand => 0xffedd5,
         CanvasContentKind::Image => 0xfce7f3,
         CanvasContentKind::Poster => 0xfef3c7,
@@ -63,6 +67,7 @@ pub(crate) fn fill_color(kind: CanvasContentKind) -> u32 {
 pub(crate) fn stroke_color(kind: CanvasContentKind) -> u32 {
     match kind {
         CanvasContentKind::Project => 0xd97706,
+        CanvasContentKind::ProjectArtifact => 0x0284c7,
         CanvasContentKind::Brand => 0xf97316,
         CanvasContentKind::Image => 0xdb2777,
         CanvasContentKind::Poster => 0xa16207,

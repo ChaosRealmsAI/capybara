@@ -15,6 +15,7 @@ pub use geometry::{point_in_polygon, point_to_segment_dist};
 #[serde(rename_all = "snake_case")]
 pub enum CanvasContentKind {
     Project,
+    ProjectArtifact,
     Brand,
     Image,
     Poster,
@@ -30,6 +31,7 @@ impl CanvasContentKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Project => "project",
+            Self::ProjectArtifact => "project_artifact",
             Self::Brand => "brand",
             Self::Image => "image",
             Self::Poster => "poster",
@@ -49,6 +51,9 @@ impl std::str::FromStr for CanvasContentKind {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "project" | "Project" => Ok(Self::Project),
+            "project_artifact" | "project-artifact" | "ProjectArtifact" => {
+                Ok(Self::ProjectArtifact)
+            }
             "brand" | "Brand" | "brand_kit" | "BrandKit" => Ok(Self::Brand),
             "image" | "Image" => Ok(Self::Image),
             "poster" | "Poster" | "poster_document" | "PosterDocument" => Ok(Self::Poster),
@@ -71,6 +76,8 @@ impl std::str::FromStr for CanvasContentKind {
 pub struct CanvasMetadata {
     #[serde(default)]
     pub content_kind: Option<CanvasContentKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_ref: Option<CanvasArtifactRef>,
     #[serde(default)]
     pub title: Option<String>,
     #[serde(default)]
@@ -91,6 +98,15 @@ pub struct CanvasMetadata {
     pub generation_provider: Option<String>,
     #[serde(default)]
     pub generation_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CanvasArtifactRef {
+    pub project_id: String,
+    pub surface_node_id: String,
+    pub artifact_id: String,
+    pub artifact_kind: String,
+    pub source_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +131,8 @@ pub struct CanvasSelectionItem {
     pub next_action: Option<String>,
     pub editor_route: Option<String>,
     pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_ref: Option<CanvasArtifactRef>,
     pub mime: Option<String>,
     pub generation_provider: Option<String>,
     pub generation_prompt: Option<String>,

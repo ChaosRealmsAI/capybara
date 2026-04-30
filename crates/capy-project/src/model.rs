@@ -8,6 +8,7 @@ pub const CONTEXT_SCHEMA_VERSION: &str = "capy.context.v1";
 pub const PATCH_SCHEMA_VERSION: &str = "capy.patch.v1";
 pub const PATCH_RUN_SCHEMA_VERSION: &str = "capy.patch-run.v1";
 pub const WORKBENCH_SCHEMA_VERSION: &str = "capy.project-workbench.v1";
+pub const SURFACE_NODES_SCHEMA_VERSION: &str = "capy.surface-nodes.v1";
 pub const GENERATE_RUN_SCHEMA_VERSION: &str = "capy.project-generate-run.v1";
 pub const PROJECT_AI_PROMPT_SCHEMA_VERSION: &str = "capy.project-ai-prompt.v1";
 pub const PROJECT_AI_RESPONSE_SCHEMA_VERSION: &str = "capy.project-ai-response.v1";
@@ -249,6 +250,32 @@ pub struct ProjectWorkbenchV1 {
     #[serde(default)]
     pub cards: Vec<ProjectWorkbenchCardV1>,
     pub generated_at: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SurfaceGeometryV1 {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSurfaceNodeV1 {
+    pub id: String,
+    pub surface: String,
+    pub artifact_id: String,
+    pub geometry: SurfaceGeometryV1,
+    pub status: String,
+    pub updated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSurfaceNodesV1 {
+    pub schema_version: String,
+    pub project_id: String,
+    #[serde(default)]
+    pub nodes: Vec<ProjectSurfaceNodeV1>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

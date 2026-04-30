@@ -77,6 +77,7 @@ impl Shape {
         }
         match self.content_kind() {
             CanvasContentKind::Project => "Project".to_string(),
+            CanvasContentKind::ProjectArtifact => "Project Artifact".to_string(),
             CanvasContentKind::Brand => "Brand Kit".to_string(),
             CanvasContentKind::Image => "Image".to_string(),
             CanvasContentKind::Poster => "Poster".to_string(),
@@ -107,6 +108,7 @@ impl Shape {
                 .source_path
                 .clone()
                 .or_else(|| self.image_path.clone()),
+            artifact_ref: self.metadata.artifact_ref.clone(),
             mime: self
                 .metadata
                 .mime
