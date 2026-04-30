@@ -5,10 +5,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use capy_agent_runtime::{AgentSdkRunRequest, run_sdk_json};
 use capy_contracts::ipc::{IpcRequest, IpcResponse};
 use capy_contracts::project::{
-    OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY, OP_PROJECT_GENERATE,
-    OP_PROJECT_INSPECT, OP_PROJECT_RUN_ACCEPT, OP_PROJECT_RUN_LIST, OP_PROJECT_RUN_REJECT,
-    OP_PROJECT_RUN_RETRY, OP_PROJECT_RUN_SHOW, OP_PROJECT_RUN_UNDO, OP_PROJECT_SURFACE_NODE_UPDATE,
-    OP_PROJECT_SURFACE_NODES, OP_PROJECT_WORKBENCH,
+    OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY,
+    OP_PROJECT_CAMPAIGN_GENERATE, OP_PROJECT_CAMPAIGN_PLAN, OP_PROJECT_CAMPAIGN_SHOW,
+    OP_PROJECT_GENERATE, OP_PROJECT_INSPECT, OP_PROJECT_RUN_ACCEPT, OP_PROJECT_RUN_LIST,
+    OP_PROJECT_RUN_REJECT, OP_PROJECT_RUN_RETRY, OP_PROJECT_RUN_SHOW, OP_PROJECT_RUN_UNDO,
+    OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES, OP_PROJECT_WORKBENCH,
 };
 use capy_project::{
     ArtifactKind, ContextBuildRequest, GENERATE_RUN_SCHEMA_VERSION, PatchDocumentV1,
@@ -36,6 +37,9 @@ pub(crate) fn handles(op: &str) -> bool {
             | OP_PROJECT_RUN_REJECT
             | OP_PROJECT_RUN_RETRY
             | OP_PROJECT_RUN_UNDO
+            | OP_PROJECT_CAMPAIGN_PLAN
+            | OP_PROJECT_CAMPAIGN_GENERATE
+            | OP_PROJECT_CAMPAIGN_SHOW
     )
 }
 
@@ -56,6 +60,11 @@ pub(crate) fn response(request: IpcRequest) -> IpcResponse {
         OP_PROJECT_RUN_REJECT => project_run_reject(&request.params),
         OP_PROJECT_RUN_RETRY => project_run_retry(&request.params),
         OP_PROJECT_RUN_UNDO => project_run_undo(&request.params),
+        OP_PROJECT_CAMPAIGN_PLAN => crate::project_ipc_campaign::campaign_plan(&request.params),
+        OP_PROJECT_CAMPAIGN_GENERATE => {
+            crate::project_ipc_campaign::campaign_generate(&request.params)
+        }
+        OP_PROJECT_CAMPAIGN_SHOW => crate::project_ipc_campaign::campaign_show(&request.params),
         _ => Err(format!("unknown project op: {}", request.op)),
     };
     match result {
@@ -79,14 +88,12 @@ fn project_inspect(params: &Value) -> Result<Value, String> {
     serde_json::to_value(package.inspect().map_err(|err| err.to_string())?)
         .map_err(|err| err.to_string())
 }
-
 fn project_workbench(params: &Value) -> Result<Value, String> {
     let package =
         ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
     serde_json::to_value(package.workbench().map_err(|err| err.to_string())?)
         .map_err(|err| err.to_string())
 }
-
 fn project_surface_nodes(params: &Value) -> Result<Value, String> {
     let package =
         ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
@@ -97,7 +104,6 @@ fn project_surface_nodes(params: &Value) -> Result<Value, String> {
     )
     .map_err(|err| err.to_string())
 }
-
 fn project_surface_node_update(params: &Value) -> Result<Value, String> {
     let package =
         ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
@@ -141,6 +147,11 @@ fn project_generate(params: &Value) -> Result<Value, String> {
             .get("review")
             .and_then(Value::as_bool)
             .unwrap_or(false),
+        selector: optional_string(params, "selector"),
+        canvas_node: optional_string(params, "canvas_node")
+            .or_else(|| optional_string(params, "canvasNode")),
+        json_pointer: optional_string(params, "json_pointer")
+            .or_else(|| optional_string(params, "jsonPointer")),
     };
     let result = if live {
         project_generate_live(&package, &project, request, params)?
@@ -178,7 +189,7 @@ fn project_generate_live(
     })
     .map_err(|err| err.to_string())?;
     let ai_response = parse_project_ai_response(&sdk_output).map_err(|err| err.to_string())?;
-    let patch = package
+    let mut patch = package
         .patch_from_ai_response(
             &request.artifact_id,
             Some(prompt.context_id.clone()),
@@ -186,6 +197,12 @@ fn project_generate_live(
             ai_response.clone(),
         )
         .map_err(|err| err.to_string())?;
+    if let Some(operation) = patch.operations.first_mut() {
+        operation.selector_hint = request
+            .selector
+            .clone()
+            .or_else(|| request.json_pointer.clone());
+    }
     let preview_source = ai_response
         .artifacts
         .first()
@@ -199,6 +216,7 @@ fn project_generate_live(
                     "context_id": prompt.context_id,
                     "design_language_ref": prompt.design_language_ref,
                     "design_language_summary": prompt.design_language_summary,
+                    "selection_context": prompt.selection_context,
                     "summary_zh": ai_response.summary_zh,
                     "verify_notes": ai_response.verify_notes,
                     "sdk": summarize_sdk_output(&sdk_output)
@@ -423,6 +441,8 @@ fn context_build(params: &Value) -> Result<Value, String> {
             selector: optional_string(params, "selector"),
             canvas_node: optional_string(params, "canvas_node")
                 .or_else(|| optional_string(params, "canvasNode")),
+            json_pointer: optional_string(params, "json_pointer")
+                .or_else(|| optional_string(params, "jsonPointer")),
         })
         .map_err(|err| err.to_string())?;
     serde_json::to_value(context).map_err(|err| err.to_string())

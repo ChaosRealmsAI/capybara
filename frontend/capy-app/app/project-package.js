@@ -1,6 +1,8 @@
 import { projectGenerateMessageContent } from "./planner-message-whitelist.js";
 import { createProjectArtifactNodes } from "./project-artifact-nodes.js";
 import { createAiDiffReviewPanel, reviewRunId } from "./ai-diff.js";
+import { renderDesignLanguageSummary, renderSelectionContext } from "./project-context-panels.js";
+import { projectCampaignMessage, renderProjectCampaignSummary } from "./project-campaign-summary.js";
 
 export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage, canvasApi = {} }) {
   const {
@@ -11,6 +13,8 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     projectWorkbenchCardsEl,
     projectSelectedSummaryEl,
     projectDesignLanguageEl,
+    projectSelectionContextEl,
+    projectCampaignSummaryEl,
     projectArtifactListEl,
     projectPreviewFrameEl,
     promptEl,
@@ -42,6 +46,8 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       state.projectPackage.selectedCardId = firstCard?.id || null;
       state.projectPackage.selectedArtifactId = firstCard?.id?.startsWith("art_") ? firstCard.id : null;
       state.projectPackage.previewSource = "";
+      state.projectPackage.selectionContext = null;
+      state.projectPackage.campaign = null;
       state.projectPackage.review = null;
       await refreshSelectedPreview();
       state.projectPackage.status = "ready";
@@ -57,16 +63,22 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     }
   }
 
-  async function buildSelectedContext(selector = null) {
+  async function buildSelectedContext(selection = null) {
     const artifact = selectedArtifact();
     if (!artifact || !state.projectPackage.path) {
       throw new Error("No selected project artifact");
     }
-    return rpc("context-build", {
+    const options = typeof selection === "string" ? { selector: selection } : (selection || {});
+    const context = await rpc("context-build", {
       project: state.projectPackage.path,
       artifact: artifact.id,
-      selector
+      selector: options.selector || null,
+      json_pointer: options.jsonPointer || options.json_pointer || null,
+      canvas_node: options.canvasNode || options.canvas_node || null
     });
+    state.projectPackage.selectionContext = context.selection_context || null;
+    renderProjectPackage();
+    return context;
   }
 
   async function generateSelectedArtifact(options = {}) {
@@ -91,7 +103,10 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
         live,
         model: options.model || modelEl?.value || null,
         effort: options.effort || effortEl?.value || null,
-        sdk_response: options.sdkResponse || null
+        sdk_response: options.sdkResponse || null,
+        selector: options.selector || state.projectPackage.selectionContext?.selector || null,
+        json_pointer: options.jsonPointer || options.json_pointer || state.projectPackage.selectionContext?.json_pointer || null,
+        canvas_node: options.canvasNode || options.canvas_node || state.projectPackage.selectionContext?.surface_node_id || null
       });
       state.projectPackage.generation = result;
       state.projectPackage.review = result?.run?.review ? result : null;
@@ -100,6 +115,33 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       state.projectPackage.status = "ready";
       renderProjectPackage();
       appendPlannerMessage?.(projectGenerateMessage(result, artifact));
+      return result;
+    } catch (error) {
+      state.projectPackage.status = "error";
+      state.projectPackage.error = stringifyError(error);
+      renderProjectPackage();
+      throw error;
+    }
+  }
+
+  async function generateCampaign(options = {}) {
+    if (!state.projectPackage.path) throw new Error("No project package loaded");
+    const input = typeof options === "string" ? { brief: options } : options;
+    const brief = input.brief || promptEl?.value.trim() || "Create one coherent campaign across project artifacts.";
+    state.projectPackage.status = "generating";
+    renderProjectPackage();
+    try {
+      const result = await rpc("project-campaign-generate", {
+        project: state.projectPackage.path,
+        brief,
+        artifacts: input.artifacts || input.artifact_ids || []
+      });
+      state.projectPackage.campaign = result;
+      state.projectPackage.review = result?.proposals?.[0] || null;
+      state.projectPackage.workbench = await rpc("project-workbench", { project: state.projectPackage.path });
+      state.projectPackage.status = "ready";
+      renderProjectPackage();
+      appendPlannerMessage?.(projectCampaignMessage(result));
       return result;
     } catch (error) {
       state.projectPackage.status = "error";
@@ -133,7 +175,9 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       else if (packageState.status === "error") projectPackageMetaEl.textContent = packageState.error || "error";
       else projectPackageMetaEl.textContent = selectedArtifactSummary(state) || `${artifacts.length} artifacts`;
     }
-    renderDesignLanguageSummary(inspection?.design_language_summary || packageState.workbench?.design_language_summary);
+    renderDesignLanguageSummary(projectDesignLanguageEl, inspection?.design_language_summary || packageState.workbench?.design_language_summary);
+    renderSelectionContext(projectSelectionContextEl, packageState.selectionContext);
+    renderProjectCampaignSummary(projectCampaignSummaryEl, packageState.campaign);
     renderArtifactList(artifacts);
     if (projectPreviewFrameEl) {
       projectPreviewFrameEl.srcdoc = previewFrameSource(selectedArtifact(), packageState.previewSource);
@@ -323,34 +367,11 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     }
   }
 
-  function renderDesignLanguageSummary(summary) {
-    if (!projectDesignLanguageEl) return;
-    if (!summary) {
-      projectDesignLanguageEl.hidden = true;
-      projectDesignLanguageEl.replaceChildren();
-      return;
-    }
-    projectDesignLanguageEl.hidden = false;
-    projectDesignLanguageEl.dataset.designLanguageRef = summary.design_language_ref || "";
-    projectDesignLanguageEl.innerHTML = `
-      <div>
-        <span class="context-eyebrow">DESIGN LANGUAGE</span>
-        <strong>${escapeText(summary.name || "Project Design Language")}</strong>
-        <small>${escapeText(summary.version || "0.1.0")} · ${escapeText(shortRef(summary.design_language_ref))}</small>
-      </div>
-      <dl>
-        <div><dt>tokens</dt><dd>${Number(summary.token_count || 0)}</dd></div>
-        <div><dt>rules</dt><dd>${Number(summary.rule_count || 0)}</dd></div>
-        <div><dt>refs</dt><dd>${Number(summary.reference_image_count || 0)}</dd></div>
-        <div><dt>examples</dt><dd>${Number(summary.example_count || 0)}</dd></div>
-      </dl>
-    `;
-  }
-
   return {
     loadProjectPackage,
     buildSelectedContext,
     generateSelectedArtifact,
+    generateCampaign,
     acceptSelectedReview,
     rejectSelectedReview,
     retrySelectedReview,
@@ -405,12 +426,6 @@ function previewFrameSource(artifact, source) {
   if (!source) return "<!doctype html><p>No artifact preview</p>";
   if (artifact?.kind === "html" || source.trimStart().startsWith("<svg")) return source;
   return `<!doctype html><pre style="white-space:pre-wrap;font:12px ui-monospace,monospace;padding:16px;color:#2f2437">${escapeText(source)}</pre>`;
-}
-
-function shortRef(value) {
-  const text = String(value || "");
-  if (text.length <= 22) return text || "no-ref";
-  return `${text.slice(0, 18)}...`;
 }
 
 function projectGenerateMessage(result, artifact) {

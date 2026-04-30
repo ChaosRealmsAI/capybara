@@ -220,6 +220,7 @@ impl ProjectPackage {
             })?;
         let design_language_summary = self.design_language_summary_for(&design_language);
         let design_refs = selected_design_assets(&design_language, &artifact.design_language_refs);
+        let selection_context = self.build_selection_context(&artifact, &request)?;
         Ok(ContextPackageV1 {
             schema_version: CONTEXT_SCHEMA_VERSION.to_string(),
             context_id: new_id("ctx"),
@@ -227,8 +228,9 @@ impl ProjectPackage {
             artifact_id: artifact.id.clone(),
             artifact_kind: artifact.kind.clone(),
             source_path: artifact.source_path.clone(),
-            selector: request.selector,
-            canvas_node: request.canvas_node,
+            selector: request.selector.clone(),
+            canvas_node: request.canvas_node.clone(),
+            selection_context,
             artifact,
             design_language_ref: design_language_summary.design_language_ref.clone(),
             design_language_summary,

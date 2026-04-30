@@ -2,9 +2,9 @@ use serde_json::{Value, json};
 
 use crate::design_language::selected_design_assets;
 use crate::model::{
-    PATCH_SCHEMA_VERSION, PROJECT_AI_PROMPT_SCHEMA_VERSION, PROJECT_AI_RESPONSE_SCHEMA_VERSION,
-    PatchDocumentV1, ProjectAiPromptV1, ProjectAiResponseV1, ProjectGenerateRequestV1,
-    ReplaceExactTextOperationV1,
+    ContextBuildRequest, PATCH_SCHEMA_VERSION, PROJECT_AI_PROMPT_SCHEMA_VERSION,
+    PROJECT_AI_RESPONSE_SCHEMA_VERSION, PatchDocumentV1, ProjectAiPromptV1, ProjectAiResponseV1,
+    ProjectGenerateRequestV1, ReplaceExactTextOperationV1,
 };
 use crate::package::{
     ProjectPackage, ProjectPackageError, ProjectPackageResult, new_id, now_ms, read_to_string,
@@ -20,6 +20,15 @@ impl ProjectPackage {
         let current_source = self.read_artifact_source(&artifact.id)?;
         let design_language = self.design_language()?;
         let design_language_summary = self.design_language_summary_for(&design_language);
+        let selection_context = self.build_selection_context(
+            &artifact,
+            &ContextBuildRequest {
+                artifact_id: artifact.id.clone(),
+                selector: request.selector.clone(),
+                canvas_node: request.canvas_node.clone(),
+                json_pointer: request.json_pointer.clone(),
+            },
+        )?;
         let selected_assets =
             selected_design_assets(&design_language, &artifact.design_language_refs);
         let design_asset_refs = selected_assets
@@ -74,6 +83,9 @@ Target artifact:
 - source_path: {source_path}
 - title: {artifact_title}
 
+Selected target:
+{selection_context_block}
+
 User request:
 {user_prompt}
 
@@ -110,6 +122,7 @@ Output JSON rules:
             artifact_kind = artifact.kind.as_str(),
             source_path = artifact.source_path,
             artifact_title = artifact.title,
+            selection_context_block = selection_context_prompt_block(&selection_context),
             user_prompt = request.prompt,
             design_asset_refs = if design_asset_refs.is_empty() {
                 "(No design-language asset refs selected.)".to_string()
@@ -132,6 +145,7 @@ Output JSON rules:
             provider: request.provider.clone(),
             design_language_ref: design_language_summary.design_language_ref.clone(),
             design_language_summary,
+            selection_context,
             prompt,
             output_schema,
             generated_at: now_ms(),
@@ -199,6 +213,36 @@ Output JSON rules:
             }],
         })
     }
+}
+
+fn selection_context_prompt_block(
+    selection: &Option<crate::selection_context::SelectionContextV1>,
+) -> String {
+    let Some(selection) = selection else {
+        return "- scope: artifact\n- note: no sub-artifact selection was provided".to_string();
+    };
+    let mut lines = vec![
+        format!("- scope: {}", selection.scope),
+        format!("- kind: {}", selection.kind),
+        format!("- artifact_id: {}", selection.artifact_id),
+        format!("- source_path: {}", selection.source_path),
+    ];
+    if let Some(value) = selection.surface_node_id.as_deref() {
+        lines.push(format!("- surface_node_id: {value}"));
+    }
+    if let Some(value) = selection.selector.as_deref() {
+        lines.push(format!("- selector: {value}"));
+    }
+    if let Some(value) = selection.json_pointer.as_deref() {
+        lines.push(format!("- json_pointer: {value}"));
+    }
+    if let Some(value) = selection.selected_text.as_deref() {
+        lines.push(format!("- selected_text: {value}"));
+    }
+    if let Some(value) = selection.fallback_reason.as_deref() {
+        lines.push(format!("- fallback_reason: {value}"));
+    }
+    lines.join("\n")
 }
 
 fn bounded_design_source(
@@ -332,6 +376,9 @@ mod tests {
             prompt: "Improve the headline".to_string(),
             dry_run: true,
             review: false,
+            selector: None,
+            canvas_node: None,
+            json_pointer: None,
         })?;
 
         assert!(prompt.prompt.contains(":root { --brand: red; }"));

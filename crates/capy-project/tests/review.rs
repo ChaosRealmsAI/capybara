@@ -22,6 +22,9 @@ fn review_accept_reject_retry_and_undo_are_file_safe() -> Result<(), Box<dyn std
         prompt: "Make it clearer".to_string(),
         dry_run: true,
         review: true,
+        selector: None,
+        canvas_node: None,
+        json_pointer: None,
     })?;
     assert_eq!(proposal.run.status, "proposed");
     assert_eq!(
@@ -75,6 +78,9 @@ fn stale_source_refuses_accept() -> Result<(), Box<dyn std::error::Error>> {
         prompt: "Make it clearer".to_string(),
         dry_run: true,
         review: true,
+        selector: None,
+        canvas_node: None,
+        json_pointer: None,
     })?;
 
     fs::write(temp.path().join("index.html"), "<h1>Someone else</h1>")?;
@@ -100,6 +106,9 @@ fn review_requires_single_operation() -> Result<(), Box<dyn std::error::Error>> 
         prompt: "Make it clearer".to_string(),
         dry_run: true,
         review: true,
+        selector: None,
+        canvas_node: None,
+        json_pointer: None,
     };
 
     let error = project

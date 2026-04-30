@@ -12,6 +12,8 @@ export function createProjectPackageWiring({ state, rpc, dom, stringifyError, ap
       projectWorkbenchCardsEl: dom.projectWorkbenchCardsEl,
       projectSelectedSummaryEl: dom.projectSelectedSummaryEl,
       projectDesignLanguageEl: dom.projectDesignLanguageEl,
+      projectSelectionContextEl: dom.projectSelectionContextEl,
+      projectCampaignSummaryEl: dom.projectCampaignSummaryEl,
       projectArtifactListEl: dom.projectArtifactListEl,
       projectPreviewFrameEl: dom.projectPreviewFrameEl,
       promptEl: dom.promptEl,

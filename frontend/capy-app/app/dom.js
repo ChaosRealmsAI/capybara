@@ -56,6 +56,8 @@ export const dom = {
   projectWorkbenchCardsEl: $("#project-workbench-cards"),
   projectSelectedSummaryEl: $("#project-selected-summary"),
   projectDesignLanguageEl: $("#project-design-language-summary"),
+  projectSelectionContextEl: $("#project-selection-context"),
+  projectCampaignSummaryEl: $("#project-campaign-summary"),
   projectArtifactListEl: $("#project-artifact-list"),
   projectPreviewFrameEl: $("#project-preview-frame"),
   posterLayerEl: $("#poster-overlay-layer"),

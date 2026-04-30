@@ -19,6 +19,8 @@ export function createStateSnapshot({ state, normalizeValue, posterDocumentsStat
           || null,
         surfaceNodeCount: state.projectPackage.surfaceNodes?.nodes?.length || 0,
         artifactNodes: state.projectPackage.artifactNodes,
+        selectionContext: state.projectPackage.selectionContext,
+        campaign: state.projectPackage.campaign,
         generation: state.projectPackage.generation,
         review: state.projectPackage.review,
         error: state.projectPackage.error

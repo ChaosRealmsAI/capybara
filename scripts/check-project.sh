@@ -206,6 +206,45 @@ if ! jq -e '.schema_version == "capy.context.v1" and .artifact_id == "art_000000
   echo "project check failed: project context build must include artifact and design language package ref" >&2
   exit 1
 fi
+if ! jq -e '.selection_context.schema_version == "capy.selection-context.v1" and .selection_context.kind == "html-section" and .selection_context.scope == "sub-artifact" and .selection_context.selected_text == "Project Context Draft"' \
+  target/capy-project-html-context/context.json >/dev/null; then
+  echo "project check failed: selector context must resolve selected HTML source text" >&2
+  exit 1
+fi
+"$CAPY_BIN" context build \
+  --project target/capy-project-html-context \
+  --artifact art_00000000000000000000000000000003 \
+  --json-pointer /pages/0/title \
+  --out target/capy-project-html-context/context-poster-title.json >/dev/null
+if ! jq -e '.selection_context.schema_version == "capy.selection-context.v1" and .selection_context.kind == "json-pointer" and .selection_context.selected_json == "Launch" and .selection_context.selected_text == "\"Launch\""' \
+  target/capy-project-html-context/context-poster-title.json >/dev/null; then
+  echo "project check failed: JSON pointer context must resolve selected JSON node" >&2
+  exit 1
+fi
+campaign_plan="$("$CAPY_BIN" project campaign plan \
+  --project target/capy-project-html-context \
+  --brief "Launch one coherent campaign")"
+if ! jq -e '.schema_version == "capy.project-campaign-plan.v1" and (.targets | length) == 4 and (.design_language_ref | startswith("dlpkg-fnv1a64-")) and all(.targets[]; .review_mode == "review" and .status == "planned")' \
+  <<<"$campaign_plan" >/dev/null; then
+  echo "project check failed: campaign plan must target reviewable campaign artifacts" >&2
+  exit 1
+fi
+campaign_before_hash="$(shasum -a 256 target/capy-project-html-context/web/index.html | awk '{print $1}')"
+campaign_generate="$("$CAPY_BIN" project campaign generate \
+  --project target/capy-project-html-context \
+  --brief "Launch one coherent campaign")"
+if ! jq -e '.run.schema_version == "capy.project-campaign-run.v1" and .run.status == "proposed" and (.run.artifact_runs | length) == 4 and (.proposals | length) == 4 and all(.proposals[]; .run.status == "proposed")' \
+  <<<"$campaign_generate" >/dev/null; then
+  echo "project check failed: campaign generate must create proposed review runs" >&2
+  exit 1
+fi
+campaign_after_hash="$(shasum -a 256 target/capy-project-html-context/web/index.html | awk '{print $1}')"
+if [[ "$campaign_before_hash" != "$campaign_after_hash" ]]; then
+  echo "project check failed: campaign generate must not mutate HTML source before review accept" >&2
+  exit 1
+fi
+campaign_run_id="$(jq -r '.run.id' <<<"$campaign_generate")"
+"$CAPY_BIN" project campaign show --project target/capy-project-html-context "$campaign_run_id" >/dev/null
 "$CAPY_BIN" patch apply \
   --project target/capy-project-html-context \
   --patch fixtures/project/html-context/patches/headline.json \

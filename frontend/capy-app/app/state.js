@@ -68,6 +68,8 @@ export const state = {
     selectedArtifactId: null,
     selectedCardId: null,
     previewSource: "",
+    selectionContext: null,
+    campaign: null,
     generation: null,
     review: null,
     error: null

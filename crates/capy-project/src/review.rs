@@ -1,8 +1,3 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-
-use serde_json::{Value, json};
-
 use crate::model::{
     PATCH_SCHEMA_VERSION, PROJECT_REVIEW_MODE, PatchDocumentV1, ProjectDiffSummaryV1,
     ProjectGenerateRequestV1, ProjectGenerateResultV1, ProjectGenerateRunV1,
@@ -13,6 +8,9 @@ use crate::package::{
     CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageResult, dedupe_sorted, new_id,
     now_ms,
 };
+use serde_json::{Value, json};
+use std::fs;
+use std::path::{Path, PathBuf};
 const STATUS_PROPOSED: &str = "proposed";
 const STATUS_ACCEPTED: &str = "accepted";
 const STATUS_REJECTED: &str = "rejected";
@@ -280,6 +278,9 @@ impl ProjectPackage {
             prompt: parent.prompt.clone(),
             dry_run: true,
             review: true,
+            selector: None,
+            canvas_node: None,
+            json_pointer: None,
         };
         let preview_source = patch
             .operations

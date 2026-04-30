@@ -32,6 +32,9 @@ pub(super) fn generate_live(
         prompt: args.prompt.clone(),
         dry_run: if args.review { true } else { !args.write },
         review: args.review,
+        selector: args.selector.clone(),
+        canvas_node: args.canvas_node.clone(),
+        json_pointer: args.json_pointer.clone(),
     };
     let prompt = package
         .build_ai_prompt(&request)
@@ -52,7 +55,7 @@ pub(super) fn generate_live(
     })
     .map_err(|err| err.to_string())?;
     let ai_response = parse_project_ai_response(&sdk_output).map_err(|err| err.to_string())?;
-    let patch = package
+    let mut patch = package
         .patch_from_ai_response(
             &request.artifact_id,
             Some(prompt.context_id.clone()),
@@ -60,6 +63,12 @@ pub(super) fn generate_live(
             ai_response.clone(),
         )
         .map_err(|err| err.to_string())?;
+    if let Some(operation) = patch.operations.first_mut() {
+        operation.selector_hint = request
+            .selector
+            .clone()
+            .or_else(|| request.json_pointer.clone());
+    }
     let preview_source = ai_response
         .artifacts
         .first()
@@ -73,6 +82,7 @@ pub(super) fn generate_live(
                     "context_id": prompt.context_id,
                     "design_language_ref": prompt.design_language_ref,
                     "design_language_summary": prompt.design_language_summary,
+                    "selection_context": prompt.selection_context,
                     "summary_zh": ai_response.summary_zh,
                     "verify_notes": ai_response.verify_notes,
                     "sdk": summarize_sdk_output(&sdk_output)

@@ -4,16 +4,22 @@
 //! frontend surfaces, and future AI context builders.
 
 mod ai;
+mod campaign;
 mod design_language;
 mod generate;
 mod model;
 mod package;
 mod patch;
 mod review;
+mod selection_context;
 mod surface_nodes;
 mod workbench;
 
 pub use ai::{parse_project_ai_response, project_ai_output_schema};
+pub use campaign::{
+    ProjectCampaignGenerateResultV1, ProjectCampaignPlanV1, ProjectCampaignRequestV1,
+    ProjectCampaignRunV1,
+};
 pub use model::{
     ArtifactKind, ArtifactRefV1, ArtifactRegistryV1, ContextBuildRequest, ContextPackageV1,
     DesignLanguageAssetStatusV1, DesignLanguageAssetV1, DesignLanguageInspectionV1,
@@ -27,3 +33,4 @@ pub use model::{
     WorkbenchPreviewV1,
 };
 pub use package::{CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageResult};
+pub use selection_context::{SelectionBoundsV1, SelectionContextV1};

@@ -25,7 +25,7 @@ pub(super) const PROJECT_HELP: &str = r#"
 Topic: capy project
 
 Use when: AI or a workflow needs a local `.capy` file package that carries project metadata, design-language assets, source artifacts, runs, and evidence.
-Required parameters: every command needs `--project <dir>`. `generate` needs `--artifact <id>`, `--provider fixture|codex|claude`, and `--prompt <text>`. Add `--live` to actually call the Claude/Codex SDK. `design-language inspect|validate` needs only `--project`. Review decisions use `project run <accept|reject|retry|undo> --project <dir> <run_id>`.
+Required parameters: every command needs `--project <dir>`. `generate` needs `--artifact <id>`, `--provider fixture|codex|claude`, and `--prompt <text>`. Optional selected target context uses `--selector`, `--json-pointer`, or `--canvas-node`. Add `--live` to actually call the Claude/Codex SDK. `campaign plan|generate` needs `--brief <text>` and optional repeated `--artifact <id>`. Review decisions use `project run <accept|reject|retry|undo> --project <dir> <run_id>`.
 Recommended commands:
 1. `target/debug/capy project init --project <dir> --name "Campaign"`
 2. `target/debug/capy project add-design --project <dir> --path design/tokens.css --kind css --role tokens --title "Tokens"`
@@ -35,9 +35,12 @@ Recommended commands:
 6. `target/debug/capy project inspect --project <dir>`
 7. `target/debug/capy project workbench --project <dir>`
 8. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Make this clearer" --review`
-9. `target/debug/capy project run show --project <dir> <run_id>`
-10. `target/debug/capy project run accept --project <dir> <run_id>`
-11. For real AI prompt evidence, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --sdk-response <fixture.json> --review --save-prompt <prompt.json>`
+9. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Tighten this headline" --selector '[data-capy-section="hero-title"]' --review`
+10. `target/debug/capy project campaign plan --project <dir> --brief "Launch one coherent campaign"`
+11. `target/debug/capy project campaign generate --project <dir> --brief "Launch one coherent campaign"`
+12. `target/debug/capy project run show --project <dir> <run_id>`
+13. `target/debug/capy project run accept --project <dir> <run_id>`
+14. For real AI prompt evidence, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --sdk-response <fixture.json> --review --save-prompt <prompt.json>`
 Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact; let models edit `.capy` metadata directly; accept stale proposals after the source hash changed; run live `codex` or `claude` provider commands when no-spend fixture mode is enough; claim a design language affects AI before validate/inspect and generate run records show the same `design_language_ref`.
 Next step: review `run.review.diff_summary`, then accept, reject, retry, or undo through `capy project run`; or open the desktop workbench for visible card evidence.
 "#;
@@ -47,8 +50,11 @@ Topic: capy context
 
 Use when: AI needs a precise project context package before editing an artifact.
 Required parameters: `build` needs `--project <dir>` and `--artifact <art_id>`.
-Optional parameters: `--selector <css>` records the user-selected DOM target; `--canvas-node <id>` records the visible surface node; `--out <json>` saves the packet.
-Recommended command: `target/debug/capy context build --project <dir> --artifact <art_id> --selector '[data-capy-section="hero-title"]' --out target/context.json`
+Optional parameters: `--selector <css>` records the selected DOM target; `--json-pointer <ptr>` records a selected JSON node; `--canvas-node <id>` records the visible surface node; `--out <json>` saves the packet.
+Recommended commands:
+1. `target/debug/capy context build --project <dir> --artifact <html_art_id> --selector '[data-capy-section="hero-title"]' --out target/context-html.json`
+2. `target/debug/capy context build --project <dir> --artifact <json_art_id> --json-pointer /pages/0/title --out target/context-json.json`
+Contract: HTML `data-capy-section` selectors and JSON Pointer values produce `selection_context` inside `capy.context.v1`. Other artifact kinds fall back to whole-artifact context with `fallback_reason`.
 Do not: call a model from this command; paste screenshots without the JSON packet; invent artifact ids.
 Next step: create a `capy.patch.v1` document and run `capy patch apply --dry-run`.
 "#;

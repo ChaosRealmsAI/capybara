@@ -236,6 +236,7 @@ installWindowFacade({
     selectProjectArtifactNode: (...args) => projectPackageApi.selectArtifactNode(...args),
     buildSelectedProjectContext: (...args) => projectPackageApi.buildSelectedContext(...args),
     generateSelectedProjectArtifact: (...args) => projectPackageApi.generateSelectedArtifact(...args),
+    generateProjectCampaign: (...args) => projectPackageApi.generateCampaign(...args),
     acceptSelectedProjectReview: (...args) => projectPackageApi.acceptSelectedReview(...args),
     rejectSelectedProjectReview: (...args) => projectPackageApi.rejectSelectedReview(...args),
     retrySelectedProjectReview: (...args) => projectPackageApi.retrySelectedReview(...args),

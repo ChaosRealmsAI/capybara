@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
-use capy_project::{ArtifactKind, ProjectGenerateRequestV1, ProjectPackage};
+use capy_project::{
+    ArtifactKind, ProjectCampaignRequestV1, ProjectGenerateRequestV1, ProjectPackage,
+};
 use clap::{Args, Subcommand, ValueEnum};
 use serde_json::Value;
 
@@ -12,8 +14,8 @@ mod live;
     disable_help_subcommand = true,
     after_help = "AI quick start:
   Use `capy project --help` as the index and `capy help project` for the full workflow.
-  Common commands: init, inspect, design-language inspect, design-language validate, workbench, generate, run, add-design, add-artifact.
-  Required params: all commands use --project <dir>; generate needs --artifact, --provider, and --prompt; live SDK generation also needs --live; run decisions need a run id.
+  Common commands: init, inspect, design-language inspect, design-language validate, workbench, generate, campaign, run, add-design, add-artifact.
+  Required params: all commands use --project <dir>; generate needs --artifact, --provider, and --prompt; selected target context uses --selector, --json-pointer, or --canvas-node; campaign needs --brief; live SDK generation also needs --live; run decisions need a run id.
   Pitfalls: paths must live inside the project root; validate design language before live generation; use --review for AI proposals; accept is the only review action that mutates source files.
   Help topic: `capy help project`."
 )]
@@ -36,6 +38,8 @@ enum ProjectCommand {
     Generate(ProjectGenerateArgs),
     #[command(about = "Review, accept, reject, retry, or undo AI project runs")]
     Run(ProjectRunArgs),
+    #[command(about = "Plan, generate, and inspect multi-artifact campaigns")]
+    Campaign(ProjectCampaignArgs),
     #[command(about = "Register an AI-readable design-language asset")]
     AddDesign(ProjectAddDesignArgs),
     #[command(about = "Register a source artifact")]
@@ -129,6 +133,21 @@ struct ProjectGenerateArgs {
     prompt: String,
     #[arg(
         long,
+        help = "CSS selector or stable DOM selector for selected target context"
+    )]
+    selector: Option<String>,
+    #[arg(
+        long = "json-pointer",
+        help = "JSON Pointer for selected target context"
+    )]
+    json_pointer: Option<String>,
+    #[arg(
+        long = "canvas-node",
+        help = "Visible canvas/surface node id for selected context"
+    )]
+    canvas_node: Option<String>,
+    #[arg(
+        long,
         help = "Call the real Claude/Codex SDK and turn its JSON output into a patch"
     )]
     live: bool,
@@ -160,6 +179,41 @@ struct ProjectGenerateArgs {
 struct ProjectRunArgs {
     #[command(subcommand)]
     command: ProjectRunCommand,
+}
+
+#[derive(Debug, Args)]
+struct ProjectCampaignArgs {
+    #[command(subcommand)]
+    command: ProjectCampaignCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum ProjectCampaignCommand {
+    #[command(about = "Plan campaign artifact targets from a brief")]
+    Plan(ProjectCampaignPlanArgs),
+    #[command(about = "Generate fixture review proposals for a campaign")]
+    Generate(ProjectCampaignPlanArgs),
+    #[command(about = "Show one campaign run JSON")]
+    Show(ProjectCampaignShowArgs),
+}
+
+#[derive(Debug, Args)]
+struct ProjectCampaignPlanArgs {
+    #[arg(long)]
+    project: PathBuf,
+    #[arg(long)]
+    brief: String,
+    #[arg(long = "artifact")]
+    artifacts: Vec<String>,
+    #[arg(long)]
+    out: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct ProjectCampaignShowArgs {
+    #[arg(long)]
+    project: PathBuf,
+    run_id: String,
 }
 
 #[derive(Debug, Subcommand)]
@@ -252,6 +306,9 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
                         prompt: args.prompt,
                         dry_run: !args.write,
                         review: args.review,
+                        selector: args.selector,
+                        canvas_node: args.canvas_node,
+                        json_pointer: args.json_pointer,
                     })
                     .map_err(|err| err.to_string())?
             };
@@ -261,6 +318,7 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
             serde_json::to_value(result)
         }
         ProjectCommand::Run(args) => project_run(args),
+        ProjectCommand::Campaign(args) => project_campaign(args),
         ProjectCommand::AddDesign(args) => {
             let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
             serde_json::to_value(
@@ -286,6 +344,45 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
     }
     .map_err(|err| err.to_string())?;
     print_json(&data)
+}
+
+fn project_campaign(args: ProjectCampaignArgs) -> Result<serde_json::Value, serde_json::Error> {
+    match args.command {
+        ProjectCampaignCommand::Plan(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            let plan = package
+                .campaign_plan(ProjectCampaignRequestV1 {
+                    brief: args.brief,
+                    artifact_ids: args.artifacts,
+                })
+                .map_err(string_json_error)?;
+            if let Some(out) = args.out.as_ref() {
+                write_json_file(out, &plan).map_err(string_json_error)?;
+            }
+            serde_json::to_value(plan)
+        }
+        ProjectCampaignCommand::Generate(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            let result = package
+                .campaign_generate(ProjectCampaignRequestV1 {
+                    brief: args.brief,
+                    artifact_ids: args.artifacts,
+                })
+                .map_err(string_json_error)?;
+            if let Some(out) = args.out.as_ref() {
+                write_json_file(out, &result).map_err(string_json_error)?;
+            }
+            serde_json::to_value(result)
+        }
+        ProjectCampaignCommand::Show(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .campaign_show(&args.run_id)
+                    .map_err(string_json_error)?,
+            )
+        }
+    }
 }
 
 fn project_run(args: ProjectRunArgs) -> Result<serde_json::Value, serde_json::Error> {

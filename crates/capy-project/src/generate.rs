@@ -72,7 +72,10 @@ impl ProjectPackage {
                     source_path: Some(artifact.source_path.clone()),
                     old_text: current_source,
                     new_text: new_source.clone(),
-                    selector_hint: None,
+                    selector_hint: request
+                        .selector
+                        .clone()
+                        .or_else(|| request.json_pointer.clone()),
                 }],
             };
             return self.record_review_proposal(
@@ -247,7 +250,7 @@ fn live_prompt(artifact: &ArtifactRefV1, prompt: &str) -> String {
     )
 }
 
-fn fixture_source(
+pub(crate) fn fixture_source(
     artifact: &ArtifactRefV1,
     current: &str,
     prompt: &str,
@@ -308,6 +311,9 @@ mod tests {
             prompt: "Make launch copy clearer".to_string(),
             dry_run: false,
             review: false,
+            selector: None,
+            canvas_node: None,
+            json_pointer: None,
         })?;
         assert_eq!(result.run.status, "completed");
         let run_path = result

@@ -92,7 +92,6 @@ pub struct ProjectManifestV1 {
     pub created_at: u64,
     pub updated_at: u64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignLanguageManifestV1 {
     pub schema_version: String,
@@ -109,7 +108,6 @@ pub struct DesignLanguageManifestV1 {
     #[serde(default)]
     pub assets: Vec<DesignLanguageAssetV1>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignLanguageAssetV1 {
     pub id: String,
@@ -121,7 +119,6 @@ pub struct DesignLanguageAssetV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignLanguageSummaryV1 {
     pub name: String,
@@ -134,7 +131,6 @@ pub struct DesignLanguageSummaryV1 {
     pub rule_count: usize,
     pub example_count: usize,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignLanguageAssetStatusV1 {
     pub id: String,
@@ -149,7 +145,6 @@ pub struct DesignLanguageAssetStatusV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignLanguageValidationV1 {
     pub schema_version: String,
@@ -164,7 +159,6 @@ pub struct DesignLanguageValidationV1 {
     pub errors: Vec<String>,
     pub generated_at: u64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignLanguageInspectionV1 {
     pub schema_version: String,
@@ -177,14 +171,12 @@ pub struct DesignLanguageInspectionV1 {
     pub assets: Vec<DesignLanguageAssetStatusV1>,
     pub generated_at: u64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArtifactRegistryV1 {
     pub schema_version: String,
     #[serde(default)]
     pub artifacts: Vec<ArtifactRefV1>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArtifactRefV1 {
     pub id: String,
@@ -205,7 +197,6 @@ pub struct ArtifactRefV1 {
     pub evidence_refs: Vec<String>,
     pub updated_at: u64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectInspectionV1 {
     pub manifest: ProjectManifestV1,
@@ -219,8 +210,8 @@ pub struct ContextBuildRequest {
     pub artifact_id: String,
     pub selector: Option<String>,
     pub canvas_node: Option<String>,
+    pub json_pointer: Option<String>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextPackageV1 {
     pub schema_version: String,
@@ -233,6 +224,8 @@ pub struct ContextPackageV1 {
     pub selector: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub canvas_node: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_context: Option<crate::selection_context::SelectionContextV1>,
     pub artifact: ArtifactRefV1,
     pub design_language_ref: String,
     pub design_language_summary: DesignLanguageSummaryV1,
@@ -254,7 +247,6 @@ pub struct PatchDocumentV1 {
     pub actor: Option<String>,
     pub operations: Vec<ReplaceExactTextOperationV1>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplaceExactTextOperationV1 {
     pub op: String,
@@ -266,7 +258,6 @@ pub struct ReplaceExactTextOperationV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selector_hint: Option<String>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PatchRunV1 {
     pub schema_version: String,
@@ -288,7 +279,6 @@ pub struct PatchRunV1 {
     pub dry_run: bool,
     pub generated_at: u64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PatchApplyResultV1 {
     pub run: PatchRunV1,
@@ -296,7 +286,6 @@ pub struct PatchApplyResultV1 {
     #[serde(default)]
     pub changed_files: Vec<String>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkbenchPreviewV1 {
     pub kind: String,
@@ -305,7 +294,6 @@ pub struct WorkbenchPreviewV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkbenchCardV1 {
     pub id: String,
@@ -327,7 +315,6 @@ pub struct ProjectWorkbenchCardV1 {
     pub next_actions: Vec<String>,
     pub updated_at: u64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectWorkbenchV1 {
     pub schema_version: String,
@@ -338,7 +325,6 @@ pub struct ProjectWorkbenchV1 {
     pub cards: Vec<ProjectWorkbenchCardV1>,
     pub generated_at: u64,
 }
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SurfaceGeometryV1 {
     pub x: f64,
@@ -346,7 +332,6 @@ pub struct SurfaceGeometryV1 {
     pub w: f64,
     pub h: f64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSurfaceNodeV1 {
     pub id: String,
@@ -356,7 +341,6 @@ pub struct ProjectSurfaceNodeV1 {
     pub status: String,
     pub updated_at: u64,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSurfaceNodesV1 {
     pub schema_version: String,
@@ -373,6 +357,12 @@ pub struct ProjectGenerateRequestV1 {
     pub dry_run: bool,
     #[serde(default)]
     pub review: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canvas_node: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub json_pointer: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -476,6 +466,8 @@ pub struct ProjectAiPromptV1 {
     pub provider: String,
     pub design_language_ref: String,
     pub design_language_summary: DesignLanguageSummaryV1,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_context: Option<crate::selection_context::SelectionContextV1>,
     pub prompt: String,
     pub output_schema: Value,
     pub generated_at: u64,

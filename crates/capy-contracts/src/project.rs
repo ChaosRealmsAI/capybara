@@ -13,11 +13,15 @@ pub const OP_PROJECT_RUN_ACCEPT: &str = "project-run-accept";
 pub const OP_PROJECT_RUN_REJECT: &str = "project-run-reject";
 pub const OP_PROJECT_RUN_RETRY: &str = "project-run-retry";
 pub const OP_PROJECT_RUN_UNDO: &str = "project-run-undo";
+pub const OP_PROJECT_CAMPAIGN_PLAN: &str = "project-campaign-plan";
+pub const OP_PROJECT_CAMPAIGN_GENERATE: &str = "project-campaign-generate";
+pub const OP_PROJECT_CAMPAIGN_SHOW: &str = "project-campaign-show";
 
 #[cfg(test)]
 mod tests {
     use super::{
         OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY,
+        OP_PROJECT_CAMPAIGN_GENERATE, OP_PROJECT_CAMPAIGN_PLAN, OP_PROJECT_CAMPAIGN_SHOW,
         OP_PROJECT_GENERATE, OP_PROJECT_INSPECT, OP_PROJECT_RUN_ACCEPT, OP_PROJECT_RUN_LIST,
         OP_PROJECT_RUN_REJECT, OP_PROJECT_RUN_RETRY, OP_PROJECT_RUN_SHOW, OP_PROJECT_RUN_UNDO,
         OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES, OP_PROJECT_WORKBENCH,
@@ -43,5 +47,8 @@ mod tests {
         assert_eq!(OP_PROJECT_RUN_REJECT, "project-run-reject");
         assert_eq!(OP_PROJECT_RUN_RETRY, "project-run-retry");
         assert_eq!(OP_PROJECT_RUN_UNDO, "project-run-undo");
+        assert_eq!(OP_PROJECT_CAMPAIGN_PLAN, "project-campaign-plan");
+        assert_eq!(OP_PROJECT_CAMPAIGN_GENERATE, "project-campaign-generate");
+        assert_eq!(OP_PROJECT_CAMPAIGN_SHOW, "project-campaign-show");
     }
 }

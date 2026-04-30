@@ -128,7 +128,9 @@
   text-align: right;
 }
 
-.project-design-language-summary {
+.project-design-language-summary,
+.project-selection-context,
+.project-campaign-summary {
   display: grid;
   gap: 10px;
   padding: 10px;
@@ -137,21 +139,43 @@
   background: rgba(255, 255, 255, 0.66);
 }
 
+.project-selection-context,
+.project-campaign-summary {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.project-selection-context p,
+.project-campaign-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .project-design-language-summary strong,
-.project-design-language-summary small {
+.project-design-language-summary small,
+.project-selection-context strong,
+.project-selection-context small,
+.project-campaign-summary strong,
+.project-campaign-summary small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.project-design-language-summary strong {
+.project-design-language-summary strong,
+.project-selection-context strong,
+.project-campaign-summary strong {
   margin-top: 3px;
   font-size: 14px;
   line-height: 1.25;
 }
 
-.project-design-language-summary small {
+.project-design-language-summary small,
+.project-selection-context small,
+.project-campaign-summary small {
   color: var(--muted);
   font-size: 11px;
 }

@@ -227,6 +227,7 @@ mod package_tests {
             artifact_id: artifact.id,
             selector: Some("h1".to_string()),
             canvas_node: Some("42".to_string()),
+            json_pointer: None,
         })?;
 
         assert_eq!(context.selector.as_deref(), Some("h1"));
