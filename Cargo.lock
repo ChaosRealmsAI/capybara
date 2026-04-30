@@ -391,6 +391,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "capy-agent-runtime"
+version = "0.2.0"
+dependencies = [
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "capy-canvas-core"
 version = "0.2.0"
 dependencies = [
@@ -426,6 +434,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64",
+ "capy-agent-runtime",
  "capy-clips-align",
  "capy-clips-core",
  "capy-clips-cut",
@@ -609,6 +618,7 @@ name = "capy-shell"
 version = "0.2.0"
 dependencies = [
  "base64",
+ "capy-agent-runtime",
  "capy-contracts",
  "capy-image-gen",
  "capy-poster",

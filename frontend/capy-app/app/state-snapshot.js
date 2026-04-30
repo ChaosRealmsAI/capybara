@@ -6,6 +6,17 @@ export function createStateSnapshot({ state, normalizeValue, posterDocumentsStat
       blocks: state.blocks,
       planner: state.planner,
       workspace: state.workspace,
+      projectPackage: {
+        status: state.projectPackage.status,
+        path: state.projectPackage.path,
+        selectedArtifactId: state.projectPackage.selectedArtifactId,
+        selectedCardId: state.projectPackage.selectedCardId,
+        previewSource: state.projectPackage.previewSource,
+        artifactCount: state.projectPackage.inspection?.artifacts?.artifacts?.length || 0,
+        cardCount: state.projectPackage.workbench?.cards?.length || 0,
+        generation: state.projectPackage.generation,
+        error: state.projectPackage.error
+      },
       video: state.video,
       gameAssets: {
         status: state.gameAssets.status,

@@ -215,5 +215,36 @@ if ! grep -q 'Capybara CLI draft' target/capy-project-html-context/web/index.htm
   echo "project check failed: project generate --write must mutate HTML source" >&2
   exit 1
 fi
+rm -rf target/capy-project-ai-live
+cp -R fixtures/project/html-context target/capy-project-ai-live
+project_ai_dry_run="$("$CAPY_BIN" project generate \
+  --project target/capy-project-ai-live \
+  --artifact art_00000000000000000000000000000001 \
+  --provider codex \
+  --prompt "Make the launch page clearer" \
+  --live \
+  --sdk-response fixtures/project/html-context/sdk-response/project-ai-html.json \
+  --dry-run)"
+if ! jq -e '.run.schema_version == "capy.project-generate-run.v1" and .run.status == "planned" and .run.output.mode == "live"' \
+  <<<"$project_ai_dry_run" >/dev/null; then
+  echo "project check failed: project AI dry-run must return a planned live run" >&2
+  exit 1
+fi
+if grep -q 'Project Context Launch' target/capy-project-ai-live/web/index.html; then
+  echo "project check failed: project AI dry-run must not mutate HTML source" >&2
+  exit 1
+fi
+"$CAPY_BIN" project generate \
+  --project target/capy-project-ai-live \
+  --artifact art_00000000000000000000000000000001 \
+  --provider codex \
+  --prompt "Make the launch page clearer" \
+  --live \
+  --sdk-response fixtures/project/html-context/sdk-response/project-ai-html.json \
+  --write >/dev/null
+if ! grep -q 'Project Context Launch' target/capy-project-ai-live/web/index.html; then
+  echo "project check failed: project AI --live --write must mutate HTML source" >&2
+  exit 1
+fi
 
 echo "project check passed"

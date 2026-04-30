@@ -134,7 +134,16 @@ videoEditorApi = createVideoEditor({
   ensureGameAssetsPack: (...args) => gameAssetsWorkspaceApi.ensureDefaultPack(...args),
 });
 
-projectPackageApi = createProjectPackageWiring({ state, rpc, dom, stringifyError });
+projectPackageApi = createProjectPackageWiring({
+  state,
+  rpc,
+  dom,
+  stringifyError,
+  appendPlannerMessage: (message) => {
+    state.messages.push({ id: `project-${Date.now()}`, ...message });
+    conversationsApi.renderMessages();
+  },
+});
 
 contextApi = createCanvasContext({
   state, canvasEl, canvasPanelEl, regionLayerEl, regionModeEl, plannerContextEl,
