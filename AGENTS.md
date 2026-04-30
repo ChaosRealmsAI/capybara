@@ -19,6 +19,25 @@ Do not load the whole spec tree or hard-code one active version from this file.
 Capybara assumes multi-model, multi-worktree work. Discover the current task
 layer by layer, then read only the docs needed for that layer.
 
+## Final Product Direction
+
+Capybara's current design is locked by `spec/product-philosophy.md` and the
+current `focus_version` directory discovered from `spec/versions/REGISTRY.json`:
+
+```text
+Project 承接一切
+AI 根据项目级设计语言生产一切
+桌面端是给 AI 提供 context 的入口
+Capybara 负责展示、编辑、验证和证据
+```
+
+Do not treat Capybara as a low-code template engine or a fixed component
+assembler. Project-level design language is AI context: markdown, JSON, CSS,
+HTML, reference images, examples, approved outputs, constraints, and feedback
+are all valid context assets. The desktop product's job is to display AI output
+on surfaces, preserve source artifacts, turn user selection into precise context,
+apply patches, verify results, export, and leave evidence.
+
 ## Start Here
 
 1. Read `spec/README.md` for the truth map and write destinations.
