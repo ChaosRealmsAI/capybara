@@ -66,6 +66,8 @@ pub(super) fn screenshot_probe_script(region: &str) -> String {
     let selector_json = json_string(selector);
     format!(
         r##"(async function() {{
+  const captureTimeoutMs = 15000;
+  const captureWork = (async () => {{
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const selector = {selector_json};
   const el = selector ? document.querySelector(selector) : document.documentElement;
@@ -170,6 +172,11 @@ pub(super) fn screenshot_probe_script(region: &str) -> String {
     found: !!el,
     renderer: "cef-dom-self-render"
   }};
+  }})();
+  const timeout = new Promise((_, reject) => {{
+    setTimeout(() => reject(new Error(`app-view self-render timed out after ${{captureTimeoutMs}}ms`)), captureTimeoutMs);
+  }});
+  return await Promise.race([captureWork, timeout]);
 }})()"##
     )
 }
@@ -185,6 +192,14 @@ pub(super) fn screenshot_response(
         Ok(value) => value,
         Err(err) => return error_response(req_id, format!("invalid screenshot probe JSON: {err}")),
     };
+    if value.get("ok").and_then(Value::as_bool) == Some(false) {
+        let detail = value
+            .get("error")
+            .and_then(Value::as_str)
+            .filter(|text| !text.is_empty())
+            .unwrap_or("unknown screenshot probe failure");
+        return error_response(req_id, format!("screenshot probe failed: {detail}"));
+    }
     let capture_region = match capture_region_from_probe(&value) {
         Ok(region) => region,
         Err(err) => return error_response(req_id, err),
@@ -318,6 +333,29 @@ mod tests {
         };
 
         assert!(error.contains("pixelWidth"));
+        Ok(())
+    }
+
+    #[test]
+    fn screenshot_response_reports_probe_error_before_file_write() -> Result<(), String> {
+        let response = super::screenshot_response(
+            "req-1",
+            "w-1",
+            "full",
+            "/tmp/capybara-should-not-write.png",
+            r#"{"ok":false,"error":"app-view self-render timed out after 15000ms"}"#,
+        );
+
+        assert!(!response.ok);
+        let error = response
+            .error
+            .ok_or_else(|| "expected screenshot response error".to_string())?;
+        let detail = error
+            .get("detail")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| "expected error detail".to_string())?;
+        assert!(detail.contains("screenshot probe failed"));
+        assert!(detail.contains("timed out"));
         Ok(())
     }
 }
