@@ -352,7 +352,10 @@ fn bundled_frontend_root() -> Option<PathBuf> {
 
 fn default_session_cwd() -> Result<PathBuf, String> {
     if let Some(cwd) = std::env::var_os("CAPY_DEFAULT_CWD").filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(cwd));
+        let cwd = PathBuf::from(cwd);
+        if cwd.exists() {
+            return Ok(cwd);
+        }
     }
     project_root().or_else(|_| std::env::current_dir().map_err(|err| err.to_string()))
 }
@@ -460,22 +463,22 @@ mod tests {
     }
 
     #[test]
-    fn fixture_assets_are_served_from_workspace_root() {
-        let frontend = project_root().unwrap().join("frontend/capy-app");
-        let response =
-            frontend_response(&frontend, "/fixtures/poster/v1/single-poster.json").unwrap();
+    fn fixture_assets_are_served_from_workspace_root() -> Result<(), Box<dyn std::error::Error>> {
+        let frontend = project_root()?.join("frontend/capy-app");
+        let response = frontend_response(&frontend, "/fixtures/poster/v1/single-poster.json")?;
         assert_eq!(response.status, 200);
         assert_eq!(response.content_type, "application/json; charset=utf-8");
-        let text = String::from_utf8(response.body).unwrap();
+        let text = String::from_utf8(response.body)?;
         assert!(text.contains("\"schema\": \"capy.poster.document.v1\""));
         assert!(text.contains("\"title\": \"AI Design Poster\""));
+        Ok(())
     }
 
     #[test]
-    fn fixture_route_rejects_path_escape() {
-        let response = workspace_fixture_response("fixtures/../frontend/capy-app/index.html")
-            .expect("escaped fixture route should produce a forbidden response");
+    fn fixture_route_rejects_path_escape() -> Result<(), Box<dyn std::error::Error>> {
+        let response = workspace_fixture_response("fixtures/../frontend/capy-app/index.html")?;
         assert_eq!(response.status, 403);
+        Ok(())
     }
 
     #[test]

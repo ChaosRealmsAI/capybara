@@ -8,6 +8,7 @@ pub struct ExportCompositionRequest {
     pub kind: ExportKind,
     pub out: Option<PathBuf>,
     pub fps: u32,
+    /// Recorder settings are part of the shared request so CLI and shell export paths stay aligned.
     pub profile: String,
     pub resolution: Option<String>,
     pub parallel: Option<usize>,
