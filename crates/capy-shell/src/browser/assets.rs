@@ -126,6 +126,9 @@ fn frontend_response(root: &Path, path: &str) -> Result<HttpResponse, String> {
     if decoded_path.starts_with("fixtures/") {
         return workspace_fixture_response(&decoded_path);
     }
+    if decoded_path.starts_with("target/") || decoded_path.starts_with("spec/versions/") {
+        return workspace_relative_response(&decoded_path, &["target", "spec/versions"]);
+    }
     let file = root.join(decoded_path);
     let file = file
         .canonicalize()
@@ -147,21 +150,28 @@ fn frontend_response(root: &Path, path: &str) -> Result<HttpResponse, String> {
 }
 
 fn workspace_fixture_response(path: &str) -> Result<HttpResponse, String> {
+    workspace_relative_response(path, &["fixtures"])
+}
+
+fn workspace_relative_response(
+    path: &str,
+    allowed_prefixes: &[&str],
+) -> Result<HttpResponse, String> {
     let cwd = default_session_cwd()?
         .canonicalize()
         .map_err(|err| format!("session cwd failed: {err}"))?;
-    let fixture_root = cwd.join("fixtures");
-    let fixture_root = fixture_root
-        .canonicalize()
-        .map_err(|err| format!("fixtures root failed: {err}"))?;
     let file = cwd.join(path);
     let file = file
         .canonicalize()
-        .map_err(|err| format!("fixture asset missing: {path}: {err}"))?;
-    if !file.starts_with(&fixture_root) {
+        .map_err(|err| format!("workspace asset missing: {path}: {err}"))?;
+    let allowed = allowed_prefixes
+        .iter()
+        .filter_map(|prefix| cwd.join(prefix).canonicalize().ok())
+        .any(|root| file.starts_with(root));
+    if !allowed {
         return Ok(text_response(403, "Forbidden", "forbidden"));
     }
-    let body = std::fs::read(&file).map_err(|err| format!("fixture asset failed: {err}"))?;
+    let body = std::fs::read(&file).map_err(|err| format!("workspace asset failed: {err}"))?;
     Ok(HttpResponse {
         status: 200,
         reason: "OK",
@@ -437,57 +447,4 @@ fn mime_for_path(path: &Path) -> &'static str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn percent_decode_rejects_invalid_escape() {
-        assert!(percent_decode("bad%zz").is_err());
-    }
-
-    #[test]
-    fn frontend_url_escapes_project_query_value() {
-        let url = frontend_url("http://127.0.0.1:1", "demo project/alpha", 2.0);
-        assert_eq!(
-            url,
-            "http://127.0.0.1:1/index.html?project=demo%20project/alpha&dpr=2.000"
-        );
-    }
-
-    #[test]
-    fn wasm_assets_use_wasm_mime_type() {
-        assert_eq!(
-            mime_for_path(Path::new("capy_canvas_web_bg.wasm")),
-            "application/wasm"
-        );
-    }
-
-    #[test]
-    fn fixture_assets_are_served_from_workspace_root() -> Result<(), Box<dyn std::error::Error>> {
-        let frontend = project_root()?.join("frontend/capy-app");
-        let response = frontend_response(&frontend, "/fixtures/poster/v1/single-poster.json")?;
-        assert_eq!(response.status, 200);
-        assert_eq!(response.content_type, "application/json; charset=utf-8");
-        let text = String::from_utf8(response.body)?;
-        assert!(text.contains("\"schema\": \"capy.poster.document.v1\""));
-        assert!(text.contains("\"title\": \"AI Design Poster\""));
-        Ok(())
-    }
-
-    #[test]
-    fn fixture_route_rejects_path_escape() -> Result<(), Box<dyn std::error::Error>> {
-        let response = workspace_fixture_response("fixtures/../frontend/capy-app/index.html")?;
-        assert_eq!(response.status, 403);
-        Ok(())
-    }
-
-    #[test]
-    fn source_project_root_is_a_frontend_candidate() {
-        let candidates = frontend_root_candidates();
-        assert!(
-            candidates
-                .iter()
-                .any(|path| path.ends_with("frontend/capy-app"))
-        );
-    }
-}
+mod tests;

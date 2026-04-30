@@ -272,3 +272,42 @@ Recommended command: `target/debug/capy cutout batch --manifest <manifest.json> 
 Do not: put directories in item `input`; assume quality without checking QA previews.
 Next step: read summary JSON and inspect `qa/`.
 "#;
+
+pub(super) const GAME_ASSETS_HELP: &str = r#"
+Topic: capy game-assets agent
+
+Use when: AI needs to create, rebuild, preview, or verify a compact 2D game asset pack from image generation and slicing.
+Required parameters: `sample` needs `--out`; `build` and `verify` need `--pack <pack.json>`.
+Recommended commands:
+1. `target/debug/capy game-assets doctor`
+2. `target/debug/capy game-assets sample --preset forest-action-rpg-compact --out target/capy-game-assets-sample --overwrite`
+3. `target/debug/capy game-assets verify --pack target/capy-game-assets-sample/pack.json`
+4. Open `target/capy-game-assets-sample/preview/index.html` or the desktop Game Assets tab.
+Outputs: `pack.json`, `prompts/`, `raw/`, `transparent/`, `frames/`, `spritesheets/`, `qa/contact-sheet.png`, `preview/index.html`, and `report.json`.
+Do not: use `--live` for smoke tests; edit frame paths by hand without rerunning `build`; claim asset quality from manifest existence alone.
+Next step: save command JSON and the contact sheet into version evidence.
+"#;
+
+pub(super) const GAME_ASSETS_LIVE_HELP: &str = r#"
+Topic: capy game-assets live
+
+Use when: the user explicitly approved provider spend for a real image-generated sample pack.
+Required parameters: `sample --live --max-live-calls <n> --out <dir>`; the compact preset currently needs 8 calls.
+Recommended commands:
+1. `target/debug/capy image balance`
+2. `target/debug/capy game-assets sample --preset forest-action-rpg-compact --live --max-live-calls 8 --out target/capy-game-assets-live --overwrite`
+3. `target/debug/capy game-assets verify --pack target/capy-game-assets-live/pack.json`
+Do not: omit `--max-live-calls`; run live generation in project gates; log provider secrets or raw credentials; accept the pack without opening the QA contact sheet.
+Next step: if live generation fails or quality is not acceptable, fall back to the no-spend sample and record the failure in evidence.
+"#;
+
+pub(super) const GAME_ASSETS_MANIFEST_HELP: &str = r#"
+Topic: capy game-assets manifest
+
+Use when: AI needs to inspect or patch a generated game asset pack.
+Required file: `pack.json` with schema `capy.game_assets.pack.v1`.
+Important fields: `assets[]`, `assets[].prompt_path`, `assets[].raw_path`, `assets[].transparent_path`, `assets[].actions[].source_path`, `frame_paths[]`, `spritesheet_path`, and `outputs`.
+Recommended command: `target/debug/capy game-assets verify --pack <pack.json>`
+Do not: point paths outside the pack directory; leave missing preview/contact-sheet/report outputs; reduce the compact sample below 5 assets or 16 frames.
+Next step: rerun `target/debug/capy game-assets build --pack <pack.json>` after manifest or source image changes.
+"#;

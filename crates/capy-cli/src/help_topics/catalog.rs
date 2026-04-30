@@ -2,8 +2,9 @@ use super::HelpTopic;
 use super::docs::{
     AGENT_HELP, AGENT_SDK_HELP, CANVAS_CONTEXT_HELP, CANVAS_HELP, CANVAS_IMAGES_HELP,
     CHAT_CANVAS_TOOLS_HELP, CHAT_HELP, CUTOUT_HELP, CUTOUT_MANIFEST_HELP, DESKTOP_HELP, DEV_HELP,
-    DOCTOR_HELP, IMAGE_CUTOUT_HELP, IMAGE_HELP, INTERACTION_HELP, PROJECT_CONTEXT_HELP,
-    PROJECT_HELP, PROJECT_PATCH_HELP,
+    DOCTOR_HELP, GAME_ASSETS_HELP, GAME_ASSETS_LIVE_HELP, GAME_ASSETS_MANIFEST_HELP,
+    IMAGE_CUTOUT_HELP, IMAGE_HELP, INTERACTION_HELP, PROJECT_CONTEXT_HELP, PROJECT_HELP,
+    PROJECT_PATCH_HELP,
 };
 use super::media_docs::{
     CLIPS_HELP, CLIPS_YOUTUBE_HELP, COMPONENT_HELP, MEDIA_SCROLL_HELP, MEDIA_STORY_HELP,
@@ -90,6 +91,12 @@ pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
         body: CUTOUT_HELP,
     },
     HelpTopic {
+        name: "game-assets",
+        aliases: &["sprites", "asset-pack"],
+        summary: "Generate, slice, preview, and verify compact game asset packs.",
+        body: GAME_ASSETS_HELP,
+    },
+    HelpTopic {
         name: "tts",
         aliases: &["voice", "audio"],
         summary: "Generate speech, subtitles, timelines, and karaoke HTML.",
@@ -166,6 +173,27 @@ pub(super) const CUTOUT_TOPICS: &[HelpTopic] = &[
         aliases: &["batch"],
         summary: "Batch manifest shape for multiple cutout inputs.",
         body: CUTOUT_MANIFEST_HELP,
+    },
+];
+
+pub(super) const GAME_ASSETS_TOPICS: &[HelpTopic] = &[
+    HelpTopic {
+        name: "agent",
+        aliases: &["workflow", "sample"],
+        summary: "Create and verify a no-spend compact game asset pack.",
+        body: GAME_ASSETS_HELP,
+    },
+    HelpTopic {
+        name: "live",
+        aliases: &["spend", "provider"],
+        summary: "Run the explicit capped live generation path.",
+        body: GAME_ASSETS_LIVE_HELP,
+    },
+    HelpTopic {
+        name: "manifest",
+        aliases: &["pack", "schema"],
+        summary: "Inspect the capy.game_assets.pack.v1 manifest contract.",
+        body: GAME_ASSETS_MANIFEST_HELP,
     },
 ];
 

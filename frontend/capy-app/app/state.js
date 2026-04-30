@@ -106,5 +106,14 @@ export const state = {
     durationMs: 0,
     exportJob: null,
     error: null
+  },
+  gameAssets: {
+    status: "idle",
+    path: "",
+    rootUrl: "",
+    pack: null,
+    selectedAssetId: "",
+    verifyStatus: "",
+    error: ""
   }
 };

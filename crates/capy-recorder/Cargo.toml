@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[workspace]
+
 [[bin]]
 name = "capy-recorder"
 path = "src/main.rs"
-
-[workspace]
 
 [dependencies]
 capy-shell-mac = { path = "../capy-shell-mac" }

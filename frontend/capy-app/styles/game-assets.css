@@ -1,0 +1,249 @@
+.game-assets-workspace {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(420px, 1fr) minmax(260px, 320px);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+  min-height: 0;
+  padding: 18px;
+}
+
+.workbench:has(.game-assets-workspace:not([hidden])) {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.game-assets-workspace[hidden] {
+  display: none;
+}
+
+.game-assets-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.game-assets-source {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.game-assets-path {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.game-assets-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.game-assets-sidebar,
+.game-assets-stage,
+.game-assets-inspector-panel {
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+}
+
+.game-assets-sidebar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.game-assets-status {
+  margin: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eef5ea;
+  color: #27452e;
+  font-size: 13px;
+}
+
+.game-assets-status[data-status="error"] {
+  background: #fff0f2;
+  color: #7f1d2d;
+}
+
+.game-assets-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+
+.game-assets-row {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  padding: 10px;
+  text-align: left;
+}
+
+.game-assets-row[data-selected="true"] {
+  border-color: #4f8f61;
+  box-shadow: inset 3px 0 0 #4f8f61;
+}
+
+.game-assets-row small,
+.game-assets-hero-meta span,
+.game-assets-kv span,
+.game-assets-empty {
+  color: var(--muted);
+}
+
+.game-assets-stage {
+  display: grid;
+  grid-template-rows: minmax(260px, 0.9fr) minmax(180px, 1fr);
+  gap: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.game-assets-preview {
+  display: grid;
+  grid-template-columns: minmax(180px, 300px) minmax(180px, 1fr);
+  gap: 16px;
+  align-items: center;
+  min-height: 0;
+}
+
+.game-assets-hero-image {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: #edf2ea;
+}
+
+.game-assets-hero-image img {
+  width: min(84%, 240px);
+  height: min(84%, 240px);
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.game-assets-hero-meta h2 {
+  margin: 4px 0 8px;
+  font-size: 24px;
+}
+
+.game-assets-hero-meta p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.game-assets-frames {
+  display: grid;
+  grid-auto-rows: min-content;
+  gap: 12px;
+  overflow: auto;
+}
+
+.game-assets-action {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 10px;
+}
+
+.game-assets-action h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.game-assets-frame-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(48px, 1fr));
+  gap: 8px;
+}
+
+.game-assets-frame-strip img,
+.game-assets-spritesheet {
+  width: 100%;
+  border-radius: 6px;
+  background: #edf2ea;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.game-assets-spritesheet {
+  margin-top: 8px;
+  max-height: 72px;
+}
+
+.game-assets-inspector-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.game-assets-inspector {
+  display: grid;
+  gap: 8px;
+}
+
+.game-assets-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  font-size: 13px;
+}
+
+.game-assets-kv strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.game-assets-contact-sheet {
+  width: 100%;
+  min-height: 0;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f5f7f2;
+}
+
+.game-assets-empty {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+}
+
+@media (max-width: 960px) {
+  .game-assets-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
+  }
+
+  .game-assets-preview {
+    grid-template-columns: 1fr;
+  }
+}

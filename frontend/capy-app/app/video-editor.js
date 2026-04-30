@@ -9,6 +9,8 @@ export function createVideoEditor(ctx) {
     setRunStatus,
     renderPosterWorkspace,
     ensurePosterDocument,
+    renderGameAssetsWorkspace,
+    ensureGameAssetsPack,
   } = ctx;
   const preview = createVideoPreviewController({ state, dom, stringifyError });
 
@@ -43,30 +45,42 @@ export function createVideoEditor(ctx) {
   }
 
   function switchWorkspace(tab) {
-    state.workspace.activeTab = ["video", "poster"].includes(tab) ? tab : "canvas";
+    state.workspace.activeTab = ["video", "poster", "game-assets"].includes(tab) ? tab : "canvas";
     const videoActive = state.workspace.activeTab === "video";
     const posterActive = state.workspace.activeTab === "poster";
+    const gameAssetsActive = state.workspace.activeTab === "game-assets";
     dom.workspaceTabs.forEach((button) => {
       const active = button.dataset.workspaceTab === state.workspace.activeTab;
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", active ? "true" : "false");
     });
     if (dom.brandSubtitleEl) {
-      dom.brandSubtitleEl.textContent = videoActive ? "视频剪辑" : posterActive ? "海报" : "Canvas";
+      dom.brandSubtitleEl.textContent = videoActive
+        ? "视频剪辑"
+        : posterActive
+          ? "海报"
+          : gameAssetsActive
+            ? "游戏素材"
+            : "Canvas";
     }
     if (videoActive && dom.timelineInspectorEl) {
       state.workspace.timelineInspectorWasOpen = !dom.timelineInspectorEl.hidden;
     }
-    dom.canvasPanelEl.hidden = videoActive || posterActive;
-    dom.plannerEl.hidden = videoActive || posterActive;
+    dom.canvasPanelEl.hidden = videoActive || posterActive || gameAssetsActive;
+    dom.plannerEl.hidden = videoActive || posterActive || gameAssetsActive;
     if (dom.timelineInspectorEl) {
-      dom.timelineInspectorEl.hidden = videoActive || posterActive ? true : !state.workspace.timelineInspectorWasOpen;
+      dom.timelineInspectorEl.hidden = videoActive || posterActive || gameAssetsActive
+        ? true
+        : !state.workspace.timelineInspectorWasOpen;
     }
     if (dom.videoEditorEl) {
       dom.videoEditorEl.hidden = !videoActive;
     }
     if (dom.posterWorkspaceEl) {
       dom.posterWorkspaceEl.hidden = !posterActive;
+    }
+    if (dom.gameAssetsWorkspaceEl) {
+      dom.gameAssetsWorkspaceEl.hidden = !gameAssetsActive;
     }
     if (videoActive) {
       window.requestAnimationFrame(() => renderVideoEditor());
@@ -77,6 +91,15 @@ export function createVideoEditor(ctx) {
           renderPosterWorkspace && renderPosterWorkspace();
         } else {
           ensurePosterDocument && ensurePosterDocument();
+        }
+      });
+    }
+    if (gameAssetsActive) {
+      window.requestAnimationFrame(() => {
+        if (state.gameAssets?.pack) {
+          renderGameAssetsWorkspace && renderGameAssetsWorkspace();
+        } else {
+          ensureGameAssetsPack && ensureGameAssetsPack();
         }
       });
     }

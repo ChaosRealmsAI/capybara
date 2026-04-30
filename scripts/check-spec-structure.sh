@@ -37,7 +37,8 @@ ensure_required_path() {
 }
 
 check_outer_git_boundary() {
-  [[ -d spec/.git ]] || fail "spec/ must be a nested git repository with spec/.git"
+  [[ -d spec/.git || -f spec/.git ]] ||
+    fail "spec/ must be a nested git repository or worktree with spec/.git"
   if ! git check-ignore -q spec/README.md 2>/dev/null &&
     ! git check-ignore -q spec 2>/dev/null &&
     ! git check-ignore -q spec/ 2>/dev/null; then

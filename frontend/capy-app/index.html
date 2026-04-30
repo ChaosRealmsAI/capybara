@@ -24,6 +24,7 @@
         <button class="workspace-tab active" type="button" data-workspace-tab="canvas" aria-selected="true">画布</button>
         <button class="workspace-tab" type="button" data-workspace-tab="video" aria-selected="false">视频剪辑</button>
         <button class="workspace-tab" type="button" data-workspace-tab="poster" aria-selected="false">海报</button>
+        <button class="workspace-tab" type="button" data-workspace-tab="game-assets" aria-selected="false">游戏素材</button>
       </nav>
       <div class="top-actions">
         <button class="icon-action" type="button" id="cmdk-trigger" aria-label="Command palette">⌘K</button>
@@ -246,6 +247,41 @@
             <button class="tool-button primary" type="button" id="poster-field-save">保存字段</button>
           </div>
           <div class="poster-export-status" id="poster-export-status">未导出</div>
+        </aside>
+      </section>
+
+      <section class="game-assets-workspace" data-section="game-assets-workspace" aria-label="Game asset workspace" hidden>
+        <header class="game-assets-head">
+          <div class="game-assets-source">
+            <span class="context-eyebrow">GAME ASSETS / PACK JSON</span>
+            <input id="game-assets-pack-path" class="game-assets-path" value="/target/capy-game-assets-sample/pack.json" placeholder="/target/capy-game-assets-sample/pack.json">
+          </div>
+          <div class="game-assets-actions">
+            <button class="tool-button secondary" type="button" id="game-assets-open-sample">样例</button>
+            <button class="tool-button secondary" type="button" id="game-assets-open">打开 pack</button>
+            <button class="tool-button primary" type="button" id="game-assets-verify">验证视图</button>
+          </div>
+        </header>
+
+        <aside class="game-assets-sidebar">
+          <div class="game-assets-status" id="game-assets-status" data-status="idle">等待 pack.json</div>
+          <div class="game-assets-list" id="game-assets-list"></div>
+        </aside>
+
+        <section class="game-assets-stage">
+          <div id="game-assets-preview" class="game-assets-preview" data-component="game-assets-preview" aria-label="Game asset preview"></div>
+          <div id="game-assets-frames" class="game-assets-frames" data-component="game-assets-frames"></div>
+        </section>
+
+        <aside class="game-assets-inspector-panel">
+          <header class="inspector-head">
+            <div>
+              <span class="context-eyebrow">QA</span>
+              <h2>素材检查</h2>
+            </div>
+          </header>
+          <div id="game-assets-inspector" class="game-assets-inspector"></div>
+          <img id="game-assets-contact-sheet" class="game-assets-contact-sheet" alt="Game asset contact sheet">
         </aside>
       </section>
     </section>

@@ -4,7 +4,7 @@ mod media_docs;
 
 use catalog::{
     AGENT_TOPICS, CANVAS_TOPICS, CAPY_TOPICS, CHAT_TOPICS, CLIPS_TOPICS, CUTOUT_TOPICS,
-    IMAGE_TOPICS, MEDIA_TOPICS, TIMELINE_TOPICS,
+    GAME_ASSETS_TOPICS, IMAGE_TOPICS, MEDIA_TOPICS, TIMELINE_TOPICS,
 };
 
 pub fn print_capy_topic(topic: Option<&str>) -> Result<(), String> {
@@ -17,6 +17,10 @@ pub fn print_image_topic(topic: Option<&str>) -> Result<(), String> {
 
 pub fn print_cutout_topic(topic: Option<&str>) -> Result<(), String> {
     print_topic(topic, CUTOUT_TOPICS, "capy cutout help")
+}
+
+pub fn print_game_assets_topic(topic: Option<&str>) -> Result<(), String> {
+    print_topic(topic, GAME_ASSETS_TOPICS, "capy game-assets help")
 }
 
 pub fn print_canvas_topic(topic: Option<&str>) -> Result<(), String> {

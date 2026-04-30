@@ -29,6 +29,25 @@ fi
   --recorder tmp/nonexistent-capy-recorder >/dev/null
 "$CAPY_BIN" image providers >/dev/null
 "$CAPY_BIN" image doctor >/dev/null
+"$CAPY_BIN" game-assets --help >/dev/null
+"$CAPY_BIN" game-assets help agent >/dev/null
+rm -rf target/capy-game-assets-sample
+game_assets_sample="$("$CAPY_BIN" game-assets sample \
+  --preset forest-action-rpg-compact \
+  --out target/capy-game-assets-sample \
+  --overwrite)"
+if ! jq -e '.ok == true and .schema == "capy.game_assets.sample.v1" and .frame_count >= 16' \
+  <<<"$game_assets_sample" >/dev/null; then
+  echo "project check failed: game-assets sample must create a compact verifiable pack" >&2
+  exit 1
+fi
+game_assets_verify="$("$CAPY_BIN" game-assets verify \
+  --pack target/capy-game-assets-sample/pack.json)"
+if ! jq -e '.verdict == "passed" and .asset_count >= 5 and .frame_count >= 16' \
+  <<<"$game_assets_verify" >/dev/null; then
+  echo "project check failed: game-assets verify must pass compact sample pack" >&2
+  exit 1
+fi
 rm -rf target/capy-timeline/sample-poster
 "$CAPY_BIN" timeline compose-poster \
   --input fixtures/poster/v0.1/sample-poster.json \

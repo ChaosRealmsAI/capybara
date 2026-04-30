@@ -36,7 +36,9 @@ import { createProjectPackageWiring } from "./app/project-package-wiring.js";
 import { createRuntimeControls } from "./app/runtime-controls.js";
 import { installShellUi } from "./app/shell-ui.js";
 import { labelSync, nodeRegistry, pending, posterDocuments, state } from "./app/state.js";
+import { createStateSnapshot } from "./app/state-snapshot.js";
 import { base64ToBytes, contentKindLabel, nextFrame, normalizeValue, stringifyError } from "./app/utils.js";
+import { createGameAssetsWorkspace } from "./app/game-assets-workspace.js";
 import { createPosterWorkspace } from "./app/poster-workspace.js";
 import { createTimelineWorkbench } from "./app/timeline-workbench.js";
 import { createVideoEditor } from "./app/video-editor.js";
@@ -77,6 +79,7 @@ let workbenchApi;
 let timelineApi;
 let videoEditorApi;
 let posterWorkspaceApi;
+let gameAssetsWorkspaceApi;
 let conversationsApi;
 let projectPackageApi;
 
@@ -100,6 +103,12 @@ rendererApi = createCanvasRenderer({
   updatePosterDocument: (...args) => workbenchApi.updatePosterDocument(...args),
 });
 
+const stateSnapshot = createStateSnapshot({
+  state,
+  normalizeValue,
+  posterDocumentsState: () => rendererApi.posterDocumentsState()
+});
+
 timelineApi = createTimelineWorkbench({
   state, labelLayerEl, nextFrameInspectorEl, nextFrameInspectorTitleEl,
   nextFrameInspectorStatusEl, nextFrameInspectorStagesEl, rpc, stringifyError,
@@ -113,10 +122,16 @@ posterWorkspaceApi = createPosterWorkspace({
   state, dom, rpc, stringifyError,
 });
 
+gameAssetsWorkspaceApi = createGameAssetsWorkspace({
+  state, dom, stringifyError,
+});
+
 videoEditorApi = createVideoEditor({
   state, dom, rpc, stringifyError, setRunStatus,
   renderPosterWorkspace: (...args) => posterWorkspaceApi.renderPosterWorkspace(...args),
   ensurePosterDocument: (...args) => posterWorkspaceApi.ensureDefaultDocument(...args),
+  renderGameAssetsWorkspace: (...args) => gameAssetsWorkspaceApi.renderGameAssetsWorkspace(...args),
+  ensureGameAssetsPack: (...args) => gameAssetsWorkspaceApi.ensureDefaultPack(...args),
 });
 
 projectPackageApi = createProjectPackageWiring({ state, rpc, dom, stringifyError });
@@ -169,6 +184,7 @@ controlsApi = createCanvasControls({
 });
 controlsApi.installCanvasControls();
 posterWorkspaceApi.installPosterWorkspace();
+gameAssetsWorkspaceApi.installGameAssetsWorkspace();
 videoEditorApi.installVideoEditor();
 
 const shellUi = installShellUi({
@@ -214,6 +230,8 @@ installWindowFacade({
     renderVideoEditor: (...args) => videoEditorApi.renderVideoEditor(...args),
     openPosterDocument: (...args) => posterWorkspaceApi.openDocument(...args),
     renderPosterWorkspace: (...args) => posterWorkspaceApi.renderPosterWorkspace(...args),
+    openGameAssetsPack: (...args) => gameAssetsWorkspaceApi.openPack(...args),
+    renderGameAssetsWorkspace: (...args) => gameAssetsWorkspaceApi.renderGameAssetsWorkspace(...args),
     startCanvasImageTool: (...args) => workbenchApi.startCanvasImageTool(...args),
     verifyCanvasImageTool: (...args) => workbenchApi.verifyCanvasImageTool(...args),
     verifyLabelMoveSync: (...args) => contextApi.verifyLabelMoveSync(...args),
@@ -387,24 +405,6 @@ function registerCanvasNodes(nodes) {
   nodeRegistry.key = key;
   rpc("canvas-nodes-register", { ids }).catch(() => {
     nodeRegistry.key = "";
-  });
-}
-
-function stateSnapshot() {
-  return normalizeValue({
-    canvas: state.canvas,
-    selectedId: state.selectedId,
-    blocks: state.blocks,
-    planner: state.planner,
-    workspace: state.workspace,
-    video: state.video,
-    posterWorkspace: { status: state.posterWorkspace.status, path: state.posterWorkspace.path, pageId: state.posterWorkspace.pageId, layerPath: state.posterWorkspace.layerPath, pageCount: state.posterWorkspace.document?.pages?.length || 0, exportStatus: state.posterWorkspace.exportStatus, error: state.posterWorkspace.error },
-    poster: {
-      ...state.poster,
-      documents: rendererApi.posterDocumentsState()
-    },
-    canvasContext: state.canvasContext.context,
-    projectPackage: state.projectPackage
   });
 }
 
