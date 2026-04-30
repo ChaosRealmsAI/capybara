@@ -153,6 +153,8 @@ fn project_generate_live(
         .to_string(),
         trace_id: new_id("trace"),
         dry_run: request.dry_run,
+        design_language_ref: Some(prompt.design_language_ref.clone()),
+        design_language_summary: Some(prompt.design_language_summary.clone()),
         command_preview: live_command_preview(
             &request.provider,
             &project_root,
@@ -163,6 +165,8 @@ fn project_generate_live(
         output: Some(json!({
             "mode": "live",
             "context_id": prompt.context_id,
+            "design_language_ref": prompt.design_language_ref,
+            "design_language_summary": prompt.design_language_summary,
             "summary_zh": ai_response.summary_zh,
             "verify_notes": ai_response.verify_notes,
             "patch_run": patch_result,

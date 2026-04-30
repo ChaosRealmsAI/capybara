@@ -8,7 +8,7 @@ scripts/lint-spec.sh
 export CAPY_SPEC_STRUCTURE_CHECKED=1
 scripts/check-architecture.sh
 scripts/check-large-files.sh
-bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts/open-debug-shell.sh scripts/verify-cef-shell.sh scripts/check-sdk-only-agent-runtime.sh
+bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts/open-debug-shell.sh scripts/verify-cef-shell.sh scripts/check-sdk-only-agent-runtime.sh scripts/check-project-design-language.sh
 scripts/check-code-sign-clones.sh
 scripts/build-canvas-for-app.sh >/dev/null
 scripts/check-frontend-js.sh >/dev/null
@@ -175,11 +175,25 @@ mkdir -p target
 cp -R fixtures/project/html-context target/capy-project-html-context
 "$CAPY_BIN" project inspect \
   --project target/capy-project-html-context >/dev/null
+project_design_language_validate="$("$CAPY_BIN" project design-language validate \
+  --project target/capy-project-html-context)"
+if ! jq -e '.schema_version == "capy.design-language.validation.v1" and .ok == true and (.design_language_ref | startswith("dlpkg-fnv1a64-")) and .summary.token_count == 1 and .summary.reference_image_count == 1' \
+  <<<"$project_design_language_validate" >/dev/null; then
+  echo "project check failed: project design-language validate must expose a stable ref and local asset summary" >&2
+  exit 1
+fi
+project_design_language_inspect="$("$CAPY_BIN" project design-language inspect \
+  --project target/capy-project-html-context)"
+if ! jq -e '.schema_version == "capy.design-language.inspection.v1" and (.manifest.assets | length) == 3 and .summary.rule_count >= 1' \
+  <<<"$project_design_language_inspect" >/dev/null; then
+  echo "project check failed: project design-language inspect must expose package metadata and rule summary" >&2
+  exit 1
+fi
 project_workbench="$("$CAPY_BIN" project workbench \
   --project target/capy-project-html-context)"
-if ! jq -e '.schema_version == "capy.project-workbench.v1" and (.cards | length) == 6 and any(.cards[]; .kind == "export_center")' \
+if ! jq -e '.schema_version == "capy.project-workbench.v1" and (.cards | length) == 6 and any(.cards[]; .kind == "export_center") and (.design_language_summary.design_language_ref | startswith("dlpkg-fnv1a64-"))' \
   <<<"$project_workbench" >/dev/null; then
-  echo "project check failed: project workbench must expose six cards including export center" >&2
+  echo "project check failed: project workbench must expose six cards and active design language summary" >&2
   exit 1
 fi
 "$CAPY_BIN" context build \
@@ -187,9 +201,9 @@ fi
   --artifact art_00000000000000000000000000000001 \
   --selector '[data-capy-section="hero-title"]' \
   --out target/capy-project-html-context/context.json >/dev/null
-if ! jq -e '.schema_version == "capy.context.v1" and .artifact_id == "art_00000000000000000000000000000001" and (.design_language_refs | length) == 2' \
+if ! jq -e '.schema_version == "capy.context.v1" and .artifact_id == "art_00000000000000000000000000000001" and (.design_language_ref | startswith("dlpkg-fnv1a64-")) and (.design_language_refs | length) == 2' \
   target/capy-project-html-context/context.json >/dev/null; then
-  echo "project check failed: project context build must include artifact and design language refs" >&2
+  echo "project check failed: project context build must include artifact and design language package ref" >&2
   exit 1
 fi
 "$CAPY_BIN" patch apply \
@@ -206,9 +220,9 @@ generate_dry_run="$("$CAPY_BIN" project generate \
   --provider fixture \
   --prompt "Make launch copy clearer" \
   --dry-run)"
-if ! jq -e '.run.schema_version == "capy.project-generate-run.v1" and .run.status == "planned" and .run.dry_run == true' \
+if ! jq -e '.run.schema_version == "capy.project-generate-run.v1" and .run.status == "planned" and .run.dry_run == true and (.run.design_language_ref | startswith("dlpkg-fnv1a64-"))' \
   <<<"$generate_dry_run" >/dev/null; then
-  echo "project check failed: project generate dry-run must return planned generate run" >&2
+  echo "project check failed: project generate dry-run must return planned generate run with design language ref" >&2
   exit 1
 fi
 if grep -q 'Capybara CLI draft' target/capy-project-html-context/web/index.html; then
@@ -241,10 +255,16 @@ project_ai_dry_run="$("$CAPY_BIN" project generate \
   --prompt "Make the launch page clearer" \
   --live \
   --sdk-response fixtures/project/html-context/sdk-response/project-ai-html.json \
+  --save-prompt target/capy-project-ai-live/design-language-prompt.json \
   --dry-run)"
-if ! jq -e '.run.schema_version == "capy.project-generate-run.v1" and .run.status == "planned" and .run.output.mode == "live"' \
+if ! jq -e '.run.schema_version == "capy.project-generate-run.v1" and .run.status == "planned" and .run.output.mode == "live" and (.run.design_language_ref | startswith("dlpkg-fnv1a64-"))' \
   <<<"$project_ai_dry_run" >/dev/null; then
-  echo "project check failed: project AI dry-run must return a planned live run" >&2
+  echo "project check failed: project AI dry-run must return a planned live run with design language ref" >&2
+  exit 1
+fi
+if ! jq -e '.schema_version == "capy.project-ai-prompt.v1" and (.design_language_ref | startswith("dlpkg-fnv1a64-")) and (.prompt | contains("design_language_ref"))' \
+  target/capy-project-ai-live/design-language-prompt.json >/dev/null; then
+  echo "project check failed: saved project AI prompt must cite design language ref" >&2
   exit 1
 fi
 if grep -q 'Project Context Launch' target/capy-project-ai-live/web/index.html; then

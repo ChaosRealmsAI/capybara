@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 
+use crate::design_language::selected_design_assets;
 use crate::model::{
     PATCH_SCHEMA_VERSION, PROJECT_AI_PROMPT_SCHEMA_VERSION, PROJECT_AI_RESPONSE_SCHEMA_VERSION,
     PatchDocumentV1, ProjectAiPromptV1, ProjectAiResponseV1, ProjectGenerateRequestV1,
@@ -18,24 +19,26 @@ impl ProjectPackage {
         let artifact = self.artifact(&request.artifact_id)?;
         let current_source = self.read_artifact_source(&artifact.id)?;
         let design_language = self.design_language()?;
-        let design_sources = design_language
-            .assets
+        let design_language_summary = self.design_language_summary_for(&design_language);
+        let selected_assets =
+            selected_design_assets(&design_language, &artifact.design_language_refs);
+        let design_asset_refs = selected_assets
             .iter()
-            .filter(|asset| {
-                artifact.design_language_refs.is_empty()
-                    || artifact
-                        .design_language_refs
-                        .iter()
-                        .any(|wanted| wanted == &asset.id)
-            })
             .map(|asset| {
-                let path = self.root().join(&asset.path);
-                let source = read_to_string(&path, "read design language source")?;
-                Ok(format!(
-                    "### {} ({}, id {}, path {})\n{}\n",
-                    asset.title, asset.kind, asset.id, asset.path, source
-                ))
+                format!(
+                    "- id: {}; role: {}; kind: {}; path: {}; title: {}",
+                    asset.id,
+                    asset.role.as_deref().unwrap_or("context"),
+                    asset.kind,
+                    asset.path,
+                    asset.title
+                )
             })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let design_sources = selected_assets
+            .iter()
+            .map(|asset| bounded_design_source(self.root(), asset))
             .collect::<ProjectPackageResult<Vec<_>>>()?
             .join("\n");
         let output_schema = project_ai_output_schema();
@@ -54,6 +57,17 @@ Project:
 - name: {project_name}
 - id: {project_id}
 
+Active design language package:
+- design_language_ref: {design_language_ref}
+- name: {design_language_name}
+- version: {design_language_version}
+- summary: {design_language_summary_text}
+- asset_count: {design_language_asset_count}
+- token_count: {design_language_token_count}
+- reference_image_count: {design_language_reference_image_count}
+- rule_count: {design_language_rule_count}
+- example_count: {design_language_example_count}
+
 Target artifact:
 - artifact_id: {artifact_id}
 - kind: {artifact_kind}
@@ -63,7 +77,10 @@ Target artifact:
 User request:
 {user_prompt}
 
-Design language context:
+Selected design language asset refs:
+{design_asset_refs}
+
+Bounded design language context excerpts:
 {design_sources}
 
 Current source file:
@@ -80,11 +97,25 @@ Output JSON rules:
 "#,
             project_name = manifest.name,
             project_id = manifest.id,
+            design_language_ref = design_language_summary.design_language_ref,
+            design_language_name = design_language_summary.name,
+            design_language_version = design_language_summary.version,
+            design_language_summary_text = design_language_summary.summary,
+            design_language_asset_count = design_language_summary.asset_count,
+            design_language_token_count = design_language_summary.token_count,
+            design_language_reference_image_count = design_language_summary.reference_image_count,
+            design_language_rule_count = design_language_summary.rule_count,
+            design_language_example_count = design_language_summary.example_count,
             artifact_id = artifact.id,
             artifact_kind = artifact.kind.as_str(),
             source_path = artifact.source_path,
             artifact_title = artifact.title,
             user_prompt = request.prompt,
+            design_asset_refs = if design_asset_refs.is_empty() {
+                "(No design-language asset refs selected.)".to_string()
+            } else {
+                design_asset_refs
+            },
             design_sources = if design_sources.is_empty() {
                 "(No design-language files registered.)".to_string()
             } else {
@@ -99,6 +130,8 @@ Output JSON rules:
             artifact_id: artifact.id,
             source_path: artifact.source_path,
             provider: request.provider.clone(),
+            design_language_ref: design_language_summary.design_language_ref.clone(),
+            design_language_summary,
             prompt,
             output_schema,
             generated_at: now_ms(),
@@ -166,6 +199,31 @@ Output JSON rules:
             }],
         })
     }
+}
+
+fn bounded_design_source(
+    root: &std::path::Path,
+    asset: &crate::model::DesignLanguageAssetV1,
+) -> ProjectPackageResult<String> {
+    let path = root.join(&asset.path);
+    let source = read_to_string(&path, "read design language source")?;
+    let excerpt = if source.chars().count() > 2400 {
+        format!(
+            "{}...\n[truncated to 2400 chars]",
+            source.chars().take(2400).collect::<String>()
+        )
+    } else {
+        source
+    };
+    Ok(format!(
+        "### {} ({}, role {}, id {}, path {})\n{}\n",
+        asset.title,
+        asset.kind,
+        asset.role.as_deref().unwrap_or("context"),
+        asset.id,
+        asset.path,
+        excerpt
+    ))
 }
 
 pub fn project_ai_output_schema() -> Value {
@@ -256,6 +314,7 @@ mod tests {
         fs::write(temp.path().join("index.html"), "<h1>Before</h1>")?;
         let design = project.add_design_asset(
             "css".to_string(),
+            Some("tokens".to_string()),
             "tokens.css",
             "Tokens".to_string(),
             None,

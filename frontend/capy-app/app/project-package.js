@@ -8,6 +8,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     projectWorkbenchEl,
     projectWorkbenchCardsEl,
     projectSelectedSummaryEl,
+    projectDesignLanguageEl,
     projectArtifactListEl,
     projectPreviewFrameEl,
     promptEl,
@@ -120,6 +121,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
       else if (packageState.status === "error") projectPackageMetaEl.textContent = packageState.error || "error";
       else projectPackageMetaEl.textContent = selectedArtifactSummary(state) || `${artifacts.length} artifacts`;
     }
+    renderDesignLanguageSummary(inspection?.design_language_summary || packageState.workbench?.design_language_summary);
     renderArtifactList(artifacts);
     if (projectPreviewFrameEl) {
       projectPreviewFrameEl.srcdoc = previewFrameSource(selectedArtifact(), packageState.previewSource);
@@ -219,6 +221,30 @@ export function createProjectPackage({ state, rpc, dom, stringifyError, appendPl
     }
   }
 
+  function renderDesignLanguageSummary(summary) {
+    if (!projectDesignLanguageEl) return;
+    if (!summary) {
+      projectDesignLanguageEl.hidden = true;
+      projectDesignLanguageEl.replaceChildren();
+      return;
+    }
+    projectDesignLanguageEl.hidden = false;
+    projectDesignLanguageEl.dataset.designLanguageRef = summary.design_language_ref || "";
+    projectDesignLanguageEl.innerHTML = `
+      <div>
+        <span class="context-eyebrow">DESIGN LANGUAGE</span>
+        <strong>${escapeText(summary.name || "Project Design Language")}</strong>
+        <small>${escapeText(summary.version || "0.1.0")} · ${escapeText(shortRef(summary.design_language_ref))}</small>
+      </div>
+      <dl>
+        <div><dt>tokens</dt><dd>${Number(summary.token_count || 0)}</dd></div>
+        <div><dt>rules</dt><dd>${Number(summary.rule_count || 0)}</dd></div>
+        <div><dt>refs</dt><dd>${Number(summary.reference_image_count || 0)}</dd></div>
+        <div><dt>examples</dt><dd>${Number(summary.example_count || 0)}</dd></div>
+      </dl>
+    `;
+  }
+
   return {
     loadProjectPackage,
     buildSelectedContext,
@@ -260,6 +286,12 @@ function previewFrameSource(artifact, source) {
   if (!source) return "<!doctype html><p>No artifact preview</p>";
   if (artifact?.kind === "html" || source.trimStart().startsWith("<svg")) return source;
   return `<!doctype html><pre style="white-space:pre-wrap;font:12px ui-monospace,monospace;padding:16px;color:#2f2437">${escapeText(source)}</pre>`;
+}
+
+function shortRef(value) {
+  const text = String(value || "");
+  if (text.length <= 22) return text || "no-ref";
+  return `${text.slice(0, 18)}...`;
 }
 
 function projectGenerateMessage(result, artifact) {

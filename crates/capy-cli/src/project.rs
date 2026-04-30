@@ -16,9 +16,9 @@ use uuid::Uuid;
     disable_help_subcommand = true,
     after_help = "AI quick start:
   Use `capy project --help` as the index and `capy help project` for the full workflow.
-  Common commands: init, inspect, workbench, generate, add-design, add-artifact.
+  Common commands: init, inspect, design-language inspect, design-language validate, workbench, generate, add-design, add-artifact.
   Required params: all commands use --project <dir>; generate needs --artifact, --provider, and --prompt; live SDK generation also needs --live.
-  Pitfalls: paths must live inside the project root; live codex/claude generation calls the Agent SDK, then Capybara applies a patch.
+  Pitfalls: paths must live inside the project root; validate design language before live generation; live codex/claude generation calls the Agent SDK, then Capybara applies a patch.
   Help topic: `capy help project`."
 )]
 pub struct ProjectArgs {
@@ -32,6 +32,8 @@ enum ProjectCommand {
     Init(ProjectInitArgs),
     #[command(about = "Inspect a .capy project package")]
     Inspect(ProjectPathArgs),
+    #[command(about = "Inspect or validate the active project design-language package")]
+    DesignLanguage(ProjectDesignLanguageArgs),
     #[command(about = "Print the six-card project workbench view")]
     Workbench(ProjectPathArgs),
     #[command(about = "Generate or plan one project artifact through CLI providers")]
@@ -46,6 +48,20 @@ enum ProjectCommand {
 struct ProjectPathArgs {
     #[arg(long)]
     project: PathBuf,
+}
+
+#[derive(Debug, Args)]
+struct ProjectDesignLanguageArgs {
+    #[command(subcommand)]
+    command: ProjectDesignLanguageCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum ProjectDesignLanguageCommand {
+    #[command(about = "Inspect the active project design-language package")]
+    Inspect(ProjectPathArgs),
+    #[command(about = "Validate design-language refs and local asset paths")]
+    Validate(ProjectPathArgs),
 }
 
 #[derive(Debug, Args)]
@@ -64,6 +80,8 @@ struct ProjectAddDesignArgs {
     path: PathBuf,
     #[arg(long)]
     kind: String,
+    #[arg(long)]
+    role: Option<String>,
     #[arg(long)]
     title: String,
     #[arg(long)]
@@ -131,6 +149,8 @@ struct ProjectGenerateArgs {
     sdk_response: Option<PathBuf>,
     #[arg(long)]
     out: Option<PathBuf>,
+    #[arg(long = "save-prompt", help = "Write the live AI prompt packet to JSON")]
+    save_prompt: Option<PathBuf>,
 }
 
 pub fn handle(args: ProjectArgs) -> Result<(), String> {
@@ -144,6 +164,24 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
             let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
             serde_json::to_value(package.inspect().map_err(|err| err.to_string())?)
         }
+        ProjectCommand::DesignLanguage(args) => match args.command {
+            ProjectDesignLanguageCommand::Inspect(args) => {
+                let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
+                serde_json::to_value(
+                    package
+                        .inspect_design_language()
+                        .map_err(|err| err.to_string())?,
+                )
+            }
+            ProjectDesignLanguageCommand::Validate(args) => {
+                let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
+                serde_json::to_value(
+                    package
+                        .validate_design_language()
+                        .map_err(|err| err.to_string())?,
+                )
+            }
+        },
         ProjectCommand::Workbench(args) => {
             let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
             serde_json::to_value(package.workbench().map_err(|err| err.to_string())?)
@@ -154,6 +192,9 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
             }
             let out = args.out.clone();
             let live = args.live || args.sdk_response.is_some();
+            if args.save_prompt.is_some() && !live {
+                return Err("--save-prompt requires --live or --sdk-response".to_string());
+            }
             let result = if live {
                 generate_live(args)?
             } else {
@@ -176,7 +217,13 @@ pub fn handle(args: ProjectArgs) -> Result<(), String> {
             let package = ProjectPackage::open(args.project).map_err(|err| err.to_string())?;
             serde_json::to_value(
                 package
-                    .add_design_asset(args.kind, args.path, args.title, args.description)
+                    .add_design_asset(
+                        args.kind,
+                        args.role,
+                        args.path,
+                        args.title,
+                        args.description,
+                    )
                     .map_err(|err| err.to_string())?,
             )
         }
@@ -216,6 +263,9 @@ fn generate_live(
     let prompt = package
         .build_ai_prompt(&request)
         .map_err(|err| err.to_string())?;
+    if let Some(save_prompt) = args.save_prompt.as_ref() {
+        write_json_file(save_prompt, &prompt)?;
+    }
     let sdk_output = run_sdk_json(AgentSdkRunRequest {
         provider: provider.to_string(),
         cwd: project_root.clone(),
@@ -260,12 +310,16 @@ fn generate_live(
         .to_string(),
         trace_id: new_id("trace"),
         dry_run: request.dry_run,
+        design_language_ref: Some(prompt.design_language_ref.clone()),
+        design_language_summary: Some(prompt.design_language_summary.clone()),
         command_preview: live_command_preview(provider, &project_root, &request.artifact_id),
         changed_artifact_refs: patch_result.run.changed_artifact_refs.clone(),
         evidence_refs: vec![patch_result.run_path.clone()],
         output: Some(json!({
             "mode": "live",
             "context_id": prompt.context_id,
+            "design_language_ref": prompt.design_language_ref,
+            "design_language_summary": prompt.design_language_summary,
             "summary_zh": ai_response.summary_zh,
             "verify_notes": ai_response.verify_notes,
             "patch_run": patch_result,

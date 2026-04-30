@@ -25,6 +25,7 @@ impl ProjectPackage {
             schema_version: WORKBENCH_SCHEMA_VERSION.to_string(),
             project_id: manifest.id,
             project_name: manifest.name,
+            design_language_summary: self.design_language_summary()?,
             cards,
             generated_at: now_ms(),
         })
