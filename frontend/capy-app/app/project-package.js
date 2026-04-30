@@ -1,4 +1,4 @@
-export function createProjectPackage({ state, rpc, dom, stringifyError }) {
+export function createProjectPackage({ state, rpc, dom, stringifyError, appendPlannerMessage }) {
   const {
     projectPackagePanelEl,
     projectPackageTitleEl,
@@ -8,6 +8,10 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
     projectSelectedSummaryEl,
     projectArtifactListEl,
     projectPreviewFrameEl,
+    promptEl,
+    providerEl,
+    modelEl,
+    effortEl,
   } = dom;
 
   async function loadProjectPackage(projectPath = window.CAPYBARA_SESSION?.project) {
@@ -58,22 +62,29 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
     if (!artifact || !state.projectPackage.path) {
       throw new Error("No selected project artifact");
     }
-    const prompt = options.prompt || `Revise ${artifact.title || artifact.id} using project design language.`;
+    const prompt = options.prompt || promptEl?.value.trim() || `Revise ${artifact.title || artifact.id} using project design language.`;
+    const provider = options.provider || providerEl?.value || "codex";
+    const live = options.live === undefined ? provider !== "fixture" : Boolean(options.live);
     state.projectPackage.status = "generating";
     renderProjectPackage();
     try {
       const result = await rpc("project-generate", {
         project: state.projectPackage.path,
         artifact: artifact.id,
-        provider: options.provider || "fixture",
+        provider,
         prompt,
-        dry_run: options.dryRun === true ? true : false
+        dry_run: options.dryRun === true ? true : false,
+        live,
+        model: options.model || modelEl?.value || null,
+        effort: options.effort || effortEl?.value || null,
+        sdk_response: options.sdkResponse || null
       });
       state.projectPackage.generation = result;
       if (result.preview_source) state.projectPackage.previewSource = result.preview_source;
       state.projectPackage.workbench = await rpc("project-workbench", { project: state.projectPackage.path });
       state.projectPackage.status = "ready";
       renderProjectPackage();
+      appendPlannerMessage?.(projectGenerateMessage(result, artifact, provider));
       return result;
     } catch (error) {
       state.projectPackage.status = "error";
@@ -145,7 +156,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
     if (card.id?.startsWith("art_")) {
       const action = document.createElement("span");
       action.className = "project-card-action";
-      action.textContent = "CLI 生成";
+      action.textContent = "AI 生成";
       action.addEventListener("click", (event) => {
         event.stopPropagation();
         generateSelectedAfter(card).catch(() => {});
@@ -158,7 +169,7 @@ export function createProjectPackage({ state, rpc, dom, stringifyError }) {
   async function generateSelectedAfter(card) {
     selectCard(card);
     await generateSelectedArtifact({
-      prompt: `Update ${card.title || card.kind} from the selected project card.`
+      prompt: promptEl?.value.trim() || `Update ${card.title || card.kind} from the selected project card.`
     });
   }
 
@@ -247,4 +258,15 @@ function previewFrameSource(artifact, source) {
   if (!source) return "<!doctype html><p>No artifact preview</p>";
   if (artifact?.kind === "html" || source.trimStart().startsWith("<svg")) return source;
   return `<!doctype html><pre style="white-space:pre-wrap;font:12px ui-monospace,monospace;padding:16px;color:#2f2437">${escapeText(source)}</pre>`;
+}
+
+function projectGenerateMessage(result, artifact, provider) {
+  const summary = result?.run?.output?.summary_zh || "项目源文件已生成。";
+  const runPath = result?.run_path || "";
+  const changed = (result?.run?.changed_artifact_refs || []).join(", ") || artifact.id;
+  const status = result?.run?.status || "completed";
+  return {
+    role: "assistant",
+    content: `### ${summary}\n\n- Provider: ${provider}\n- Artifact: ${artifact.title || artifact.id}\n- Changed: ${changed}\n- Status: ${status}\n- Run: ${runPath}`
+  };
 }

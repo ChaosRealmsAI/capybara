@@ -25,7 +25,7 @@ pub(super) const PROJECT_HELP: &str = r#"
 Topic: capy project
 
 Use when: AI or a workflow needs a local `.capy` file package that carries project metadata, design-language assets, source artifacts, runs, and evidence.
-Required parameters: every command needs `--project <dir>`. `generate` needs `--artifact <id>`, `--provider fixture|codex|claude`, and `--prompt <text>`.
+Required parameters: every command needs `--project <dir>`. `generate` needs `--artifact <id>`, `--provider fixture|codex|claude`, and `--prompt <text>`. Add `--live` to actually call the Claude/Codex SDK.
 Recommended commands:
 1. `target/debug/capy project init --project <dir> --name "Campaign"`
 2. `target/debug/capy project add-design --project <dir> --path design/tokens.css --kind css --title "Tokens"`
@@ -34,7 +34,8 @@ Recommended commands:
 5. `target/debug/capy project workbench --project <dir>`
 6. `target/debug/capy project generate --project <dir> --artifact <art_id> --provider fixture --prompt "Make this clearer" --dry-run`
 7. Copy the project, then run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider fixture --prompt "Make this clearer" --write`
-Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact; run live `codex` or `claude` provider commands when no-spend fixture mode is enough.
+8. For real AI output, run `target/debug/capy project generate --project <copy> --artifact <art_id> --provider codex --prompt "Make this clearer" --live --write`
+Do not: place project source outside the project root; treat `.capy` as generated garbage; register derived screenshots as the editable source artifact; let models edit `.capy` metadata directly; run live `codex` or `claude` provider commands when no-spend fixture mode is enough.
 Next step: build context with `capy context build --project <dir> --artifact <art_id>`, or open the desktop workbench for visible card evidence.
 "#;
 

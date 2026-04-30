@@ -79,6 +79,33 @@ impl ProjectPackage {
         Ok(relative)
     }
 
+    pub fn record_external_generate_run(
+        &self,
+        run: ProjectGenerateRunV1,
+        preview_source: Option<String>,
+        mark_artifact: bool,
+    ) -> ProjectPackageResult<ProjectGenerateResultV1> {
+        let manifest = self.project_manifest()?;
+        if run.project_id != manifest.id {
+            return Err(ProjectPackageError::Invalid(format!(
+                "generate run project_id {} does not match {}",
+                run.project_id, manifest.id
+            )));
+        }
+        let run_path = self.write_generate_run(&run)?;
+        let artifact = if mark_artifact {
+            self.mark_generated_artifact(&run.artifact_id, &run_path, run.generated_at)?
+        } else {
+            self.artifact(&run.artifact_id)?
+        };
+        Ok(ProjectGenerateResultV1 {
+            run,
+            run_path: Some(run_path),
+            artifact: Some(artifact),
+            preview_source,
+        })
+    }
+
     fn mark_generated_artifact(
         &self,
         artifact_id: &str,

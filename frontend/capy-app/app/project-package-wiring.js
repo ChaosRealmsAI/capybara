@@ -1,6 +1,6 @@
 import { createProjectPackage } from "./project-package.js";
 
-export function createProjectPackageWiring({ state, rpc, dom, stringifyError }) {
+export function createProjectPackageWiring({ state, rpc, dom, stringifyError, appendPlannerMessage }) {
   return createProjectPackage({
     state,
     rpc,
@@ -13,7 +13,12 @@ export function createProjectPackageWiring({ state, rpc, dom, stringifyError }) 
       projectSelectedSummaryEl: dom.projectSelectedSummaryEl,
       projectArtifactListEl: dom.projectArtifactListEl,
       projectPreviewFrameEl: dom.projectPreviewFrameEl,
+      promptEl: dom.promptEl,
+      providerEl: dom.providerEl,
+      modelEl: dom.modelEl,
+      effortEl: dom.effortEl,
     },
     stringifyError,
+    appendPlannerMessage,
   });
 }

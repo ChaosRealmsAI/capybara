@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 base64.workspace = true
 capy-contracts.workspace = true
+capy-agent-runtime.workspace = true
 capy-project.workspace = true
 capy-components.workspace = true
 capy-clips-align.workspace = true

@@ -1,15 +1,19 @@
 use std::fs;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
+use capy_agent_runtime::{AgentSdkRunRequest, run_sdk_json};
 use capy_contracts::ipc::{IpcRequest, IpcResponse};
 use capy_contracts::project::{
     OP_ARTIFACT_READ, OP_ARTIFACT_REGISTER, OP_CONTEXT_BUILD, OP_PATCH_APPLY, OP_PROJECT_GENERATE,
     OP_PROJECT_INSPECT, OP_PROJECT_WORKBENCH,
 };
 use capy_project::{
-    ArtifactKind, ContextBuildRequest, PatchDocumentV1, ProjectGenerateRequestV1, ProjectPackage,
+    ArtifactKind, ContextBuildRequest, GENERATE_RUN_SCHEMA_VERSION, PatchDocumentV1,
+    ProjectGenerateRequestV1, ProjectGenerateRunV1, ProjectPackage, parse_project_ai_response,
 };
 use serde_json::{Value, json};
+use uuid::Uuid;
 
 pub(crate) fn handles(op: &str) -> bool {
     matches!(
@@ -65,23 +69,155 @@ fn project_workbench(params: &Value) -> Result<Value, String> {
 }
 
 fn project_generate(params: &Value) -> Result<Value, String> {
-    let package =
-        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    let project = required_path(params, "project")?;
+    let package = ProjectPackage::open(&project).map_err(|err| err.to_string())?;
     let provider = optional_string(params, "provider").unwrap_or_else(|| "fixture".to_string());
     let dry_run = params
         .get("dry_run")
         .or_else(|| params.get("dryRun"))
         .and_then(Value::as_bool)
         .unwrap_or(true);
-    let result = package
-        .generate(ProjectGenerateRequestV1 {
-            artifact_id: required_string(params, "artifact")?,
-            provider,
-            prompt: required_string(params, "prompt")?,
-            dry_run,
-        })
-        .map_err(|err| err.to_string())?;
+    let live = params.get("live").and_then(Value::as_bool).unwrap_or(false)
+        || optional_string(params, "sdk_response").is_some()
+        || optional_string(params, "sdkResponse").is_some();
+    let request = ProjectGenerateRequestV1 {
+        artifact_id: required_string(params, "artifact")?,
+        provider,
+        prompt: required_string(params, "prompt")?,
+        dry_run,
+    };
+    let result = if live {
+        project_generate_live(&package, &project, request, params)?
+    } else {
+        package.generate(request).map_err(|err| err.to_string())?
+    };
     serde_json::to_value(result).map_err(|err| err.to_string())
+}
+
+fn project_generate_live(
+    package: &ProjectPackage,
+    project: &std::path::Path,
+    request: ProjectGenerateRequestV1,
+    params: &Value,
+) -> Result<capy_project::ProjectGenerateResultV1, String> {
+    if request.provider == "fixture" {
+        return Err("live project generation requires provider codex or claude".to_string());
+    }
+    let project_root = fs::canonicalize(project)
+        .map_err(|err| format!("canonicalize project {} failed: {err}", project.display()))?;
+    let prompt = package
+        .build_ai_prompt(&request)
+        .map_err(|err| err.to_string())?;
+    let sdk_output = run_sdk_json(AgentSdkRunRequest {
+        provider: request.provider.clone(),
+        cwd: project_root.clone(),
+        prompt: prompt.prompt.clone(),
+        output_schema: prompt.output_schema.clone(),
+        model: optional_string(params, "model"),
+        effort: optional_string(params, "effort"),
+        fake_response: optional_string(params, "sdk_response")
+            .or_else(|| optional_string(params, "sdkResponse"))
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("CAPY_PROJECT_AI_RESPONSE_FIXTURE").map(PathBuf::from)),
+    })
+    .map_err(|err| err.to_string())?;
+    let ai_response = parse_project_ai_response(&sdk_output).map_err(|err| err.to_string())?;
+    let patch = package
+        .patch_from_ai_response(
+            &request.artifact_id,
+            Some(prompt.context_id.clone()),
+            format!("project-ai:{}", request.provider),
+            ai_response.clone(),
+        )
+        .map_err(|err| err.to_string())?;
+    let patch_result = package
+        .apply_patch(patch.clone(), None, request.dry_run)
+        .map_err(|err| err.to_string())?;
+    let preview_source = ai_response
+        .artifacts
+        .first()
+        .map(|artifact| artifact.new_source.clone());
+    let inspection = package.inspect().map_err(|err| err.to_string())?;
+    let run = ProjectGenerateRunV1 {
+        schema_version: GENERATE_RUN_SCHEMA_VERSION.to_string(),
+        id: new_id("gen"),
+        project_id: inspection.manifest.id,
+        artifact_id: request.artifact_id.clone(),
+        provider: request.provider.clone(),
+        prompt: request.prompt.clone(),
+        status: if request.dry_run {
+            "planned"
+        } else {
+            "completed"
+        }
+        .to_string(),
+        trace_id: new_id("trace"),
+        dry_run: request.dry_run,
+        command_preview: live_command_preview(
+            &request.provider,
+            &project_root,
+            &request.artifact_id,
+        ),
+        changed_artifact_refs: patch_result.run.changed_artifact_refs.clone(),
+        evidence_refs: vec![patch_result.run_path.clone()],
+        output: Some(json!({
+            "mode": "live",
+            "context_id": prompt.context_id,
+            "summary_zh": ai_response.summary_zh,
+            "verify_notes": ai_response.verify_notes,
+            "patch_run": patch_result,
+            "patch": patch,
+            "sdk": summarize_sdk_output(&sdk_output)
+        })),
+        error: None,
+        generated_at: now_ms(),
+    };
+    package
+        .record_external_generate_run(run, preview_source, !request.dry_run)
+        .map_err(|err| err.to_string())
+}
+
+fn live_command_preview(
+    provider: &str,
+    project_root: &std::path::Path,
+    artifact: &str,
+) -> Vec<String> {
+    vec![
+        "target/debug/capy".to_string(),
+        "agent".to_string(),
+        "sdk".to_string(),
+        "run".to_string(),
+        "--provider".to_string(),
+        provider.to_string(),
+        "--cwd".to_string(),
+        project_root.display().to_string(),
+        "--output-schema".to_string(),
+        "capy.project-ai-response.v1".to_string(),
+        "--prompt".to_string(),
+        format!("Project artifact {artifact} generation prompt"),
+    ]
+}
+
+fn summarize_sdk_output(value: &Value) -> Value {
+    json!({
+        "ok": value.get("ok").and_then(Value::as_bool),
+        "provider": value.get("provider").and_then(Value::as_str),
+        "thread_id": value.get("thread_id").and_then(Value::as_str),
+        "session_id": value.get("session_id").and_then(Value::as_str),
+        "usage": value.get("usage").cloned().unwrap_or(Value::Null),
+        "total_cost_usd": value.get("total_cost_usd").cloned().unwrap_or(Value::Null)
+    })
+}
+
+fn new_id(prefix: &str) -> String {
+    format!("{prefix}_{}", Uuid::new_v4().simple())
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn artifact_register(params: &Value) -> Result<Value, String> {

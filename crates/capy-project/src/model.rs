@@ -9,6 +9,8 @@ pub const PATCH_SCHEMA_VERSION: &str = "capy.patch.v1";
 pub const PATCH_RUN_SCHEMA_VERSION: &str = "capy.patch-run.v1";
 pub const WORKBENCH_SCHEMA_VERSION: &str = "capy.project-workbench.v1";
 pub const GENERATE_RUN_SCHEMA_VERSION: &str = "capy.project-generate-run.v1";
+pub const PROJECT_AI_PROMPT_SCHEMA_VERSION: &str = "capy.project-ai-prompt.v1";
+pub const PROJECT_AI_RESPONSE_SCHEMA_VERSION: &str = "capy.project-ai-response.v1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -290,4 +292,34 @@ pub struct ProjectGenerateResultV1 {
     pub artifact: Option<ArtifactRefV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview_source: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectAiPromptV1 {
+    pub schema_version: String,
+    pub context_id: String,
+    pub project_id: String,
+    pub artifact_id: String,
+    pub source_path: String,
+    pub provider: String,
+    pub prompt: String,
+    pub output_schema: Value,
+    pub generated_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectAiResponseV1 {
+    pub schema_version: String,
+    pub summary_zh: String,
+    #[serde(default)]
+    pub artifacts: Vec<ProjectAiArtifactV1>,
+    #[serde(default)]
+    pub verify_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectAiArtifactV1 {
+    pub artifact_id: String,
+    pub source_path: String,
+    pub new_source: String,
 }

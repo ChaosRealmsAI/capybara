@@ -1,0 +1,15 @@
+{
+  "schema_version": "capy.project-ai-response.v1",
+  "summary_zh": "首屏标题和说明已经改成更像发布会发布页的表达。",
+  "artifacts": [
+    {
+      "artifact_id": "art_00000000000000000000000000000001",
+      "source_path": "web/index.html",
+      "new_source": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>HTML Context Fixture</title>\n  <link rel=\"stylesheet\" href=\"../design/tokens.css\">\n  <style>\n    body {\n      margin: 0;\n      min-height: 100vh;\n      display: grid;\n      place-items: center;\n      background: var(--capy-bg);\n      color: var(--capy-ink);\n      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;\n    }\n    main {\n      width: min(760px, calc(100vw - 48px));\n      border: 1px solid rgba(138, 111, 174, 0.22);\n      border-radius: 20px;\n      padding: 34px;\n      background: rgba(255, 255, 255, 0.74);\n      box-shadow: 0 28px 90px rgba(47, 36, 55, 0.14);\n    }\n    h1 {\n      margin: 0 0 12px;\n      font-size: 44px;\n      line-height: 1;\n    }\n    p {\n      margin: 0;\n      max-width: 560px;\n      font-size: 18px;\n      line-height: 1.55;\n    }\n  </style>\n</head>\n<body>\n  <main data-capy-section=\"hero\">\n    <h1 data-capy-section=\"hero-title\">Project Context Launch</h1>\n    <p data-capy-section=\"hero-copy\">A focused launch page generated from the project design language. Capybara keeps the source editable, refreshes preview, and records evidence for the next AI pass.</p>\n  </main>\n</body>\n</html>\n"
+    }
+  ],
+  "verify_notes": [
+    "打开 HTML 预览，确认标题变为 Project Context Launch。",
+    "检查 .capy/runs 中生成 run 和 patch run 均有记录。"
+  ]
+}
