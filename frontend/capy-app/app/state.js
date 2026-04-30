@@ -108,6 +108,7 @@ export const state = {
     selectedTrackId: "",
     selectedField: "",
     selectedRange: null,
+    clipQueue: [],
     clipProposal: null,
     proposalStatus: "idle",
     playheadMs: 0,

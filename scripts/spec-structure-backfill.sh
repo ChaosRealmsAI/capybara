@@ -37,8 +37,10 @@ Rules:
   it must not copy a current-version pointer.
 - `spec/versions/REGISTRY.json` uses parallel registry semantics:
   `focus_version`, compatibility `active_version`, and `active_versions[]`.
-- Every active/focus version must keep enhanced task metadata in `status.json`
-  and `evidence/manifest.json` using `capy.evidence.manifest.v1`.
+  `active_versions[]` contains only truly in-progress versions and may be empty.
+- Every active version and the current focus version must keep enhanced task
+  metadata in `status.json` and `evidence/manifest.json` using
+  `capy.evidence.manifest.v1`.
 - `spec/contracts/` stores runnable JSON fixtures and schemas for shared
   handoff surfaces.
 - Global current-truth files must exist: charter, collaboration, architecture,

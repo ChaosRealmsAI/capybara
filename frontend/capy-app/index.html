@@ -204,8 +204,11 @@
                   <input id="video-range-end" type="number" min="0" step="0.1" value="0">
                 </label>
               </div>
+              <button class="tool-button secondary" type="button" id="video-queue-add">加入队列</button>
               <button class="tool-button secondary" type="button" id="video-proposal-generate">生成 proposal</button>
             </div>
+            <div id="video-queue-summary" class="video-queue-summary">剪辑队列为空</div>
+            <div id="video-queue" class="video-queue-list" aria-label="Clip queue"></div>
             <div id="video-proposal" class="video-proposal">选择左侧 scene 后生成可交付片段 proposal</div>
           </section>
           <div class="video-timeline" id="video-timeline" data-component="video-timeline"></div>

@@ -18,7 +18,9 @@ State effects: read-only by default. --fix writes missing spec handoff files and
 must be reviewed before commit.
 
 Pitfalls: focus_version must match the current branch/worktree for normal gates;
-do not edit public AGENTS/CLAUDE by hand to silence this check.
+active_versions is only for truly in-progress versions and may be empty when
+there is no live parallel work. Do not edit public AGENTS/CLAUDE by hand to
+silence this check.
 
 Next step: if structure is missing, inspect scripts/spec-structure-backfill.sh
 and rerun with --fix only when backfilling legacy spec files is intended.
@@ -316,13 +318,44 @@ check_active_version() {
 
   jq -e '.registry_model == "parallel"' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
     fail "REGISTRY.json registry_model must be parallel"
-  jq -e '(.active_versions | type) == "array" and (.active_versions | length) > 0 and all(.active_versions[]; type == "string")' \
+  jq -e '(.active_versions | type) == "array" and all(.active_versions[]; type == "string")' \
     spec/versions/REGISTRY.json >/dev/null 2>&1 ||
-    fail "REGISTRY.json active_versions must be a non-empty string array"
-  jq -e --arg focus "$focus" '.active_versions | index($focus)' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
-    fail "REGISTRY.json active_versions must include focus_version"
-  jq -e --arg focus "$validation_focus" '.active_versions | index($focus)' spec/versions/REGISTRY.json >/dev/null 2>&1 ||
-    fail "REGISTRY.json active_versions must include validation focus $validation_focus"
+    fail "REGISTRY.json active_versions must be a string array; use [] when no version is actively in progress"
+  jq -e '(.active_versions | length) == ((.active_versions | unique) | length)' \
+    spec/versions/REGISTRY.json >/dev/null 2>&1 ||
+    fail "REGISTRY.json active_versions must not contain duplicate version ids"
+
+  local stale_active
+  stale_active="$(
+    jq -r '
+      def terminal_status($s):
+        [
+          "verified",
+          "merged-verified",
+          "superseded",
+          "parked",
+          "passed",
+          "quality-gates-passed",
+          "poc-verified-product-deferred",
+          "verified-strict-4k-recorder",
+          "dropped",
+          "wontfix"
+        ] | index($s);
+      (.active_versions // [])[] as $id |
+      if any(.versions[]?; .id == $id) then
+        .versions[]
+        | select(.id == $id)
+        | select(terminal_status(.status // ""))
+        | "  - \(.id) status=\(.status // "unknown") stage=\(.stage // "unknown")"
+      else
+        "  - \($id) missing from versions[]"
+      end
+    ' spec/versions/REGISTRY.json
+  )"
+  if [[ -n "$stale_active" ]]; then
+    fail "REGISTRY.json active_versions must contain only true in-progress versions. Close or migrate these entries out of active_versions:
+$stale_active"
+  fi
 
   local version_id
   while IFS= read -r version_id; do

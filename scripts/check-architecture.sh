@@ -191,6 +191,19 @@ check_no_default_screen_recording_capture() {
   rg -q '"source": "app-view"' crates/capy-shell/src/app/ipc_handlers.rs crates/capy-shell/src/app/probes.rs ||
     fail "desktop capture/screenshot responses must report source=app-view"
 }
+check_desktop_shell_docs_consistent() {
+  local doc
+  for doc in AGENTS.md CLAUDE.md README.md spec/charter.md spec/runtime.md; do
+    rg -q 'CEF/Chromium \+ tao' "$doc" ||
+      fail_guardrail "$doc must state the desktop shell direction as CEF/Chromium + tao" "update the project entry/runtime/charter wording without changing product behavior"
+  done
+  local drift
+  drift="$(rg -n 'wry/tao|必 wry|走 wry|moving from system WebView/wry toward|future desktop shell must report `cef`' spec/charter.md spec/runtime.md spec/ai-verify/debugging.md || true)"
+  if [[ -n "$drift" ]]; then
+    echo "$drift" >&2
+    fail_guardrail "desktop shell docs still describe wry as the mainline or CEF as future/moving" "rewrite the wording so CEF/Chromium + tao is canonical and wry is legacy rollback only"
+  fi
+}
 check_no_external_timeline_engine
 check_timeline_engine_dependency_boundary
 check_no_new_render_source_builders
@@ -200,6 +213,7 @@ check_no_binary_adapter
 check_v15_contract_boundary
 check_v16_tts_clips_boundary
 check_no_default_screen_recording_capture
+check_desktop_shell_docs_consistent
 scripts/check-sdk-only-agent-runtime.sh
 scripts/check-desktop-signing-boundary.sh
 for path in \

@@ -16,11 +16,14 @@ Required params: none. Optional env: CAPYBARA_SOCKET, CAPY_VERIFY_VERSION_DIR,
 CAPY_VERIFY_ASSETS, CAPY_VERIFY_OPEN_PROJECT, CAPY_LAUNCH_LABEL.
 
 State effects: builds/stages/signs target/debug/capy-shell.app unless
---skip-build, launches a desktop shell, writes evidence JSON/PNG files, and
-closes it unless --keep-open is passed.
+--skip-build, runs CEF code-sign clone preflight cleanup/checks, launches a
+desktop shell, writes evidence JSON/PNG/log files, and closes it unless
+--keep-open is passed.
 
 Pitfalls: use an isolated CAPYBARA_SOCKET for parallel worktrees; do not use
 this as a generic browser screenshot tool; --keep-open leaves a running app.
+If stale CodeSigningHelper clones cannot be cleaned, inspect
+capy-cef-code-sign-preflight.log in the evidence assets directory.
 
 Next step: inspect the written capy-cef-*.json/png assets or rerun
 target/debug/capy help desktop for focused CLI probes.
@@ -80,6 +83,8 @@ case "$ASSETS" in
   *) ASSETS="$ROOT/$ASSETS" ;;
 esac
 mkdir -p "$ASSETS" "$ROOT/tmp"
+CODE_SIGN_PREFLIGHT_LOG="$ASSETS/capy-cef-code-sign-preflight.log"
+: > "$CODE_SIGN_PREFLIGHT_LOG"
 
 run_capy() {
   CAPYBARA_SOCKET="$SOCKET" target/debug/capy "$@"
@@ -106,21 +111,42 @@ stop_service() {
   rm -f "$SOCKET"
 }
 
-cleanup_code_sign_clones() {
-  scripts/check-code-sign-clones.sh --cleanup --apply --older-than-minutes 10 --keep-newest 2 >/dev/null || true
+cleanup_code_sign_clones_best_effort() {
+  {
+    echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) exit-cleanup =="
+    echo "$ scripts/check-code-sign-clones.sh --cleanup --apply --older-than-minutes 10 --keep-newest 2"
+  } >> "$CODE_SIGN_PREFLIGHT_LOG"
+  scripts/check-code-sign-clones.sh --cleanup --apply --older-than-minutes 10 --keep-newest 2 \
+    >> "$CODE_SIGN_PREFLIGHT_LOG" 2>&1 || true
 }
 
-check_code_sign_clone_budget() {
-  scripts/check-code-sign-clones.sh >/dev/null
+run_code_sign_clone_preflight() {
+  local stage="$1"
+  {
+    echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) $stage =="
+    echo "$ scripts/check-code-sign-clones.sh --cleanup --apply --older-than-minutes 10 --keep-newest 2"
+  } >> "$CODE_SIGN_PREFLIGHT_LOG"
+  if ! scripts/check-code-sign-clones.sh --cleanup --apply --older-than-minutes 10 --keep-newest 2 \
+    >> "$CODE_SIGN_PREFLIGHT_LOG" 2>&1; then
+    echo "CEF code-sign clone preflight failed during $stage: active or blocked clone remains." >&2
+    echo "Inspect evidence log: $CODE_SIGN_PREFLIGHT_LOG" >&2
+    exit 2
+  fi
+
+  echo "$ scripts/check-code-sign-clones.sh --check" >> "$CODE_SIGN_PREFLIGHT_LOG"
+  if ! scripts/check-code-sign-clones.sh --check >> "$CODE_SIGN_PREFLIGHT_LOG" 2>&1; then
+    echo "CEF code-sign clone preflight failed during $stage: clone budget check failed." >&2
+    echo "Inspect evidence log: $CODE_SIGN_PREFLIGHT_LOG" >&2
+    exit 2
+  fi
 }
 
 if [[ "$KEEP_OPEN" == "0" ]]; then
-  trap 'run_capy quit >/dev/null 2>&1 || true; stop_service; cleanup_code_sign_clones' EXIT
+  trap 'run_capy quit >/dev/null 2>&1 || true; stop_service; cleanup_code_sign_clones_best_effort' EXIT
 fi
 
 stop_service
-cleanup_code_sign_clones
-check_code_sign_clone_budget
+run_code_sign_clone_preflight "before-build"
 
 stage_frontend_assets() {
   local resources="$APP/Contents/Resources/capy-app"
@@ -141,8 +167,7 @@ if [[ "$SKIP_BUILD" == "0" ]]; then
 fi
 stage_frontend_assets
 scripts/sign-capy-shell-app.sh "$APP"
-cleanup_code_sign_clones
-check_code_sign_clone_budget
+run_code_sign_clone_preflight "after-sign"
 
 if [[ "$LAUNCH_MODE" == "launchctl" ]]; then
   : > "$ASSETS/capy-cef-launchctl.out.log"

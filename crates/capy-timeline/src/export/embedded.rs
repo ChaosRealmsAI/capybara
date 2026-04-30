@@ -5,9 +5,11 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::snapshot;
-use crate::video_source::{RenderVideoSource, first_video_source};
+use crate::video_source::{RenderVideoSource, video_sources};
 
 use super::report::ExportError;
+
+mod video_concat;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmbeddedExportMetrics {
@@ -25,15 +27,19 @@ pub fn export_embedded(
     let source = read_source(render_source_path)?;
     let duration_ms = duration_ms(&source)?;
     let frame_count = frame_count(duration_ms, fps)?;
-    if let Some(video) = first_video_source(&source, duration_ms).map_err(|message| {
+    let videos = video_sources(&source, duration_ms).map_err(|message| {
         ExportError::new(
             "EXPORT_FAILED",
             "$.tracks[].clips[].params.src",
             message,
             "next step · inspect video track src",
         )
-    })? {
-        return export_video_source(&video, out, fps, frame_count);
+    })?;
+    if videos.len() == 1 {
+        return export_video_source(&videos[0], out, fps, frame_count);
+    }
+    if videos.len() > 1 {
+        return video_concat::export_video_sources(&videos, &source, out, fps);
     }
     let frame_dir = frame_dir(out, job_id);
     fs::create_dir_all(&frame_dir).map_err(|err| {

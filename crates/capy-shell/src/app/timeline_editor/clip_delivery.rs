@@ -3,6 +3,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
+mod clip_queue_delivery;
+pub(super) use clip_queue_delivery::write_clip_queue_proposal_composition;
+
 pub(super) fn write_clip_proposal_composition(
     composition_path: &Path,
     params: &Value,

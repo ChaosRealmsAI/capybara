@@ -1,8 +1,18 @@
+import {
+  normalizedQueue,
+  queueExportRange,
+  queueItemFromRange,
+  queueTotalDuration,
+  renumberQueue,
+  renderQueue
+} from "./video-clip-queue.js";
+
 export function createVideoClipDeliveryController(ctx) {
   const { state, dom, exportComposition, seek, renderVideoEditor, selectedTrack, firstTrackForClip } = ctx;
 
   function install() {
     dom.videoProposalGenerateEl?.addEventListener("click", () => generateClipProposal());
+    dom.videoQueueAddEl?.addEventListener("click", () => addCurrentRangeToQueue());
     dom.videoRangeStartEl?.addEventListener("input", () => updateRangeFromInputs());
     dom.videoRangeEndEl?.addEventListener("input", () => updateRangeFromInputs());
   }
@@ -11,6 +21,7 @@ export function createVideoClipDeliveryController(ctx) {
     const selectedClipId = state.video.selectedRange?.clip_id;
     const clip = clips.find((item) => item.id === selectedClipId) || clips[0] || null;
     state.video.selectedRange = clip ? rangeFromClip(clip) : null;
+    state.video.clipQueue = Array.isArray(state.video.clipQueue) ? state.video.clipQueue : [];
     state.video.clipProposal = null;
     state.video.proposalStatus = "idle";
     state.video.lastExport = null;
@@ -19,23 +30,67 @@ export function createVideoClipDeliveryController(ctx) {
   function render() {
     const range = state.video.selectedRange;
     syncRangeInputs(range);
-    if (dom.videoRangeSummaryEl) {
-      dom.videoRangeSummaryEl.textContent = range
-        ? `${range.scene || range.clip_id} · ${formatTime(range.start_ms)} - ${formatTime(range.end_ms)}`
-        : "未选择片段";
-    }
+    renderRangeSummary(range);
+    renderQueue({ state, dom, moveQueueItem, removeQueueItem, formatTime, escapeHtml });
+    renderProposal();
+  }
+
+  function renderRangeSummary(range) {
+    if (!dom.videoRangeSummaryEl) return;
+    dom.videoRangeSummaryEl.textContent = range
+      ? `${range.scene || range.clip_id} · ${formatTime(range.start_ms)} - ${formatTime(range.end_ms)}`
+      : "未选择片段";
+  }
+
+  function renderProposal() {
     if (!dom.videoProposalEl) return;
     const proposal = state.video.clipProposal;
-    if (!state.video.editor) {
+    if (!state.video.editor && !state.video.clipQueue?.length) {
       dom.videoProposalEl.textContent = "打开 composition.json 后选择 scene";
       return;
     }
     if (!proposal) {
-      dom.videoProposalEl.innerHTML = range
-        ? `<p>已选择 ${escapeHtml(range.scene || range.clip_id)}，可生成片段 proposal。</p>`
-        : "<p>选择左侧 scene 后生成可交付片段 proposal。</p>";
+      const queue = normalizedQueue(state);
+      dom.videoProposalEl.innerHTML = queue.length
+        ? `<p>剪辑队列已有 ${queue.length} 个片段，可生成多片段 proposal。</p>`
+        : state.video.selectedRange
+          ? `<p>已选择 ${escapeHtml(state.video.selectedRange.scene || state.video.selectedRange.clip_id)}，可生成单片段 proposal，或先加入队列。</p>`
+          : "<p>选择左侧 scene 后生成可交付片段 proposal。</p>";
       return;
     }
+    if (proposal.kind === "video-clip-queue-proposal") {
+      renderQueueProposal(proposal);
+      return;
+    }
+    renderSingleProposal(proposal);
+  }
+
+  function renderQueueProposal(proposal) {
+    const exported = proposal.status === "exported";
+    const rows = (proposal.clips || []).map((item) => `
+      <li>
+        <strong>${String(item.sequence).padStart(2, "0")} · ${escapeHtml(item.source_video?.filename || item.scene || item.clip_id)}</strong>
+        <span>${formatTime(item.start_ms)} - ${formatTime(item.end_ms)} · ${formatTime(item.duration_ms)}</span>
+      </li>
+    `).join("");
+    dom.videoProposalEl.innerHTML = `
+      <dl class="video-proposal-grid">
+        <dt>片段数量</dt><dd>${proposal.clip_count} 个</dd>
+        <dt>总时长</dt><dd>${formatTime(proposal.total_duration_ms)}</dd>
+        <dt>输出文件</dt><dd>${escapeHtml(proposal.output_filename)}</dd>
+        <dt>proposal</dt><dd>${escapeHtml(proposal.id)}</dd>
+      </dl>
+      <ol class="video-proposal-list">${rows}</ol>
+      <button class="tool-button primary" type="button" data-video-confirm-proposal>${exported ? "已导出" : "确认导出队列"}</button>
+    `;
+    const confirm = dom.videoProposalEl.querySelector("[data-video-confirm-proposal]");
+    if (confirm) {
+      confirm.disabled = exported;
+      confirm.addEventListener("click", () => confirmClipProposal());
+    }
+  }
+
+  function renderSingleProposal(proposal) {
     const exported = proposal.status === "exported";
     dom.videoProposalEl.innerHTML = `
       <dl class="video-proposal-grid">
@@ -71,13 +126,63 @@ export function createVideoClipDeliveryController(ctx) {
     renderVideoEditor();
   }
 
+  function addCurrentRangeToQueue() {
+    const range = state.video.selectedRange || rangeFromTrack(selectedTrack());
+    if (!range || !state.video.compositionPath) return;
+    const selected = setSelectedRange(range, false);
+    if (!selected) return;
+    const queue = normalizedQueue(state);
+    queue.push(queueItemFromRange({
+      state,
+      range: selected,
+      sequence: queue.length + 1,
+      currentVideoSourceSummary
+    }));
+    state.video.clipQueue = renumberQueue(queue);
+    state.video.clipProposal = null;
+    state.video.proposalStatus = "idle";
+    renderVideoEditor();
+  }
+
+  function moveQueueItem(id, delta) {
+    const queue = normalizedQueue(state);
+    const index = queue.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const next = Math.max(0, Math.min(queue.length - 1, index + delta));
+    if (next === index) return;
+    const [item] = queue.splice(index, 1);
+    queue.splice(next, 0, item);
+    state.video.clipQueue = renumberQueue(queue);
+    state.video.clipProposal = null;
+    state.video.proposalStatus = "idle";
+    renderVideoEditor();
+  }
+
+  function removeQueueItem(id) {
+    state.video.clipQueue = renumberQueue(normalizedQueue(state).filter((item) => item.id !== id));
+    state.video.clipProposal = null;
+    state.video.proposalStatus = "idle";
+    renderVideoEditor();
+  }
+
   function generateClipProposal() {
+    const queue = normalizedQueue(state);
+    if (queue.length) {
+      generateQueueProposal(queue);
+      render();
+      return;
+    }
+    generateSingleClipProposal();
+  }
+
+  function generateSingleClipProposal() {
     const range = state.video.selectedRange || rangeFromTrack(selectedTrack());
     if (!range || !state.video.compositionPath) return;
     const outputFilename = outputFilenameForRange(range);
     state.video.selectedRange = range;
     state.video.clipProposal = {
       id: `proposal-${safeSlug(range.clip_id)}-${range.start_ms}-${range.end_ms}`,
+      kind: "video-clip-proposal",
       status: "ready",
       clip_id: range.clip_id,
       track_id: range.track_id || "",
@@ -90,17 +195,41 @@ export function createVideoClipDeliveryController(ctx) {
       source: {
         composition_path: state.video.compositionPath,
         render_source_path: state.video.renderSourcePath,
-        video: videoSourceSummary(state.video.renderSource)
+        video: currentVideoSourceSummary()
       }
     };
     state.video.proposalStatus = "ready";
     render();
   }
 
+  function generateQueueProposal(queue) {
+    const total = queueTotalDuration(queue);
+    const outputFilename = `clip-queue-${queue.length}-${Math.round(total)}.mp4`;
+    state.video.clipProposal = {
+      id: `proposal-clip-queue-${queue.length}-${Math.round(total)}`,
+      kind: "video-clip-queue-proposal",
+      status: "ready",
+      clip_count: queue.length,
+      total_duration_ms: total,
+      output_filename: outputFilename,
+      output_path: outputPathForProposal(state.video.compositionPath || queue[0]?.composition_path, outputFilename),
+      clips: queue.map((item) => ({ ...item }))
+    };
+    state.video.proposalStatus = "ready";
+  }
+
   function confirmClipProposal() {
     if (!state.video.clipProposal) generateClipProposal();
     const proposal = state.video.clipProposal;
     if (!proposal) return;
+    if (proposal.kind === "video-clip-queue-proposal") {
+      return exportComposition({
+        mode: "clip-queue-proposal",
+        out: proposal.output_path,
+        queue: proposal.clips.map(queueExportRange),
+        proposal
+      });
+    }
     return exportComposition({
       mode: "clip-proposal",
       out: proposal.output_path,
@@ -152,6 +281,21 @@ export function createVideoClipDeliveryController(ctx) {
     const maxSeconds = Math.max(0, Number(state.video.durationMs || 0) / 1000);
     dom.videoRangeStartEl.max = maxSeconds ? String(maxSeconds) : "";
     dom.videoRangeEndEl.max = maxSeconds ? String(maxSeconds) : "";
+  }
+
+  function currentVideoSourceSummary() {
+    const editorSource = state.video.editor?.source_video;
+    const renderSource = videoSourceSummary(state.video.renderSource);
+    const source = editorSource || renderSource || {};
+    return {
+      src: source.src || "",
+      filename: source.filename || source.name || "",
+      duration_ms: Number(source.duration_ms || 0),
+      width: Number(source.width || 0),
+      height: Number(source.height || 0),
+      source_start_ms: Number(source.source_start_ms || 0),
+      source_end_ms: Number(source.source_end_ms || 0)
+    };
   }
 
   return {

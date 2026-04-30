@@ -359,6 +359,7 @@ export function createVideoEditor(ctx) {
       };
       if (options.out) payload.out = options.out;
       if (options.range) payload.range = options.range;
+      if (options.queue) payload.queue = options.queue;
       if (options.proposal) payload.proposal = options.proposal;
       const result = await rpc("timeline-export-start", payload);
       state.video.exportJob = result.job || null;

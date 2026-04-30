@@ -6,7 +6,7 @@ use image::imageops::FilterType;
 use image::{ImageBuffer, Rgba, RgbaImage};
 use serde_json::Value;
 
-use crate::video_source::first_video_source;
+use crate::video_source::video_sources;
 
 use self::placeholders::{
     has_component_tracks, has_scroll_chapter_component, render_component_placeholder,
@@ -47,17 +47,29 @@ fn snapshot_video_source(
         .or_else(|| source.get("duration"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
-    let Some(video) = first_video_source(&source, duration_ms).map_err(|message| {
+    let videos = video_sources(&source, duration_ms).map_err(|message| {
         SnapshotError::new(
             "SNAPSHOT_FAILED",
             "$.tracks[].clips[].params.src",
             message,
             "next step · inspect video track src",
         )
-    })?
-    else {
+    })?;
+    if videos.is_empty() {
         return Ok(false);
-    };
+    }
+    let video = videos
+        .iter()
+        .find(|video| frame_ms >= video.timeline_begin_ms && frame_ms < video.timeline_end_ms)
+        .or_else(|| videos.last())
+        .ok_or_else(|| {
+            SnapshotError::new(
+                "SNAPSHOT_FAILED",
+                "$.tracks[].clips[]",
+                "no video source available for frame",
+                "next step · inspect render_source video clips",
+            )
+        })?;
     if let Some(parent) = out.parent().filter(|parent| !parent.as_os_str().is_empty()) {
         fs::create_dir_all(parent).map_err(|err| {
             SnapshotError::new(
@@ -68,9 +80,11 @@ fn snapshot_video_source(
             )
         })?;
     }
-    let seek_ms = video
-        .start_ms
-        .saturating_add(frame_ms.min(video.duration_ms.saturating_sub(1)));
+    let seek_ms = video.start_ms.saturating_add(
+        frame_ms
+            .saturating_sub(video.timeline_begin_ms)
+            .min(video.duration_ms.saturating_sub(1)),
+    );
     let output = Command::new(ffmpeg_path()?)
         .args([
             "-y",
