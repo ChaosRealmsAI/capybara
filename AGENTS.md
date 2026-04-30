@@ -124,11 +124,20 @@ Rules:
 - Before using an unfamiliar Capybara CLI surface, read its `--help` and, when
   listed, the matching `help <topic>` first.
 - Keep this contract green with `scripts/verify-capy-cli-help.sh`.
+- For non-product scripts, private spec harnesses, prompt workflows, adapters,
+  and verification scripts, start with `target/debug/capy help harness`, then
+  run `scripts/verify-ai-cli-discovery.sh --list` and the listed help command.
+- Keep the non-product CLI catalog green with `scripts/verify-ai-cli-discovery.sh`;
+  its truth source is `spec/ai-verify/cli-catalog.json`.
 
 Common examples:
 
 ```bash
 cargo run -p capy-cli -- --help
+target/debug/capy help prompts
+target/debug/capy help replica
+target/debug/capy help harness
+scripts/verify-ai-cli-discovery.sh --list
 target/debug/capy open --project=demo
 target/debug/capy ps
 target/debug/capy state --key=app.ready

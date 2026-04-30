@@ -4,6 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/spec-structure-backfill.sh
+
+Use when: AI intentionally backfills missing legacy spec version handoff files.
+
+Required params: none.
+State effects: writes missing spec/standards/project/spec-structure.md and
+missing version brief/bdd/status/bugs/report/evidence files.
+Pitfalls: this is a repair tool; review all generated spec changes before commit.
+Next step: prefer scripts/check-spec-structure.sh --fix, then rerun scripts/lint-spec.sh.
+USAGE
+  exit 0
+fi
+
 mkdir -p spec/standards/project
 
 if [[ ! -e spec/standards/project/spec-structure.md ]]; then

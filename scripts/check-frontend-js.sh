@@ -4,6 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/check-frontend-js.sh
+
+Use when: AI changes frontend/capy-app JS/HTML/CSS and needs syntax plus
+Capybara-specific frontend guardrails before browser verification.
+
+Required params: none.
+State effects: read-only.
+Pitfalls: this does not launch the desktop shell or prove visible layout.
+Next step: for UI delivery run target/debug/capy help desktop and capture real evidence.
+USAGE
+  exit 0
+fi
+
 while IFS= read -r js_file; do
   node --input-type=module --check < "$js_file" >/dev/null
 done < <(find frontend/capy-app -path 'frontend/capy-app/canvas-pkg' -prune -o -name '*.js' -print | sort)

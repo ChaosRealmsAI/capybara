@@ -4,11 +4,33 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/check-project.sh
+
+Use when: AI needs the full local Capybara gate before claiming product, CLI,
+runtime, frontend, or harness changes are ready.
+
+Required params: none. Run from the repository root or any subdirectory.
+
+State effects: builds Rust/wasm/frontend assets, writes target/ dry-run outputs,
+and may reuse the private spec repo for read-only consistency checks.
+
+Pitfalls: this is slower than scripts/check-commit.sh; it can fail when the
+private spec focus_version points at a different branch/worktree; do not bypass
+that failure with --no-verify.
+
+Next step: fix the first failing gate. For help-contract failures run
+scripts/verify-ai-cli-discovery.sh --list and the listed help command.
+USAGE
+  exit 0
+fi
+
 scripts/lint-spec.sh
 export CAPY_SPEC_STRUCTURE_CHECKED=1
 scripts/check-architecture.sh
 scripts/check-large-files.sh
-bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts/open-debug-shell.sh scripts/verify-cef-shell.sh scripts/check-sdk-only-agent-runtime.sh scripts/check-project-design-language.sh
+bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts/open-debug-shell.sh scripts/verify-cef-shell.sh scripts/check-sdk-only-agent-runtime.sh scripts/check-project-design-language.sh scripts/verify-ai-cli-discovery.sh
 scripts/check-code-sign-clones.sh
 scripts/build-canvas-for-app.sh >/dev/null
 scripts/check-frontend-js.sh >/dev/null
@@ -17,6 +39,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test --manifest-path crates/capy-recorder/Cargo.toml --lib
 scripts/verify-capy-cli-help.sh
+scripts/verify-ai-cli-discovery.sh
 CAPY_BIN="${CAPY_BIN:-target/debug/capy}"
 if [[ ! -x "$CAPY_BIN" ]]; then
   cargo build -p capy-cli >/dev/null

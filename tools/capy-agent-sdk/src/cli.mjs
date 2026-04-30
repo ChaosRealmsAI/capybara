@@ -108,6 +108,29 @@ function printJsonLine(value) {
 function printHelp() {
   process.stdout.write(`Capybara Agent SDK Runtime
 
+Usage:
+  node tools/capy-agent-sdk/src/cli.mjs help
+  node tools/capy-agent-sdk/src/cli.mjs doctor
+  node tools/capy-agent-sdk/src/cli.mjs normalize --provider <claude|codex> [options]
+  node tools/capy-agent-sdk/src/cli.mjs run --provider <claude|codex> --prompt <text> [options]
+  node tools/capy-agent-sdk/src/cli.mjs run-stream --provider <claude|codex> --prompt <text> [options]
+
+Use when:
+  Maintaining the internal SDK process boundary used by Capybara shell/chat.
+  Normal AI operators should discover this through target/debug/capy agent help sdk.
+
+Required params:
+  run and run-stream need --provider <claude|codex> and --prompt <text> or
+  positional prompt text. normalize needs --provider.
+
+Pitfalls:
+  Direct run/run-stream can call real Claude/Codex SDKs and may write code when
+  --write-code is passed. Prefer capy chat/agent commands for product workflows.
+
+Next step:
+  Run target/debug/capy agent sdk doctor, then use capy chat or capy agent unless
+  you are changing this adapter.
+
 Commands:
   doctor
   normalize --provider <claude|codex> [options]

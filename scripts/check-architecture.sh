@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/check-architecture.sh
+Use when: AI changes module boundaries, dependencies, runtime wiring, product
+framework choices, or architecture-sensitive scripts.
+Required params: none.
+State effects: read-only.
+Pitfalls: this is a guardrail, not a full build/test or visible UI proof.
+Next step: fix the named boundary failure, then run scripts/check-commit.sh.
+USAGE
+  exit 0
+fi
 if [[ "${CAPY_SPEC_STRUCTURE_CHECKED:-0}" != "1" ]]; then
   scripts/check-spec-structure.sh
 fi
-
 fail() {
   echo "architecture check failed: $*" >&2
   exit 1
 }
-
 fail_guardrail() {
   local message="$1"
   local next_step="$2"
@@ -20,11 +28,9 @@ fail_guardrail() {
   echo "next step · $next_step" >&2
   exit 2
 }
-
 require_file() {
   [[ -f "$1" ]] || fail "missing required file: $1"
 }
-
 check_no_external_timeline_engine() {
   local matches
   matches="$(rg -n 'external/Timeline|/Users/Zhuanz/workspace/Timeline|Timeline/target/debug' Cargo.toml crates frontend scripts README.md AGENTS.md CLAUDE.md | rg -v 'scripts/check-architecture.sh' || true)"
@@ -35,7 +41,6 @@ check_no_external_timeline_engine() {
       "move required code into crates/capy-* and use Capybara path dependencies"
   fi
 }
-
 check_timeline_engine_dependency_boundary() {
   local matches
   matches="$(
@@ -49,7 +54,6 @@ check_timeline_engine_dependency_boundary() {
       "rename to capy-timeline-project, capy-recorder, CAPY_RECORDER, or typed in-process adapters"
   fi
 }
-
 check_no_new_render_source_builders() {
   local matches
   matches="$(
@@ -63,7 +67,6 @@ check_no_new_render_source_builders() {
       "route generation through capy-timeline only"
   fi
 }
-
 check_no_old_timeline_compat_surface() {
   local matches
   matches="$(rg -n 'NextFrame|nextframe|legacy_nextframe|CAPY_NEXTFRAME|OP_NEXTFRAME|KIND_NEXTFRAME|attachNextFrame|openNextFrame|name = "nextframe"|capy nextframe' crates frontend scripts README.md AGENTS.md CLAUDE.md | rg -v 'scripts/check-architecture.sh' || true)"
@@ -74,7 +77,6 @@ check_no_old_timeline_compat_surface() {
       "use Timeline/Capybara names only; no legacy CLI command, old IPC aliases, or old frontend aliases"
   fi
 }
-
 check_no_legacy_poster_render_source() {
   local matches
   matches="$(rg -n 'compile_render_source|write_render_source' crates || true)"
@@ -85,7 +87,6 @@ check_no_legacy_poster_render_source() {
       "delete legacy render_source APIs and route poster composition through capy timeline compose-poster"
   fi
 }
-
 check_no_binary_adapter() {
   local matches
   matches="$(rg -n 'BinaryAdapter|adapter/binary' crates || true)"
@@ -96,7 +97,6 @@ check_no_binary_adapter() {
       "delete BinaryAdapter references and keep in-process Capybara engine adapters only"
   fi
 }
-
 check_v15_contract_boundary() {
   rg -q '"crates/capy-contracts"' Cargo.toml || fail "capy-contracts must be a workspace member"
   rg -q '"crates/capy-creative-core"' Cargo.toml || fail "capy-creative-core must be a workspace member"
@@ -109,7 +109,6 @@ check_v15_contract_boundary() {
   rg -q 'pub struct IpcResponse' crates/capy-contracts/src/ipc.rs || fail "IpcResponse contract must live in capy-contracts"
   rg -q 'OP_TIMELINE_ATTACH' crates/capy-contracts/src/timeline.rs || fail "Timeline live IPC contracts must live in capy-contracts"
   rg -q 'TrackKind::Tts' crates/capy-creative-core/src/lib.rs || fail "Creative core must reserve TTS track contract"
-
   local duplicate_ipc
   duplicate_ipc="$(rg -n 'pub struct Ipc(Request|Response)' crates/capy-cli/src crates/capy-shell/src || true)"
   if [[ -n "$duplicate_ipc" ]]; then
@@ -119,7 +118,6 @@ check_v15_contract_boundary() {
       "use capy_contracts::ipc::{IpcRequest, IpcResponse}"
   fi
 }
-
 check_v16_tts_clips_boundary() {
   for member in \
     '"crates/capy-tts"' \
@@ -130,7 +128,6 @@ check_v16_tts_clips_boundary() {
     '"crates/capy-clips-cut"'; do
     rg -q "$member" Cargo.toml || fail "v0.16 workspace member missing: $member"
   done
-
   for dep in \
     '^capy-tts\.workspace = true' \
     '^capy-clips-core\.workspace = true' \
@@ -140,7 +137,6 @@ check_v16_tts_clips_boundary() {
     '^capy-clips-cut\.workspace = true'; do
     rg -q "$dep" crates/capy-cli/Cargo.toml || fail "capy-cli missing v0.16 dependency: $dep"
   done
-
   rg -q 'Command::Tts' crates/capy-cli/src/main.rs || fail "capy tts CLI must remain wired"
   rg -q 'Init\(InitArgs\)' crates/capy-tts/src/cli/args.rs ||
     fail "capy tts init must remain wired for explicit whisperX setup"
@@ -162,7 +158,6 @@ check_v16_tts_clips_boundary() {
     fail "clips alignment must use Capybara-owned helper env vars"
   rg -q 'CAPY_TTS_ALIGN_SCRIPT' crates/capy-tts/src/whisper ||
     fail "TTS alignment must use Capybara-owned helper env vars"
-
   local legacy_matches
   legacy_matches="$(
     rg -n 'nf-tts|nf-source|VIDEOCUT_|VOX_ALIGN_SCRIPT|\.vox-cache|name = "vox"|capy cue' \
@@ -176,7 +171,6 @@ check_v16_tts_clips_boundary() {
       "route through capy tts / capy clips and Capybara-owned CAPY_* environment variables"
   fi
 }
-
 check_no_default_screen_recording_capture() {
   local matches
   matches="$(
@@ -197,7 +191,6 @@ check_no_default_screen_recording_capture() {
   rg -q '"source": "app-view"' crates/capy-shell/src/app/ipc_handlers.rs crates/capy-shell/src/app/probes.rs ||
     fail "desktop capture/screenshot responses must report source=app-view"
 }
-
 check_no_external_timeline_engine
 check_timeline_engine_dependency_boundary
 check_no_new_render_source_builders
@@ -209,7 +202,6 @@ check_v16_tts_clips_boundary
 check_no_default_screen_recording_capture
 scripts/check-sdk-only-agent-runtime.sh
 scripts/check-desktop-signing-boundary.sh
-
 for path in \
   Cargo.toml \
   crates/capy-contracts/Cargo.toml \
@@ -271,7 +263,6 @@ for path in \
 do
   require_file "$path"
 done
-
 rg -q '^wef = ' Cargo.toml || fail "workspace must depend on wef for CEF/Chromium"
 rg -q '^wef\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must use workspace wef"
 rg -q 'data-capy-browser", "cef"' crates/capy-shell/src/browser/assets.rs || fail "CEF browser identity marker missing"
@@ -320,7 +311,6 @@ if rg -n 'CutoutRequest|cutout::execute|flood|tolerance|feather_radius|hole_min_
   crates/capy-cli/src/main.rs crates/capy-cli/src/cutout.rs; then
   fail "cutout CLI must not expose the old fixed-background algorithm"
 fi
-
 rg -q '"crates/capy-project"' Cargo.toml || fail "capy-project must be a workspace member"
 rg -q '^capy-project\.workspace = true' crates/capy-cli/Cargo.toml || fail "capy-cli must depend on capy-project"
 rg -q '^capy-project\.workspace = true' crates/capy-shell/Cargo.toml || fail "capy-shell must depend on capy-project"
@@ -336,7 +326,6 @@ if [[ -n "$frontend_write_matches" ]]; then
   echo "$frontend_write_matches" >&2
   fail "frontend must not write .capy project truth directly; route writes through capy-project"
 fi
-
 provider_api_matches="$(
   rg -n -i 'openai|anthropic|api[_-]?key|bearer|authorization|https://api\\.|api\\.openai|api\\.anthropic|reqwest|ureq|curl' \
     crates/capy-project crates/capy-cli/src/project.rs crates/capy-cli/src/project_context.rs crates/capy-cli/src/project_patch.rs \
@@ -346,7 +335,6 @@ if [[ -n "$provider_api_matches" ]]; then
   echo "$provider_api_matches" >&2
   fail "project/context/patch commands must not call real provider APIs; v0.31 only allows CLI provider planning and fixture writes"
 fi
-
 active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"
 [[ -n "$active_version" ]] || fail "spec active_version is missing"
 require_file "spec/versions/$active_version/bdd.json"
@@ -364,21 +352,17 @@ jq -e --arg active "$active_version" '
     ($deps | index("v0.5-desktop-foundation-hardening") != null) or
     ($deps | index("v0.6-canvas-chat-workbench") != null))
 ' spec/versions/REGISTRY.json >/dev/null || fail "active version must be v0.4 CEF foundation or depend on the CEF desktop foundation chain"
-
 if rg -n '\bwry\b|javascriptcore|WKWebView|WebKit' Cargo.toml Cargo.lock; then
   fail "desktop mainline must not reintroduce wry/WebKit dependencies"
 fi
-
 if rg -n '\bwry\b|objc2-web-kit|javascriptcore|WKWebView|WebKit' \
   Cargo.toml crates/capy-shell/Cargo.toml crates/capy-shell/src; then
   fail "desktop mainline must not reintroduce wry/WebKit dependencies"
 fi
-
 if rg -n -i '\b(electron|tailwind|shadcn|react|vue|next\.js|nextjs)\b' \
   Cargo.toml crates frontend; then
   fail "forbidden product framework dependency found"
 fi
-
 check_rust_file_size() {
   local file="$1"
   local lines
@@ -392,9 +376,7 @@ check_rust_file_size() {
       ;;
   esac
 }
-
 while IFS= read -r file; do
   check_rust_file_size "$file"
 done < <(find crates -path '*/src/*.rs' -type f | sort)
-
 echo "architecture check passed"

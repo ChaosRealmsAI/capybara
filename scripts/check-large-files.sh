@@ -4,6 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/check-large-files.sh
+
+Use when: AI needs the tracked-file size guardrail for maintainable modules.
+
+Required params: none.
+State effects: read-only.
+Pitfalls: generated/vendor/build outputs are intentionally skipped; do not raise
+caps to hide product code that should be split.
+Next step: split oversized files, then rerun scripts/check-commit.sh.
+USAGE
+  exit 0
+fi
+
 failures=""
 checked=0
 skipped=0

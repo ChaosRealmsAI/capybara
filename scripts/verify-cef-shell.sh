@@ -4,12 +4,39 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+usage() {
+  cat <<'USAGE'
+Usage: scripts/verify-cef-shell.sh [--launch launchctl|open] [--keep-open] [--skip-build]
+
+Use when: AI must prove the real CEF/Chromium desktop shell opens, renders,
+accepts an interaction, exposes JS bridge state, has no blocking page errors,
+and can produce app-view capture evidence.
+
+Required params: none. Optional env: CAPYBARA_SOCKET, CAPY_VERIFY_VERSION_DIR,
+CAPY_VERIFY_ASSETS, CAPY_VERIFY_OPEN_PROJECT, CAPY_LAUNCH_LABEL.
+
+State effects: builds/stages/signs target/debug/capy-shell.app unless
+--skip-build, launches a desktop shell, writes evidence JSON/PNG files, and
+closes it unless --keep-open is passed.
+
+Pitfalls: use an isolated CAPYBARA_SOCKET for parallel worktrees; do not use
+this as a generic browser screenshot tool; --keep-open leaves a running app.
+
+Next step: inspect the written capy-cef-*.json/png assets or rerun
+target/debug/capy help desktop for focused CLI probes.
+USAGE
+}
+
 KEEP_OPEN=0
 SKIP_BUILD=0
 LAUNCH_MODE="launchctl"
 while [[ $# -gt 0 ]]; do
   arg="$1"
   case "$arg" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
     --keep-open) KEEP_OPEN=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
     --launch=*) LAUNCH_MODE="${arg#--launch=}" ;;

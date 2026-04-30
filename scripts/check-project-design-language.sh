@@ -4,6 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/check-project-design-language.sh
+
+Use when: AI changes project design-language contracts, prompt context, or
+desktop summary wiring and needs the architecture guard for that slice.
+
+Required params: none.
+State effects: read-only.
+Pitfalls: this is a contract/string guard, not a browser proof.
+Next step: run scripts/check-project.sh for the full gate.
+USAGE
+  exit 0
+fi
+
 fail() {
   echo "project design-language check failed: $*" >&2
   exit 1

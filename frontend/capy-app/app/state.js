@@ -107,9 +107,13 @@ export const state = {
     editor: null,
     selectedTrackId: "",
     selectedField: "",
+    selectedRange: null,
+    clipProposal: null,
+    proposalStatus: "idle",
     playheadMs: 0,
     durationMs: 0,
     exportJob: null,
+    lastExport: null,
     error: null
   },
   gameAssets: {

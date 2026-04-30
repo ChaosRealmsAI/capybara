@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod clip_delivery;
 mod model;
 
 use serde_json::{Value, json};
@@ -9,6 +10,7 @@ use serde_json::{Value, json};
 use super::ShellState;
 use super::timeline_state::{ExportJob, ExportJobStatus, iso_now};
 use crate::ipc::IpcResponse;
+use clip_delivery::write_clip_proposal_composition;
 use model::{editor_summary, patch_track_field};
 
 pub(crate) fn open_response(req_id: String, state: &ShellState, params: Value) -> IpcResponse {
@@ -176,6 +178,11 @@ fn export_start(state: &ShellState, params: Value) -> Result<Value, String> {
                 .join("exports")
                 .join(format!("{job_id}.mp4"))
         });
+    let export_composition_path = if params.get("range").is_some() {
+        write_clip_proposal_composition(&composition_path, &params, &job_id)?
+    } else {
+        composition_path.clone()
+    };
     let mut job = ExportJob {
         job_id: job_id.clone(),
         status: ExportJobStatus::Running,
@@ -187,7 +194,7 @@ fn export_start(state: &ShellState, params: Value) -> Result<Value, String> {
     state.upsert_timeline_editor_job(job.clone())?;
 
     let compile = capy_timeline::compile_composition(capy_timeline::CompileCompositionRequest {
-        composition_path: composition_path.clone(),
+        composition_path: export_composition_path.clone(),
     });
     if !compile.ok {
         job.status = ExportJobStatus::Failed;
@@ -208,7 +215,7 @@ fn export_start(state: &ShellState, params: Value) -> Result<Value, String> {
     }
 
     let export = capy_timeline::export_composition(capy_timeline::ExportCompositionRequest {
-        composition_path: composition_path.clone(),
+        composition_path: export_composition_path.clone(),
         kind: capy_timeline::ExportKind::Mp4,
         out: Some(output_path.clone()),
         fps,
@@ -249,6 +256,9 @@ fn export_start(state: &ShellState, params: Value) -> Result<Value, String> {
         "trace_id": trace_id("export-start"),
         "stage": "export-start",
         "composition_path": composition_path.display().to_string(),
+        "export_composition_path": export_composition_path.display().to_string(),
+        "range": params.get("range").cloned(),
+        "proposal": params.get("proposal").cloned(),
         "job": job,
         "export": export
     }))

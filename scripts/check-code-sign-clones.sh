@@ -15,6 +15,11 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/check-code-sign-clones.sh [options]
 
+Use when: AI verifies or cleans Capybara-owned macOS CodeSigningHelper temp app
+bundle clones before or after desktop shell launch/signing work.
+
+Required params: none for read-only check.
+
 Detects macOS CodeSigningHelper temporary app bundle clones created under:
   /private/var/folders/*/*/X/*.code_sign_clone
 
@@ -42,6 +47,11 @@ Examples:
 Exit codes:
   0  no leak over threshold
   2  clone total exceeds threshold or cleanup found active candidates
+
+Pitfalls: cleanup only deletes planned candidates when --apply is passed; quit
+desktop shells first if active clones block cleanup.
+
+Next step: rerun scripts/verify-cef-shell.sh or scripts/check-project.sh after cleanup.
 USAGE
 }
 

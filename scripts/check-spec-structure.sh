@@ -5,6 +5,26 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 MODE="${1:-check}"
+if [[ "$MODE" == "-h" || "$MODE" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/check-spec-structure.sh [--fix]
+
+Use when: AI needs to verify the private spec repo shape, parallel version
+registry, required standards, JSON validity, and active/focus version metadata.
+
+Required params: none. Optional --fix backfills missing legacy version files.
+
+State effects: read-only by default. --fix writes missing spec handoff files and
+must be reviewed before commit.
+
+Pitfalls: focus_version must match the current branch/worktree for normal gates;
+do not edit public AGENTS/CLAUDE by hand to silence this check.
+
+Next step: if structure is missing, inspect scripts/spec-structure-backfill.sh
+and rerun with --fix only when backfilling legacy spec files is intended.
+USAGE
+  exit 0
+fi
 case "$MODE" in
   check|--check) ;;
   --fix) scripts/spec-structure-backfill.sh ;;
@@ -85,6 +105,7 @@ check_required_tree() {
     spec/design/examples/images
     spec/ai-verify/README.md
     spec/ai-verify/cli.md
+    spec/ai-verify/cli-catalog.json
     spec/ai-verify/scenarios.md
     spec/ai-verify/human-sim.md
     spec/ai-verify/debugging.md

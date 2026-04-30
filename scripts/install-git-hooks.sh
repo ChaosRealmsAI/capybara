@@ -4,6 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/install-git-hooks.sh
+
+Use when: AI needs to install the repository pre-commit hook that runs
+scripts/check-commit.sh.
+
+Required params: none.
+State effects: writes .git/hooks/pre-commit for this worktree.
+Pitfalls: installing the hook is not a substitute for running the gate now.
+Next step: run scripts/check-commit.sh before committing.
+USAGE
+  exit 0
+fi
+
 hook_path="$(git rev-parse --git-path hooks/pre-commit)"
 mkdir -p "$(dirname "$hook_path")"
 

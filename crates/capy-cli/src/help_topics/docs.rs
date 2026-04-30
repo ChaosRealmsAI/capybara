@@ -73,6 +73,65 @@ Do not: patch derived screenshots or outputs; skip review for AI-generated patch
 Next step: accept/reject the project review run or reopen the surface and capture evidence after a manual patch.
 "#;
 
+pub(super) const PROMPTS_HELP: &str = r#"
+Topic: capy prompts
+
+Use when: a workflow is primarily driven by prompts, model instructions, or model-readable JSON contracts rather than one direct product action.
+Required parameters: none for this help topic. For commands that generate prompt packs, the command help must name its required paths; for workflows that only guide an AI, the complete prompt contract lives in `capy help <topic>` or command-local `help <topic>`.
+Recommended commands:
+1. `target/debug/capy help prompts`
+2. `target/debug/capy help replica`
+3. `target/debug/capy image help cutout-ready`
+4. `target/debug/capy motion help prompt-pack`
+5. `npm --prefix spec run layered-replica -- help visual-analysis`
+Rule: putting the prompt contract in help is enough when the CLI is only teaching an AI how to operate. Add a `prompts` or `prompt-pack` command only when the CLI writes concrete prompt files that downstream agents or evidence will consume.
+Do not: hide prompts in chat history, README-only docs, source comments, or unindexed spec files; create a `prompt` subcommand that only prints the same text as help; let OCR or detector output become source truth when a vision-capable model should read the image directly.
+Next step: choose the domain topic, then follow its prompt contract and save generated prompt packs or model outputs into version evidence when they affect delivery.
+"#;
+
+pub(super) const REPLICA_HELP: &str = r#"
+Topic: capy replica
+
+Use when: AI needs to turn a reference webpage/image into a high-quality static HTML replica with generated assets, model-written analysis JSON, prompt packs, browser screenshots, and PM-visible evidence.
+Required parameters: this top-level topic has no direct `capy replica` command. Use the private spec harness from the repo root: `layered-replica init` needs `--out-dir <dir> --slug <slug>` and either `--reference <png>` or `--reference-note <text>`; `plan` needs `--analysis <json> --out <json>`; `verify` needs an HTTP `--url` and `--out-dir`.
+Recommended commands:
+1. `target/debug/capy help prompts`
+2. `npm --prefix spec run layered-replica -- --help`
+3. `npm --prefix spec run layered-replica -- help visual-analysis`
+4. `npm --prefix spec run layered-replica -- init --out-dir spec/versions/<version>/evidence/assets/<replica> --slug <replica-slug> --reference-note "chat attachment Image #1"`
+5. Have a vision-capable model inspect the reference image directly and edit `analysis.json`.
+6. `npm --prefix spec run layered-replica -- plan --analysis spec/versions/<version>/evidence/assets/<replica>/analysis.json --out spec/versions/<version>/evidence/assets/<replica>/asset-plan.json --prompts-out spec/versions/<version>/evidence/assets/<replica>/prompts/layered-prompts.md`
+7. Generate each real asset one by one from `prompts/layered-prompts.md`; use `target/debug/capy image ...` or the built-in image tool as appropriate.
+8. For transparent assets, run `target/debug/capy cutout ...` or the package-required cutout QA path.
+9. `npm --prefix spec run layered-replica -- review --plan <asset-plan.json> --out <review.html>`
+10. `npm --prefix spec run layered-replica -- check --plan <asset-plan.json> --out <asset-check.json>`
+11. Serve the HTML over HTTP, then `npm --prefix spec run replica -- verify --url http://127.0.0.1:<port>/index.html --out-dir <evidence-dir> --click <selector> --required-section <name> --min-images <n>`
+Prompt contract: the reference image is interpreted by a vision-capable model through `analysis.json`. OCR, OpenCV-style detectors, screenshot analyzers, and pixel palette extractors are prohibited as source truth for text, layout, palette, or layer boundaries.
+Do not: use one generated asset board as implementation material; bake readable text/nav/buttons into images; rely on OCR; skip `layered-replica --help` and `help visual-analysis`; claim completion without browser screenshots, state JSON, and console/error checks.
+Next step: open the final HTML and evidence page for PM review, then commit the package, prompt files, dog/agent outputs if used, browser state, screenshots, and devlog.
+"#;
+
+pub(super) const HARNESS_HELP: &str = r#"
+Topic: capy harness
+
+Use when: AI needs the project-owned non-product CLI/tool directory before running private spec harnesses, shell scripts, or verification scripts.
+Required parameters: none for this help topic. Use `scripts/verify-ai-cli-discovery.sh` and `spec/ai-verify/cli-catalog.json` to discover concrete help commands, state effects, and evidence outputs.
+Recommended commands:
+1. `target/debug/capy --help`
+2. `target/debug/capy help`
+3. `target/debug/capy help prompts`
+4. `target/debug/capy help replica`
+5. `scripts/verify-ai-cli-discovery.sh --help`
+6. `scripts/verify-ai-cli-discovery.sh`
+7. `jq -r '.entries[] | [.id, (.help_command | join(" "))] | @tsv' spec/ai-verify/cli-catalog.json`
+8. For image-to-HTML replica work: `npm --prefix spec run layered-replica -- --help`, then `npm --prefix spec run layered-replica -- help workflow`.
+9. For final static HTML proof: `npm --prefix spec run replica -- --help`, then `npm --prefix spec run replica -- help verify`.
+10. For project gates: `scripts/check-project.sh --help`, `scripts/check-commit.sh --help`, `scripts/lint-spec.sh --help`.
+Catalog rule: every AI-facing tool that is not a public `capy` product command must have a catalog entry in `spec/ai-verify/cli-catalog.json` with its canonical help command, state effect, and evidence output. The discovery script verifies that listed help remains self-contained.
+Do not: run random `scripts/verify-*.mjs` by filename guessing; treat private harness commands as PM-facing product capabilities; hide prompt contracts in source comments or README-only docs; skip direct `--help`/`help <topic>` before using an unfamiliar tool.
+Next step: run `scripts/verify-ai-cli-discovery.sh`, choose the listed help command for the task, then save any generated evidence under the relevant version evidence directory.
+"#;
+
 pub(super) const DOCTOR_HELP: &str = r#"
 Topic: capy doctor
 

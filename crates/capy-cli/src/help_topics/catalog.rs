@@ -2,10 +2,10 @@ use super::HelpTopic;
 use super::docs::{
     AGENT_HELP, AGENT_SDK_HELP, CANVAS_CONTEXT_HELP, CANVAS_HELP, CANVAS_IMAGES_HELP,
     CHAT_CANVAS_TOOLS_HELP, CHAT_HELP, CUTOUT_HELP, CUTOUT_MANIFEST_HELP, DESKTOP_HELP, DEV_HELP,
-    DOCTOR_HELP, GAME_ASSETS_HELP, GAME_ASSETS_LIVE_HELP, GAME_ASSETS_MANIFEST_HELP,
+    DOCTOR_HELP, GAME_ASSETS_HELP, GAME_ASSETS_LIVE_HELP, GAME_ASSETS_MANIFEST_HELP, HARNESS_HELP,
     IMAGE_CUTOUT_HELP, IMAGE_HELP, INTERACTION_HELP, MOTION_HELP, MOTION_MANIFEST_HELP,
     MOTION_PREVIEW_HELP, MOTION_PROMPT_PACK_HELP, MOTION_QA_HELP, PROJECT_CONTEXT_HELP,
-    PROJECT_HELP, PROJECT_PATCH_HELP,
+    PROJECT_HELP, PROJECT_PATCH_HELP, PROMPTS_HELP, REPLICA_HELP,
 };
 use super::media_docs::{
     CLIPS_HELP, CLIPS_YOUTUBE_HELP, COMPONENT_HELP, MEDIA_SCROLL_HELP, MEDIA_STORY_HELP,
@@ -60,6 +60,24 @@ pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
         aliases: &["project-patch", "patch-run"],
         summary: "Dry-run or apply exact-text patches to project artifacts.",
         body: PROJECT_PATCH_HELP,
+    },
+    HelpTopic {
+        name: "prompts",
+        aliases: &["prompt", "prompt-contract", "prompt-workflow"],
+        summary: "Use prompt-driven workflows where help topics carry the operating contract.",
+        body: PROMPTS_HELP,
+    },
+    HelpTopic {
+        name: "replica",
+        aliases: &["frontend-replica", "layered-replica", "image-to-html"],
+        summary: "Run the vision-model prompt workflow for image-to-HTML replicas.",
+        body: REPLICA_HELP,
+    },
+    HelpTopic {
+        name: "harness",
+        aliases: &["scripts", "ai-harness", "cli-catalog"],
+        summary: "Discover project-owned scripts and private spec harness tools.",
+        body: HARNESS_HELP,
     },
     HelpTopic {
         name: "chat",

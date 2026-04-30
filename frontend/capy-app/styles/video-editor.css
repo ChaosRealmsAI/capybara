@@ -146,6 +146,11 @@
   background: rgba(255, 255, 255, 0.95);
 }
 
+.video-clip-row[data-selected="true"] {
+  background: rgba(254, 243, 199, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(217, 79, 92, 0.32);
+}
+
 .video-clip-row span {
   min-width: 0;
   color: #2a211a;
@@ -162,7 +167,7 @@
 
 .video-stage {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto 190px;
+  grid-template-rows: minmax(0, 1fr) auto auto 190px;
   gap: 10px;
   padding: 10px;
 }

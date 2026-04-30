@@ -4,6 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/check-sdk-only-agent-runtime.sh
+
+Use when: AI changes agent runtime code and must ensure shell chat execution
+stays behind tools/capy-agent-sdk instead of direct Claude/Codex CLI backends.
+
+Required params: none.
+State effects: read-only.
+Pitfalls: this is an architecture guard, not an SDK availability doctor.
+Next step: run target/debug/capy agent sdk doctor for runtime availability.
+USAGE
+  exit 0
+fi
+
 fail_guardrail() {
   local message="$1"
   local next_step="$2"

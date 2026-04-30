@@ -39,11 +39,13 @@ mod tts;
   Common checks: `capy doctor`, `capy verify`, `capy image doctor`, `capy cutout doctor`, `capy motion doctor`, `capy game-assets doctor`, `capy clips doctor`, `capy tts doctor`.
   Common asset flow: `capy image generate --cutout-ready ...` then `capy cutout run ...`.
   Common game asset flow: `capy game-assets sample --preset forest-action-rpg-compact --out target/capy-game-assets-sample --overwrite`, then `capy game-assets verify --pack target/capy-game-assets-sample/pack.json`.
+  Common replica flow: `capy help replica`, then follow the layered-replica prompt contract; vision-capable models read reference images directly, OCR is prohibited.
+  Common harness flow: `capy help harness`, then `scripts/verify-ai-cli-discovery.sh` to find non-product scripts and private spec tools.
   Common UI flow: `capy devtools --query <css>`, then `capy click --query <css>` or `capy type --query <css> --text <text>`.
   Required params: image prompts use five labeled sections; cutout run needs --input/--output; click/type need --query.
   Pitfalls: live image/TTS provider calls may spend credits; click/type need a running shell and the right CAPYBARA_SOCKET.
   Command tag: [dev] means internal AI/dev verification or automation, not a PM-facing product workflow.
-  Help topics: dev, doctor, interaction, desktop, project, context, patch, canvas, chat, agent, image, image-cutout, cutout, motion, game-assets, tts, tts-karaoke, tts-batch, clips, media, poster, component, timeline."
+  Help topics: dev, doctor, interaction, desktop, project, context, patch, prompts, replica, harness, canvas, chat, agent, image, image-cutout, cutout, motion, game-assets, tts, tts-karaoke, tts-batch, clips, media, poster, component, timeline."
 )]
 struct Cli {
     #[command(subcommand)]

@@ -5,6 +5,29 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_ROOT = "/Users/Zhuanz/workspace/apimart-image-gen";
 
+if (process.argv.includes("--help") || process.argv.includes("-h") || process.argv[2] === "help") {
+  console.log(`Usage: node scripts/image-provider-apimart.mjs <balance|submit|resume|generate> < payload.json
+
+Use when: Capybara's image provider boundary needs to call the local apimart
+gpt-image-2 adapter. Normal AI operators should prefer target/debug/capy image
+--help and target/debug/capy image help agent.
+
+Required params: JSON on stdin for submit/resume/generate. Set
+CAPY_IMAGE_GEN_APIMART_ROOT or input.provider_root when the adapter repo is not
+at /Users/Zhuanz/workspace/apimart-image-gen.
+
+State effects: balance is read-only; submit/resume/generate may call live
+provider APIs and generate/download image assets.
+
+Pitfalls: direct use can spend credits. Prompts must still follow the Capybara
+five-section image prompt contract from capy image help agent.
+
+Next step: run target/debug/capy image doctor, then use capy image generate
+unless you are maintaining the provider adapter itself.
+`);
+  process.exit(0);
+}
+
 function readStdin() {
   return new Promise((resolve, reject) => {
     let text = "";

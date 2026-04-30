@@ -1,4 +1,5 @@
 import { createVideoPreviewController } from "./video-preview.js";
+import { createVideoClipDeliveryController } from "./video-clip-delivery.js";
 
 export function createVideoEditor(ctx) {
   const {
@@ -13,6 +14,15 @@ export function createVideoEditor(ctx) {
     ensureGameAssetsPack,
   } = ctx;
   const preview = createVideoPreviewController({ state, dom, stringifyError });
+  const clipDelivery = createVideoClipDeliveryController({
+    state,
+    dom,
+    exportComposition,
+    seek,
+    renderVideoEditor,
+    selectedTrack,
+    firstTrackForClip,
+  });
 
   function installVideoEditor() {
     dom.workspaceTabs.forEach((button) => {
@@ -33,6 +43,7 @@ export function createVideoEditor(ctx) {
       const value = Number(dom.videoPlayheadEl.value || 0);
       seek(value);
     });
+    clipDelivery.install();
     dom.videoFieldSaveEl?.addEventListener("click", () => saveSelectedField());
     dom.videoExportEl?.addEventListener("click", () => exportComposition());
     dom.videoRecordEl?.addEventListener("click", () => exportComposition({ mode: "record" }));
@@ -135,9 +146,11 @@ export function createVideoEditor(ctx) {
     state.video.durationMs = Number(result.editor?.duration_ms || 0);
     state.video.playheadMs = Math.min(state.video.playheadMs || 0, state.video.durationMs || 0);
     const tracks = Array.isArray(result.editor?.tracks) ? result.editor.tracks : [];
+    const clips = Array.isArray(result.editor?.clips) ? result.editor.clips : [];
     if (!state.video.selectedTrackId && tracks[0]) {
       state.video.selectedTrackId = tracks[0].id;
     }
+    clipDelivery.applyOpenResult(clips);
     if (dom.videoPathEl && state.video.compositionPath) {
       dom.videoPathEl.value = state.video.compositionPath;
     }
@@ -148,6 +161,7 @@ export function createVideoEditor(ctx) {
     renderSummary();
     renderClips();
     renderTimeline();
+    clipDelivery.render();
     renderInspector();
     renderExportState();
     preview.renderPreviewFrame();
@@ -177,8 +191,9 @@ export function createVideoEditor(ctx) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "video-clip-row";
+      button.dataset.selected = state.video.selectedRange?.clip_id === clip.id ? "true" : "false";
       button.innerHTML = `<span>${escapeHtml(clip.name || clip.id)}</span><small>${formatTime(clip.start_ms)} - ${formatTime(clip.end_ms)}</small>`;
-      button.addEventListener("click", () => seek(Number(clip.start_ms || 0)));
+      button.addEventListener("click", () => clipDelivery.selectClipRange(clip));
       return button;
     }));
   }
@@ -205,6 +220,7 @@ export function createVideoEditor(ctx) {
       clip.style.left = `${(Number(track.start_ms || 0) / duration) * 100}%`;
       clip.style.width = `${Math.max(3, (Number(track.duration_ms || 0) / duration) * 100)}%`;
       clip.addEventListener("click", () => selectTrack(track.id));
+      clip.addEventListener("dblclick", () => clipDelivery.selectRangeFromTrack(track));
       lane.appendChild(clip);
       row.append(label, lane);
       return row;
@@ -285,6 +301,11 @@ export function createVideoEditor(ctx) {
     return fields.find((field) => field.field === state.video.selectedField) || null;
   }
 
+  function firstTrackForClip(clipId) {
+    const tracks = Array.isArray(state.video.editor?.tracks) ? state.video.editor.tracks : [];
+    return tracks.find((track) => track.clip_id === clipId) || null;
+  }
+
   async function saveSelectedField() {
     const track = selectedTrack();
     if (!track || !state.video.compositionPath) return;
@@ -312,20 +333,34 @@ export function createVideoEditor(ctx) {
   async function exportComposition(options = {}) {
     if (!state.video.compositionPath) return;
     state.video.exportJob = { status: options.mode === "record" ? "recording" : "exporting" };
+    state.video.lastExport = null;
     renderExportState();
     try {
       const exportResolution = state.video.renderSource?.meta?.export?.resolution || "";
       const is4k = exportResolution === "4k" || Number(state.video.renderSource?.viewport?.w || 0) >= 3840;
-      const result = await rpc("timeline-export-start", {
+      const payload = {
         composition_path: state.video.compositionPath,
         fps: 30,
         profile: is4k ? "final" : "draft",
         resolution: is4k ? "4k" : exportResolution || undefined,
         parallel: is4k ? 2 : undefined,
         strict_recorder: is4k || options.mode === "record"
-      });
+      };
+      if (options.out) payload.out = options.out;
+      if (options.range) payload.range = options.range;
+      if (options.proposal) payload.proposal = options.proposal;
+      const result = await rpc("timeline-export-start", payload);
       state.video.exportJob = result.job || null;
+      state.video.lastExport = result;
+      if (options.proposal && state.video.clipProposal) {
+        state.video.clipProposal = {
+          ...state.video.clipProposal,
+          status: result.job?.status === "done" ? "exported" : result.job?.status || "unknown",
+          actual_output_path: result.job?.output_path || options.out || ""
+        };
+      }
       renderExportState();
+      clipDelivery.render();
       setRunStatus("idle");
     } catch (error) {
       state.video.exportJob = { status: "failed", output_path: stringifyError(error) };

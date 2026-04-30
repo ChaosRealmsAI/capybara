@@ -17,6 +17,11 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/open-debug-shell.sh [options]
 
+Use when: AI needs one or more isolated Capybara desktop debug instances for
+manual inspection, side-by-side comparison, or capture with stable sockets.
+
+Required params: none. Pass --id for repeatable handoff paths.
+
 Starts an isolated Capybara desktop debug instance with its own socket and
 launchctl label. This is the debug path for running multiple independent
 desktop windows/instances at the same time.
@@ -51,6 +56,11 @@ Examples:
 
   # Inspect exact commands and logs for an instance.
   cat tmp/capy-debug-shells/poster-preview/instance.json
+
+Pitfalls: do not reuse ids for parallel work; --replace intentionally restarts
+that instance. This launches a desktop app, so quit it when done.
+
+Next step: use the printed CAPYBARA_SOCKET with target/debug/capy ps/capture/quit.
 USAGE
 }
 

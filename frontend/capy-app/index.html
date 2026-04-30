@@ -188,6 +188,16 @@
             <span id="video-time">0.00s / 0.00s</span>
             <input id="video-playhead" type="range" min="0" max="1" value="0" step="16">
           </div>
+          <section class="video-delivery-panel" data-component="video-clip-delivery" aria-label="Video clip delivery">
+            <div class="video-delivery-head">
+              <div>
+                <span class="context-eyebrow">DELIVERY CLIP</span>
+                <strong id="video-range-summary">未选择片段</strong>
+              </div>
+              <button class="tool-button secondary" type="button" id="video-proposal-generate">生成 proposal</button>
+            </div>
+            <div id="video-proposal" class="video-proposal">选择左侧 scene 后生成可交付片段 proposal</div>
+          </section>
           <div class="video-timeline" id="video-timeline" data-component="video-timeline"></div>
         </section>
 

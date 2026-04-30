@@ -4,6 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'USAGE'
+Usage: scripts/check-desktop-signing-boundary.sh
+
+Use when: AI changes desktop signing, CEF launch, or verification scripts and
+must ensure all signing goes through scripts/sign-capy-shell-app.sh.
+
+Required params: none.
+State effects: read-only.
+Pitfalls: this is a guardrail only; it does not sign or launch the app.
+Next step: run scripts/sign-capy-shell-app.sh --help or scripts/verify-cef-shell.sh --help.
+USAGE
+  exit 0
+fi
+
 fail() {
   echo "desktop signing boundary check failed: $*" >&2
   exit 1

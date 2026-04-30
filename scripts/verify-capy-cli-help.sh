@@ -18,6 +18,10 @@ Verifies the Capybara CLI progressive-disclosure contract:
   4. capy <command> help <topic> works for command-local topics.
 
 --with-smoke also runs no-spend doctor/dry-run commands that are safe for gates.
+
+Required params: none. Set CAPY_BIN to test a non-default capy binary.
+Pitfalls: this verifies help contracts, not visible product delivery.
+Next step: for non-capy scripts also run scripts/verify-ai-cli-discovery.sh.
 USAGE
 }
 
@@ -78,7 +82,7 @@ require_text "$top_help" "Help topics:"
 topic_index="$(run_capture capy-help-topics "$CAPY_BIN" help)"
 require_text "$topic_index" "Available self-contained help topics:"
 for topic in \
-  dev doctor interaction desktop project context patch canvas chat agent image image-cutout cutout \
+  dev doctor interaction desktop project context patch prompts replica harness canvas chat agent image image-cutout cutout \
   motion game-assets tts tts-karaoke tts-batch clips media poster component timeline; do
   require_text "$topic_index" "$topic"
 done
@@ -108,7 +112,7 @@ check_topic() {
 
 echo "[help] global topics"
 for topic in \
-  dev doctor interaction desktop project context patch canvas chat agent image image-cutout cutout \
+  dev doctor interaction desktop project context patch prompts replica harness canvas chat agent image image-cutout cutout \
   motion game-assets tts tts-karaoke tts-batch clips media poster component timeline; do
   check_topic "topic-$topic" "$CAPY_BIN" help "$topic"
 done

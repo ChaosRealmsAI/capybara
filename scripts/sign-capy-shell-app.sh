@@ -14,6 +14,11 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/sign-capy-shell-app.sh [options] [app-bundle]
 
+Use when: AI needs to verify or sign target/debug/capy-shell.app before desktop
+launch without causing unnecessary macOS code_sign_clone churn.
+
+Required params: none; optional app bundle path.
+
 Ensures the Capybara CEF app bundle is signed without re-signing it on every
 debug launch. By default this script first runs codesign verification; it only
 executes `codesign --force --deep --sign` when the bundle is unsigned, invalid,
@@ -36,6 +41,11 @@ Why this exists:
   create large *.code_sign_clone temporary app copies under /private/var/folders.
   Debug and verification scripts must call this wrapper instead of calling
   codesign directly.
+
+Pitfalls: do not pass --allow-running unless intentionally experimenting; if
+the bundle is running and needs signing, quit those shells first.
+
+Next step: run scripts/check-code-sign-clones.sh or scripts/verify-cef-shell.sh.
 USAGE
 }
 
