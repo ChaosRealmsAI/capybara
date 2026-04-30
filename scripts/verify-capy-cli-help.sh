@@ -79,14 +79,14 @@ topic_index="$(run_capture capy-help-topics "$CAPY_BIN" help)"
 require_text "$topic_index" "Available self-contained help topics:"
 for topic in \
   dev doctor interaction desktop project context patch canvas chat agent image image-cutout cutout \
-  tts tts-karaoke tts-batch clips media timeline; do
+  tts tts-karaoke tts-batch clips media poster component timeline; do
   require_text "$topic_index" "$topic"
 done
 
 echo "[help] top-level commands"
 for command in \
   shell open ps state devtools screenshot capture doctor click type cutout verify \
-  chat project context patch canvas image help media timeline tts clips agent quit; do
+  chat project context patch canvas image help media poster component timeline tts clips agent quit; do
   file="$(run_capture "cmd-$command-help" "$CAPY_BIN" "$command" --help)"
   require_text "$file" "Usage:"
   require_text "$file" "AI quick start:"
@@ -109,7 +109,7 @@ check_topic() {
 echo "[help] global topics"
 for topic in \
   dev doctor interaction desktop project context patch canvas chat agent image image-cutout cutout \
-  tts tts-karaoke tts-batch clips media timeline; do
+  tts tts-karaoke tts-batch clips media poster component timeline; do
   check_topic "topic-$topic" "$CAPY_BIN" help "$topic"
 done
 

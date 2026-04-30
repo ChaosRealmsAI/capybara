@@ -82,6 +82,30 @@ Do not: use story-pack for one clip when scroll-pack is enough; skip manifest in
 Next step: serve output with `capy media serve` and inspect manifest.
 "#;
 
+pub(super) const POSTER_HELP: &str = r#"
+Topic: capy poster export
+
+Use when: capy.poster.document.v1 should become real delivery files without opening the desktop app.
+Required parameters: `export --input <poster.json> --out <dir>`.
+Recommended command: `target/debug/capy poster export --input fixtures/poster/v1/single-poster.json --out target/capy-poster-v1-check --formats svg,png,pdf,pptx,json`
+Output: stdout JSON plus `<out>/manifest.json`, page SVG/PNG files, `document.pdf`, image-based `document.pptx`, and saved `document.json`.
+Do not: use this for legacy v0.1 Timeline poster JSON; export runtime-only components without a static `svg` template; reintroduce GPU/readback paths for poster export.
+Next step: save stdout and manifest into version evidence, then open the exported PNG/PDF/PPTX as needed.
+"#;
+
+pub(super) const COMPONENT_HELP: &str = r#"
+Topic: capy component
+
+Use when: AI needs to validate reusable Capybara component packages before a poster, video, or web surface references them.
+Required parameters: `validate --path <components-root-or-component-dir>` or `inspect --path <component-dir>`.
+Recommended commands:
+1. `target/debug/capy component validate --path fixtures/components`
+2. `target/debug/capy component inspect --path fixtures/components/html.capy-title`
+Output: JSON report with schema `capy.component.validation.v1`, component ids, runtime/static entrypoints, export functions, and validation errors.
+Do not: run remote or third-party component code here; v0.30 supports trusted local packages only.
+Next step: use validated component ids from poster layers or timeline composition tracks.
+"#;
+
 pub(super) const TIMELINE_HELP: &str = r#"
 Topic: capy timeline poster-export
 

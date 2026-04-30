@@ -1,0 +1,7 @@
+<rect x="0" y="0" width="1920" height="1080" fill="#fffaf0"/>
+<rect x="70" y="70" width="1780" height="940" rx="52" fill="#fef3c7" stroke="#d6d3d1"/>
+<text x="152" y="164" fill="#78716c" font-size="34" font-weight="850" font-family="Arial">{{params.eyebrow}}</text>
+<text x="152" y="300" fill="#1c1917" font-size="102" font-weight="900" font-family="Arial">{{params.title}}</text>
+<text x="152" y="390" fill="#57534e" font-size="42" font-weight="650" font-family="Arial">{{params.subtitle}}</text>
+<rect x="152" y="922" width="430" height="76" rx="38" fill="{{theme.accent}}"/>
+<text x="186" y="972" fill="#1c1917" font-size="32" font-weight="900" font-family="Arial">{{params.metric}}</text>

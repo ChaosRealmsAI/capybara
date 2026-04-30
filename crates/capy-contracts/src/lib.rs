@@ -5,5 +5,6 @@
 
 pub mod canvas;
 pub mod ipc;
+pub mod poster;
 pub mod project;
 pub mod timeline;

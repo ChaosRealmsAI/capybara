@@ -7,6 +7,7 @@ members = [
     "crates/capy-contracts",
     "crates/capy-creative-core",
     "crates/capy-project",
+    "crates/capy-components",
     "crates/capy-image-gen",
     "crates/capy-timeline-project",
     "crates/capy-timeline",
@@ -39,6 +40,8 @@ clap = { version = "4", features = ["derive"] }
 ctrlc = { version = "3", features = ["termination"] }
 interprocess = { version = "2.4", features = ["tokio"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+flate2 = "1"
+resvg = "0.44"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
@@ -49,6 +52,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "io-ut
 uuid = { version = "1", features = ["v4"] }
 wef = "0.6"
 raw-window-handle = "0.6"
+tiny-skia = "0.11"
+usvg = "0.44"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 vello = "0.6"
 skrifa = "0.22"
 winit = "0.30"
@@ -57,6 +63,7 @@ capy-canvas-core = { path = "crates/capy-canvas-core" }
 capy-contracts = { path = "crates/capy-contracts" }
 capy-creative-core = { path = "crates/capy-creative-core" }
 capy-project = { path = "crates/capy-project" }
+capy-components = { path = "crates/capy-components" }
 capy-image-gen = { path = "crates/capy-image-gen" }
 capy-timeline-project = { path = "crates/capy-timeline-project" }
 capy-timeline = { path = "crates/capy-timeline" }

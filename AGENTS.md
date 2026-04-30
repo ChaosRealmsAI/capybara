@@ -94,6 +94,8 @@ matching spec file in the same work unit.
 scripts/lint-spec.sh
 scripts/check-spec-structure.sh
 scripts/check-architecture.sh
+scripts/check-code-sign-clones.sh
+scripts/sign-capy-shell-app.sh --help
 scripts/check-commit.sh
 scripts/check-project.sh
 CAPYBARA_SOCKET=/tmp/capybara-main-cef-$(id -u).sock scripts/verify-cef-shell.sh --launch launchctl --keep-open
@@ -140,13 +142,33 @@ target/debug/capy quit
 Debugging multiple desktop surfaces:
 
 ```bash
-scripts/open-debug-shell.sh --name v19-a --windows 2
-scripts/open-debug-shell.sh --name v19-b --socket=/tmp/capybara-v19-b-$(id -u).sock
+# One named preview instance for PM inspection.
+scripts/open-debug-shell.sh --id poster-preview --project demo --skip-build
+CAPYBARA_SOCKET=/tmp/capybara-poster-preview-$(id -u).sock target/debug/capy ps
+
+# Two independent app instances for side-by-side debugging.
+scripts/open-debug-shell.sh --id v27-a --project demo --skip-build
+scripts/open-debug-shell.sh --id v27-b --project demo --skip-build
+CAPYBARA_SOCKET=/tmp/capybara-v27-a-$(id -u).sock target/debug/capy capture --out /tmp/v27-a.png
+CAPYBARA_SOCKET=/tmp/capybara-v27-b-$(id -u).sock target/debug/capy capture --out /tmp/v27-b.png
+
+# Multiple windows inside one instance/socket.
+scripts/open-debug-shell.sh --id layout-debug --windows 2 --skip-build
+
+# Intentional restart of one known instance.
+scripts/open-debug-shell.sh --id poster-preview --replace --skip-build
+
+# Inspect the exact socket, label, logs, and reusable CLI commands.
+cat tmp/capy-debug-shells/poster-preview/instance.json
 ```
 
-Use `scripts/open-debug-shell.sh` for parallel desktop debugging. It launches a
-separate app process with an explicit socket and launchctl label, so one debug
-window cannot accidentally answer another window's CLI commands.
+Use `scripts/open-debug-shell.sh` for parallel desktop debugging. The `--id`
+value is the unique debug instance id; it derives the launchctl label, socket,
+log directory, and `tmp/capy-debug-shells/<id>/instance.json`. Never reuse an id
+for parallel instances. Reusing an id now fails by default; pass `--replace`
+only when intentionally restarting that specific instance. Do not use global
+`launchctl setenv` plus `open -n` for parallel debug sessions because it can
+make windows share or inherit the wrong socket.
 
 Project Core is canonical for project-level context:
 

@@ -17,6 +17,7 @@ mod canvas_nodes;
 mod canvas_tool;
 mod conversation;
 mod ipc_handlers;
+mod poster_export;
 mod probes;
 pub mod timeline;
 mod timeline_detail;

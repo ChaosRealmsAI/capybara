@@ -110,7 +110,7 @@ timelineApi = createTimelineWorkbench({
 });
 
 posterWorkspaceApi = createPosterWorkspace({
-  state, dom, stringifyError,
+  state, dom, rpc, stringifyError,
 });
 
 videoEditorApi = createVideoEditor({

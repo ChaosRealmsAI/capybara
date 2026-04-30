@@ -23,6 +23,12 @@ fn load_component_js(
     component_id: &str,
 ) -> Result<String, ProjectError> {
     validate_component_id(component_id)?;
+    let package_path = component_package_path(root, project_slug, component_id);
+    if package_path.join("component.json").is_file() {
+        return capy_components::load_component_package(&package_path)
+            .map(|package| package.runtime)
+            .map_err(|err| ProjectError::ValidationFailed(err.to_string()));
+    }
     let path = component_source_path(root, project_slug, component_id);
     fs::read_to_string(&path).map_err(|err| {
         ProjectError::StorageFailed(format!(
@@ -33,28 +39,12 @@ fn load_component_js(
 }
 
 fn validate_component_id(component_id: &str) -> Result<(), ProjectError> {
-    let mut chars = component_id.chars();
-    let Some(first) = chars.next() else {
-        return Err(ProjectError::ValidationFailed(
-            "invalid component id: empty".to_string(),
-        ));
-    };
-    if !first.is_ascii_lowercase() {
-        return Err(ProjectError::ValidationFailed(format!(
-            "invalid component id '{component_id}': must start with lowercase letter"
-        )));
-    }
-    if component_id.len() > 128
-        || component_id.contains("..")
-        || component_id
-            .chars()
-            .any(|ch| !(ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '.' || ch == '-'))
-    {
-        return Err(ProjectError::ValidationFailed(format!(
-            "invalid component id '{component_id}': use lowercase letters, numbers, dots, and hyphens"
-        )));
-    }
-    Ok(())
+    capy_components::validate_component_id(component_id)
+        .map_err(|err| ProjectError::ValidationFailed(err.to_string()))
+}
+
+fn component_package_path(root: &Path, project_slug: &str, component_id: &str) -> PathBuf {
+    root.join(project_slug).join("components").join(component_id)
 }
 
 fn component_source_path(root: &Path, project_slug: &str, component_id: &str) -> PathBuf {
@@ -69,6 +59,35 @@ fn inspect_component_source(
     component_id: &str,
     errors: &mut Vec<String>,
 ) -> ComponentValidationComponent {
+    let package_path = component_package_path(root, project_slug, component_id);
+    if package_path.join("component.json").is_file() {
+        match capy_components::load_component_package(&package_path) {
+            Ok(package) => {
+                let exports = component_exports_from(package.runtime.as_str());
+                return ComponentValidationComponent {
+                    id: component_id.to_string(),
+                    path: package.manifest_path.display().to_string(),
+                    exists: true,
+                    bytes: package.runtime.len(),
+                    exports,
+                    params: Vec::new(),
+                    used_by: Vec::new(),
+                };
+            }
+            Err(err) => {
+                errors.push(err.to_string());
+                return ComponentValidationComponent {
+                    id: component_id.to_string(),
+                    path: package_path.display().to_string(),
+                    exists: false,
+                    bytes: 0,
+                    exports: ComponentExports::default(),
+                    params: Vec::new(),
+                    used_by: Vec::new(),
+                };
+            }
+        }
+    }
     let path = component_source_path(root, project_slug, component_id);
     let display_path = path.display().to_string();
     let Ok(source) = fs::read_to_string(&path) else {
@@ -97,20 +116,19 @@ fn inspect_component_source(
     }
 }
 
-fn inspect_component_exports(source: &str) -> ComponentExports {
+fn component_exports_from(source: &str) -> ComponentExports {
+    let exports = capy_components::inspect_component_exports(source);
     ComponentExports {
-        mount: source.contains("export function mount(")
-            || source.contains("export async function mount("),
-        update: source.contains("export function update(")
-            || source.contains("export async function update("),
-        destroy: source.contains("export function destroy(")
-            || source.contains("export async function destroy("),
-        imports: source
-            .lines()
-            .map(str::trim_start)
-            .any(|line| line.starts_with("import ")),
-        dynamic_imports: source.contains("import("),
+        mount: exports.mount,
+        update: exports.update,
+        destroy: exports.destroy,
+        imports: exports.imports,
+        dynamic_imports: exports.dynamic_imports,
     }
+}
+
+fn inspect_component_exports(source: &str) -> ComponentExports {
+    component_exports_from(source)
 }
 
 fn list_project_components(root: &Path, project_slug: &str) -> Result<Vec<String>, ProjectError> {
@@ -118,7 +136,7 @@ fn list_project_components(root: &Path, project_slug: &str) -> Result<Vec<String
     if !dir.exists() {
         return Ok(Vec::new());
     }
-    let mut components = Vec::new();
+    let mut components = std::collections::BTreeSet::new();
     for entry in fs::read_dir(&dir)
         .map_err(|err| ProjectError::StorageFailed(format!("components read failed: {err}")))?
     {
@@ -126,17 +144,21 @@ fn list_project_components(root: &Path, project_slug: &str) -> Result<Vec<String
             ProjectError::StorageFailed(format!("components entry read failed: {err}"))
         })?;
         let path = entry.path();
-        if path.extension().and_then(|value| value.to_str()) != Some("js") {
-            continue;
-        }
-        if let Some(id) = path.file_stem().and_then(|value| value.to_str()) {
-            if validate_component_id(id).is_ok() {
-                components.push(id.to_string());
+        if path.is_dir() && path.join("component.json").is_file() {
+            if let Some(id) = path.file_name().and_then(|value| value.to_str()) {
+                if validate_component_id(id).is_ok() {
+                    components.insert(id.to_string());
+                }
+            }
+        } else if path.extension().and_then(|value| value.to_str()) == Some("js") {
+            if let Some(id) = path.file_stem().and_then(|value| value.to_str()) {
+                if validate_component_id(id).is_ok() {
+                    components.insert(id.to_string());
+                }
             }
         }
     }
-    components.sort();
-    Ok(components)
+    Ok(components.into_iter().collect())
 }
 
 fn copy_number_param(
@@ -362,6 +384,58 @@ mod tests {
         assert_eq!(report.components[0].params, vec!["title", "x"]);
         assert!(report.components[0].exports.mount);
         assert!(report.components[0].exports.update);
+        cleanup(storage.root())?;
+        Ok(())
+    }
+
+    #[test]
+    fn validates_component_package_contract() -> Result<(), Box<dyn std::error::Error>> {
+        let storage = test_storage("component-package-contract")?;
+        let component_dir = storage
+            .root()
+            .join("demo")
+            .join("components")
+            .join("html.hero-title");
+        std::fs::create_dir_all(&component_dir)?;
+        std::fs::write(
+            component_dir.join("component.json"),
+            r#"{
+              "schema": "capy.component.v1",
+              "id": "html.hero-title",
+              "version": "0.1.0",
+              "surfaces": ["video", "poster", "web"],
+              "entrypoints": { "runtime": "runtime.js" },
+              "trusted": true
+            }"#,
+        )?;
+        std::fs::write(
+            component_dir.join("runtime.js"),
+            "export function mount() {}\nexport function update() {}\n",
+        )?;
+        let composition = serde_json::json!({
+            "id": "launch-open",
+            "name": "Launch Open",
+            "duration": "4s",
+            "tracks": [{
+                "id": "hero",
+                "kind": "component",
+                "component": "html.hero-title",
+                "time": { "start": "0s", "end": "4s" },
+                "params": { "title": "Hello" }
+            }]
+        });
+
+        let report = validate_composition_components(&storage, "demo", &composition)?;
+        let compiled = compile_composition_source(&storage, "demo", &composition)?;
+
+        assert!(report.ok, "{:?}", report.errors);
+        assert_eq!(report.components[0].path, component_dir.join("component.json").display().to_string());
+        assert!(
+            compiled.source["components"]["html.hero-title"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("export function update")
+        );
         cleanup(storage.root())?;
         Ok(())
     }

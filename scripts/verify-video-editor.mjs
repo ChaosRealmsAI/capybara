@@ -178,6 +178,9 @@ try {
   if (!state.previewText?.includes(expectedText)) failures.push("preview text did not render expected title");
   if (state.previewLayers < 1) failures.push("expected at least one preview layer");
   if (state.layout.editor.w < 1000 || state.layout.preview.w < 600) failures.push("editor/preview layout is too narrow for desktop verification");
+  if (!String(renderSource.components?.["html.capy-title"] || "").includes("同一组件用于海报、视频和网页")) {
+    failures.push("video render_source did not compile from component package runtime");
+  }
   if (consoleEvents.some((event) => event.type === "error" || event.type === "pageerror")) failures.push("console error or pageerror was emitted");
   await fs.writeFile(
     path.join(evidence, stateName),

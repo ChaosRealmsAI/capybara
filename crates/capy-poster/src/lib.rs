@@ -1,6 +1,7 @@
 #[allow(dead_code)]
 mod component;
 mod types;
+pub mod v1;
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -9,6 +10,11 @@ use std::path::Path;
 use thiserror::Error;
 
 pub use types::{PosterAsset, PosterCanvas, PosterDocument, PosterLayer, PosterLayerKind};
+pub use v1::{
+    ExportFormat, ExportReport, ExportRequest, PosterDocumentV1, export_document,
+    export_document_value, read_document_v1, resolve_component_packages, validate_document_v1,
+    write_document_json,
+};
 
 #[derive(Debug, Error)]
 pub enum PosterError {
@@ -26,6 +32,8 @@ pub enum PosterError {
     },
     #[error("poster JSON: {0}")]
     Json(serde_json::Error),
+    #[error("poster export: {0}")]
+    Export(String),
 }
 
 pub type Result<T> = std::result::Result<T, PosterError>;

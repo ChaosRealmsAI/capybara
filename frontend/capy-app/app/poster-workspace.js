@@ -7,7 +7,7 @@ const SAMPLE_PATHS = {
 };
 
 export function createPosterWorkspace(ctx) {
-  const { state, dom, stringifyError } = ctx;
+  const { state, dom, rpc, stringifyError } = ctx;
   let resizeFrame = 0;
   const preview = createPosterPreviewController({ state, dom, stringifyError, currentPage });
 
@@ -20,8 +20,10 @@ export function createPosterWorkspace(ctx) {
     dom.posterSampleDeckEl?.addEventListener("click", () => openDocument(SAMPLE_PATHS.deck));
     dom.posterSampleSharedEl?.addEventListener("click", () => openDocument(SAMPLE_PATHS.shared));
     dom.posterFieldSaveEl?.addEventListener("click", () => saveInspectorFields());
-    dom.posterExportPngEl?.addEventListener("click", () => markExport("png"));
-    dom.posterExportPdfEl?.addEventListener("click", () => markExport("pdf"));
+    dom.posterSaveJsonEl?.addEventListener("click", () => saveDocument());
+    dom.posterExportPngEl?.addEventListener("click", () => exportDocument(["png"]));
+    dom.posterExportPdfEl?.addEventListener("click", () => exportDocument(["pdf"]));
+    dom.posterExportPptxEl?.addEventListener("click", () => exportDocument(["pptx"]));
     dom.posterVerifyEl?.addEventListener("click", () => verifyWorkspace());
     window.addEventListener("resize", () => {
       if (state.workspace?.activeTab !== "poster") return;
@@ -42,9 +44,7 @@ export function createPosterWorkspace(ctx) {
     state.posterWorkspace.exportStatus = "";
     renderPosterWorkspace();
     try {
-      const response = await fetch(path);
-      if (!response.ok) throw new Error(`load ${path} failed: ${response.status}`);
-      const document = await response.json();
+      const document = await loadDocument(path);
       validateDocument(document);
       state.posterWorkspace.path = path;
       state.posterWorkspace.document = document;
@@ -196,8 +196,49 @@ export function createPosterWorkspace(ctx) {
     renderPosterWorkspace();
   }
 
-  function markExport(kind) {
-    state.posterWorkspace.exportStatus = `${kind.toUpperCase()} 导出入口已连接 · 文件导出走后续 shell adapter`;
+  async function saveDocument() {
+    const document = state.posterWorkspace.document;
+    if (!document) return;
+    try {
+      validateDocument(document);
+      const result = await rpc("poster-document-save", {
+        document,
+        path: state.posterWorkspace.path,
+      });
+      state.posterWorkspace.status = "saved";
+      state.posterWorkspace.path = result.path || state.posterWorkspace.path;
+      state.posterWorkspace.exportStatus = `JSON 已保存 · ${result.path || ""}`;
+      if (dom.posterPathEl && result.path) dom.posterPathEl.value = result.path;
+    } catch (error) {
+      state.posterWorkspace.status = "error";
+      state.posterWorkspace.error = stringifyError(error);
+      state.posterWorkspace.exportStatus = `保存失败 · ${stringifyError(error)}`;
+    }
+    renderStatus();
+  }
+
+  async function exportDocument(formats) {
+    const document = state.posterWorkspace.document;
+    if (!document) return;
+    try {
+      validateDocument(document);
+      state.posterWorkspace.exportStatus = `${formats.join("/").toUpperCase()} 导出中...`;
+      renderStatus();
+      const result = await rpc("poster-document-export", {
+        document,
+        path: state.posterWorkspace.path,
+        formats,
+        page: "all",
+      });
+      state.posterWorkspace.status = "exported";
+      state.posterWorkspace.exportManifest = result.manifest_path || "";
+      const path = result.pdf_path || result.pptx_path || result.pages?.[0]?.png_path || result.manifest_path || "";
+      state.posterWorkspace.exportStatus = `${formats.join("/").toUpperCase()} 已导出 · ${path}`;
+    } catch (error) {
+      state.posterWorkspace.status = "error";
+      state.posterWorkspace.error = stringifyError(error);
+      state.posterWorkspace.exportStatus = `导出失败 · ${stringifyError(error)}`;
+    }
     renderStatus();
   }
 
@@ -218,6 +259,57 @@ export function createPosterWorkspace(ctx) {
     renderPosterWorkspace,
     openDocument,
   };
+}
+
+async function loadDocument(path) {
+  try {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`load ${path} failed: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    const fallback = sampleDocumentForPath(path);
+    if (fallback) return fallback;
+    throw error;
+  }
+}
+
+function sampleDocumentForPath(path) {
+  const key = String(path || "").replace(/^https?:\/\/[^/]+/, "");
+  if (!key.endsWith("/fixtures/poster/v1/single-poster.json")) return null;
+  return cloneJson({
+    schema: "capy.poster.document.v1",
+    id: "single-poster-demo",
+    title: "AI Design Poster",
+    viewport: { w: 1920, h: 1080, ratio: "16:9" },
+    theme: { background: "#fffaf0", accent: "#a78bfa" },
+    assets: {
+      hero: {
+        type: "image",
+        src: "data:image/svg+xml,%3Csvg%20width%3D%22640%22%20height%3D%22640%22%20viewBox%3D%220%200%20640%20640%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3CradialGradient%20id%3D%22g%22%20cx%3D%2230%25%22%20cy%3D%2220%25%22%20r%3D%2280%25%22%3E%3Cstop%20stop-color%3D%22%23fff7ed%22/%3E%3Cstop%20offset%3D%22.55%22%20stop-color%3D%22%23c4b5fd%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23f59e0b%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect%20width%3D%22640%22%20height%3D%22640%22%20rx%3D%22120%22%20fill%3D%22url(%23g)%22/%3E%3Ccircle%20cx%3D%22324%22%20cy%3D%22272%22%20r%3D%22126%22%20fill%3D%22%231c1917%22%20opacity%3D%22.9%22/%3E%3Cpath%20d%3D%22M210%20412h228c-18%2066-72%20104-138%20104-42%200-76-12-106-36z%22%20fill%3D%22%23fffaf0%22%20opacity%3D%22.92%22/%3E%3C/svg%3E",
+        provenance: { kind: "fallback", source: "app-bundled" }
+      }
+    },
+    pages: [
+      {
+        id: "cover",
+        title: "Cover",
+        background: "#fffaf0",
+        layers: [
+          { id: "wash", kind: "shape", shape: "rect", bounds: { x: 0, y: 0, w: 1920, h: 1080 }, z: 0, style: { fill: "linear-gradient(135deg, #fffaf0 0%, #fef3c7 48%, #ede9fe 100%)" } },
+          { id: "eyebrow", kind: "text", text: "CAPYBARA JSON POSTER", bounds: { x: 150, y: 145, w: 760, h: 64 }, z: 2, style: { fontSize: 32, fontWeight: 800, color: "#78716c" } },
+          { id: "headline", kind: "text", text: "每层都可选中\n每层都可编辑", bounds: { x: 150, y: 250, w: 860, h: 250 }, z: 3, style: { fontSize: 94, fontWeight: 900, color: "#1c1917", lineHeight: 1.05 } },
+          { id: "subhead", kind: "text", text: "JSON 是源文件，Preview 是调试面，Inspector 是局部 patch 入口。", bounds: { x: 160, y: 545, w: 680, h: 130 }, z: 4, style: { fontSize: 34, fontWeight: 760, color: "#57534e", lineHeight: 1.25 } },
+          { id: "hero-card", kind: "image", asset_ref: "hero", bounds: { x: 1220, y: 250, w: 430, h: 430 }, z: 4, style: { radius: 72, objectFit: "cover" } },
+          { id: "cta-bg", kind: "shape", shape: "pill", bounds: { x: 160, y: 720, w: 360, h: 86 }, z: 5, style: { fill: "#1c1917", radius: 999 } },
+          { id: "cta-text", kind: "text", text: "打开 Inspector", bounds: { x: 210, y: 742, w: 260, h: 44 }, z: 6, style: { fontSize: 30, fontWeight: 880, color: "#fffaf0" } }
+        ]
+      }
+    ]
+  });
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 function validateDocument(document) {

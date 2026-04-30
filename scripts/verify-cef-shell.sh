@@ -83,18 +83,28 @@ cleanup_code_sign_clones() {
   scripts/check-code-sign-clones.sh --cleanup --apply --older-than-minutes 10 --keep-newest 2 >/dev/null || true
 }
 
+check_code_sign_clone_budget() {
+  scripts/check-code-sign-clones.sh >/dev/null
+}
+
 if [[ "$KEEP_OPEN" == "0" ]]; then
   trap 'run_capy quit >/dev/null 2>&1 || true; stop_service; cleanup_code_sign_clones' EXIT
 fi
 
 stop_service
 cleanup_code_sign_clones
+check_code_sign_clone_budget
 
 stage_frontend_assets() {
   local resources="$APP/Contents/Resources/capy-app"
-  rm -rf "$resources"
   mkdir -p "$resources"
-  cp -R "$ROOT/frontend/capy-app/." "$resources/"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete "$ROOT/frontend/capy-app/" "$resources/"
+  else
+    rm -rf "$resources"
+    mkdir -p "$resources"
+    cp -Rp "$ROOT/frontend/capy-app/." "$resources/"
+  fi
 }
 
 if [[ "$SKIP_BUILD" == "0" ]]; then
@@ -103,9 +113,9 @@ if [[ "$SKIP_BUILD" == "0" ]]; then
   cargo build -p capy-cli
 fi
 stage_frontend_assets
-codesign --force --deep --sign - "$APP"
-codesign --verify --deep --strict "$APP"
+scripts/sign-capy-shell-app.sh "$APP"
 cleanup_code_sign_clones
+check_code_sign_clone_budget
 
 if [[ "$LAUNCH_MODE" == "launchctl" ]]; then
   : > "$ASSETS/capy-cef-launchctl.out.log"

@@ -7,6 +7,7 @@ cd "$ROOT"
 scripts/lint-spec.sh
 export CAPY_SPEC_STRUCTURE_CHECKED=1
 scripts/check-large-files.sh
+bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts/open-debug-shell.sh scripts/verify-cef-shell.sh
 scripts/check-code-sign-clones.sh
 scripts/check-architecture.sh
 RUSTC_WRAPPER= cargo test -p capy-canvas-core --all-targets

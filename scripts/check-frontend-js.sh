@@ -32,9 +32,20 @@ require_text frontend/capy-app/app/html-preview-renderer.js "allow-same-origin"
 require_text frontend/capy-app/styles/planner.css "has-html-artifact"
 require_text frontend/capy-app/styles/planner.css ".message.is-loading .bubble"
 require_text frontend/capy-app/index.html 'value="/fixtures/poster/v1/single-poster.json"'
+require_text frontend/capy-app/index.html 'id="poster-save-json"'
+require_text frontend/capy-app/index.html 'id="poster-export-pptx"'
 require_text frontend/capy-app/app/poster-workspace.js "function ensureDefaultDocument()"
+require_text frontend/capy-app/app/poster-workspace.js '"poster-document-save"'
+require_text frontend/capy-app/app/poster-workspace.js '"poster-document-export"'
 require_text frontend/capy-app/app/video-editor.js "ensurePosterDocument && ensurePosterDocument()"
 require_text crates/capy-shell/src/browser/assets.rs "fn workspace_fixture_response"
+require_text crates/capy-poster/src/v1/export.rs "capy.poster.export.v1"
+require_text frontend/capy-app/app/component-runtime.js "async function loadComponent"
+require_text frontend/capy-app/app/component-runtime.js "resolveComponentDefinition"
+require_text frontend/capy-app/app/poster-preview.js "componentRuntime.loadComponent"
+require_text frontend/capy-app/app/video-preview.js "componentRuntime.loadComponent"
+require_text crates/capy-components/src/lib.rs "capy.component.v1"
+require_text crates/capy-cli/src/component.rs "capy.component.validation.v1"
 
 require_text frontend/capy-app/index.html 'data-component="canvas-tool-bar"'
 require_text frontend/capy-app/index.html 'class="canvas-bottom canvas-tool-island"'
@@ -72,6 +83,11 @@ fi
 if rg -n 'export_png|perform_png_export|export_requested|canvas\.png|Export PNG|GPU readback|map_async' \
   crates/capy-canvas-core crates/capy-canvas-web frontend/capy-app/app frontend/capy-app/index.html >/dev/null; then
   echo "v0.24 canvas export must stay SVG/vector-first; remove PNG/GPU readback canvas export paths" >&2
+  exit 1
+fi
+
+if rg -n '导出入口已连接|后续 shell adapter' frontend/capy-app/app/poster-workspace.js frontend/capy-app/index.html >/dev/null; then
+  echo "poster export buttons must call real save/export IPC, not placeholder status copy" >&2
   exit 1
 fi
 

@@ -1,0 +1,21 @@
+{
+  "schema": "capy.component.v1",
+  "id": "html.capy-title",
+  "version": "0.1.0",
+  "title": "Capybara shared title",
+  "surfaces": ["video", "poster", "web"],
+  "entrypoints": {
+    "runtime": "runtime.js"
+  },
+  "params_schema": {
+    "type": "object",
+    "properties": {
+      "eyebrow": { "type": "string" },
+      "title": { "type": "string" },
+      "subtitle": { "type": "string" },
+      "metric": { "type": "string" },
+      "accent": { "type": "string" }
+    }
+  },
+  "trusted": true
+}

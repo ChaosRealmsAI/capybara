@@ -6,8 +6,8 @@ use super::docs::{
     PROJECT_HELP, PROJECT_PATCH_HELP,
 };
 use super::media_docs::{
-    CLIPS_HELP, CLIPS_YOUTUBE_HELP, MEDIA_SCROLL_HELP, MEDIA_STORY_HELP, TIMELINE_HELP,
-    TIMELINE_LIVE_HELP, TTS_BATCH_HELP, TTS_HELP, TTS_KARAOKE_HELP,
+    CLIPS_HELP, CLIPS_YOUTUBE_HELP, COMPONENT_HELP, MEDIA_SCROLL_HELP, MEDIA_STORY_HELP,
+    POSTER_HELP, TIMELINE_HELP, TIMELINE_LIVE_HELP, TTS_BATCH_HELP, TTS_HELP, TTS_KARAOKE_HELP,
 };
 
 pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
@@ -120,8 +120,20 @@ pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
         body: MEDIA_SCROLL_HELP,
     },
     HelpTopic {
+        name: "poster",
+        aliases: &["poster-export", "ppt-export"],
+        summary: "Export Poster/PPT JSON into SVG, PNG, PDF, and PPTX.",
+        body: POSTER_HELP,
+    },
+    HelpTopic {
+        name: "component",
+        aliases: &["components", "component-contract"],
+        summary: "Validate and inspect reusable component packages.",
+        body: COMPONENT_HELP,
+    },
+    HelpTopic {
         name: "timeline",
-        aliases: &["poster-export", "recorder"],
+        aliases: &["timeline-export", "recorder"],
         summary: "Compose, compile, export, and verify Timeline projects.",
         body: TIMELINE_HELP,
     },

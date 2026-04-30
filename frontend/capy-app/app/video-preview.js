@@ -71,8 +71,12 @@ export function createVideoPreviewController({ state, dom, stringifyError }) {
   }
 
   function previewComponentModule(source, id) {
-    const sourceText = source.components && source.components[id];
-    return componentRuntime.loadModule(`${state.video.renderSourcePath}::${id}`, sourceText);
+    const definition = source.components && source.components[id];
+    return componentRuntime.loadComponent(
+      `${state.video.renderSourcePath}::${id}`,
+      definition,
+      state.video.renderSourcePath || globalThis.location?.href || "",
+    );
   }
 
   function ensurePreviewStage(host, source) {
@@ -111,6 +115,7 @@ export function createVideoPreviewController({ state, dom, stringifyError }) {
       track: params.track || { id: track.id, kind: track.kind },
       theme: source.theme || {},
       viewport: source.viewport || {},
+      surface: { kind: "video", track: { id: track.id }, clip: { id: clip.id } },
       mode: "preview"
     };
   }

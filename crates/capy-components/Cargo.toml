@@ -1,22 +1,17 @@
 [package]
-name = "capy-poster"
+name = "capy-components"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 authors.workspace = true
+description = "Capybara shared component package contracts"
 
 [dependencies]
-capy-components.workspace = true
-flate2.workspace = true
-image.workspace = true
-resvg.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tiny-skia.workspace = true
-usvg.workspace = true
-zip.workspace = true
 
 [lints]
 workspace = true

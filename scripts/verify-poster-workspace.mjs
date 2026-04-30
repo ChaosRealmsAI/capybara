@@ -13,6 +13,7 @@ const assetsDir = process.env.CAPY_POSTER_EVIDENCE_DIR
   : path.join(versionDir, "evidence", "assets");
 const screenshotDesktop = path.join(assetsDir, "poster-workspace-desktop.png");
 const screenshotMobile = path.join(assetsDir, "poster-workspace-mobile.png");
+const screenshotFallback = path.join(assetsDir, "poster-workspace-fixture-500-fallback.png");
 const statePath = path.join(assetsDir, "poster-workspace-browser-state.json");
 
 async function loadChromium() {
@@ -79,6 +80,26 @@ try {
           setTimeout(() => window.__capyReceive && window.__capyReceive({ req_id: request.id, ok: true, data }), 0);
         };
         if (request.op === "conversation-list") reply({ db_path: null, conversations: [] });
+        else if (request.op === "poster-document-save") {
+          reply({
+            ok: true,
+            schema: "capy.poster.save.v1",
+            document_id: request.params?.document?.id || "poster",
+            path: "/tmp/capy-poster-workspace/saved-poster.json",
+          });
+        }
+        else if (request.op === "poster-document-export") {
+          const format = Array.isArray(request.params?.formats) ? request.params.formats[0] : "png";
+          reply({
+            ok: true,
+            schema: "capy.poster.export.v1",
+            document_id: request.params?.document?.id || "poster",
+            manifest_path: "/tmp/capy-poster-workspace/manifest.json",
+            pdf_path: format === "pdf" ? "/tmp/capy-poster-workspace/document.pdf" : null,
+            pptx_path: format === "pptx" ? "/tmp/capy-poster-workspace/document.pptx" : null,
+            pages: [{ id: "cover", png_path: "/tmp/capy-poster-workspace/png/cover.png" }],
+          });
+        }
         else reply({});
       },
     };
@@ -95,6 +116,17 @@ try {
   await page.click("#poster-field-save");
   await page.waitForFunction(() => document.querySelector("#poster-source-json")?.textContent?.includes("Inspector 可编辑"));
   await page.click("#poster-verify");
+  await page.click("#poster-save-json");
+  await page.waitForFunction(() => document.querySelector("#poster-export-status")?.textContent?.includes("JSON 已保存"));
+  const saveState = await posterState(page);
+  await page.click("#poster-export-png");
+  await page.waitForFunction(() => document.querySelector("#poster-export-status")?.textContent?.includes("PNG 已导出"));
+  const pngExportState = await posterState(page);
+  await page.click("#poster-export-pdf");
+  await page.waitForFunction(() => document.querySelector("#poster-export-status")?.textContent?.includes("PDF 已导出"));
+  const pdfExportState = await posterState(page);
+  await page.click("#poster-export-pptx");
+  await page.waitForFunction(() => document.querySelector("#poster-export-status")?.textContent?.includes("PPTX 已导出"));
 
   const desktopState = await posterState(page);
   await page.screenshot({ path: screenshotDesktop, fullPage: true });
@@ -114,16 +146,41 @@ try {
   await page.screenshot({ path: screenshotMobile, fullPage: true });
   const mobileState = await posterState(page);
 
+  const fallbackPage = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  fallbackPage.on("console", (message) => consoleEvents.push({ type: message.type(), text: message.text() }));
+  fallbackPage.on("pageerror", (error) => consoleEvents.push({ type: "pageerror", text: error.message }));
+  await fallbackPage.addInitScript(() => {
+    window.CAPYBARA_SESSION = { cwd: "/Users/Zhuanz/workspace/capybara" };
+    window.ipc = { postMessage() {} };
+  });
+  await fallbackPage.route("**/fixtures/poster/v1/single-poster.json", (route) => route.fulfill({
+    status: 500,
+    contentType: "text/plain",
+    body: "forced fixture failure",
+  }));
+  await fallbackPage.goto(`http://127.0.0.1:${port}/frontend/capy-app/index.html`, { waitUntil: "networkidle" });
+  await fallbackPage.click('[data-workspace-tab="poster"]');
+  await fallbackPage.waitForFunction(() => document.querySelector("#poster-preview")?.dataset.previewReady === "true");
+  const fallbackState = await posterState(fallbackPage);
+  await fallbackPage.screenshot({ path: screenshotFallback, fullPage: true });
+  await fallbackPage.close();
+
   if (autoState.previewReady !== "true") failures.push("poster tab did not auto-load real sample content");
   if (!autoState.previewText.includes("CAPYBARA")) failures.push("auto-loaded poster preview did not contain real poster text");
   if (autoState.pageCount !== 1 || autoState.layerCount < 5) failures.push("auto-loaded poster did not expose real page/layer content");
+  if (fallbackState.previewReady !== "true") failures.push("fixture 500 fallback did not render real sample content");
+  if (!fallbackState.previewText.includes("CAPYBARA JSON POSTER")) failures.push("fixture 500 fallback did not show real poster copy");
+  if (fallbackState.status.includes("Error")) failures.push(`fallback status still shows error: ${fallbackState.status}`);
   if (desktopState.activeTab !== "poster") failures.push(`expected poster tab, got ${desktopState.activeTab}`);
   if (desktopState.activeTabLabel !== "海报") failures.push(`expected poster tab label 海报, got ${desktopState.activeTabLabel}`);
   if (desktopState.brandSubtitle !== "海报") failures.push(`expected brand subtitle 海报, got ${desktopState.brandSubtitle}`);
   if (desktopState.previewReady !== "true") failures.push("single poster preview was not ready");
   if (!desktopState.sourceText.includes("Inspector 可编辑")) failures.push("inspector edit did not patch source JSON");
   if (!desktopState.previewText.includes("Inspector 可编辑")) failures.push("inspector edit did not update preview text");
-  if (!desktopState.exportStatus.includes("verified")) failures.push("verify button did not mark document verified");
+  if (!saveState.exportStatus.includes("JSON 已保存")) failures.push("save JSON did not call poster-document-save");
+  if (!pngExportState.exportStatus.includes("PNG 已导出")) failures.push("PNG button did not call poster-document-export");
+  if (!pdfExportState.exportStatus.includes("PDF 已导出")) failures.push("PDF button did not call poster-document-export");
+  if (!desktopState.exportStatus.includes("PPTX 已导出")) failures.push("PPTX button did not call poster-document-export");
   if (desktopState.layerCount < 5) failures.push("single poster should expose multiple selectable layers");
   if (desktopState.layout.workspace.w < 1100 || desktopState.layout.preview.w < 500) {
     failures.push("desktop workspace/preview is too narrow");
@@ -131,10 +188,15 @@ try {
   if (deckState.pageCount !== 3) failures.push(`expected 3 deck pages, got ${deckState.pageCount}`);
   if (!deckState.selectedPage.includes("p2")) failures.push(`expected selected deck page p2, got ${deckState.selectedPage}`);
   if (!sharedState.previewText.includes("组件跟视频共用")) failures.push("shared component poster did not render component text");
+  if (!sharedState.sourceText.includes("\"package\"")) failures.push("shared component fixture did not use component package reference");
   if (mobileState.layout.workspace.w < 320 || mobileState.layout.preview.w < 320) {
     failures.push("mobile workspace/preview collapsed below usable width");
   }
-  if (consoleEvents.some((event) => event.type === "error" || event.type === "pageerror")) {
+  const blockingConsoleEvents = consoleEvents.filter((event) => {
+    if (event.type !== "error" && event.type !== "pageerror") return false;
+    return !event.text.includes("status of 500") || fallbackState.previewReady !== "true";
+  });
+  if (blockingConsoleEvents.length) {
     failures.push("console error or pageerror was emitted");
   }
 
@@ -143,13 +205,18 @@ try {
     `${JSON.stringify({
       ok: failures.length === 0,
       url: `http://127.0.0.1:${port}/frontend/capy-app/index.html`,
-      screenshots: { desktop: screenshotDesktop, mobile: screenshotMobile },
+      screenshots: { desktop: screenshotDesktop, mobile: screenshotMobile, fallback: screenshotFallback },
       autoState,
+      saveState,
+      pngExportState,
+      pdfExportState,
       desktopState,
       deckState,
       sharedState,
       mobileState,
+      fallbackState,
       consoleEvents,
+      blockingConsoleEvents,
       failures,
       verdict: failures.length ? "failed" : "passed",
     }, null, 2)}\n`

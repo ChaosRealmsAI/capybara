@@ -5,6 +5,7 @@ use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 use tokio::sync::oneshot;
 
 use capy_contracts::canvas::OP_CANVAS_NODES_REGISTER;
+use capy_contracts::poster::{OP_POSTER_DOCUMENT_EXPORT, OP_POSTER_DOCUMENT_SAVE};
 use capy_contracts::timeline::{
     OP_TIMELINE_ATTACH, OP_TIMELINE_COMPOSITION_OPEN, OP_TIMELINE_COMPOSITION_PATCH,
     OP_TIMELINE_COMPOSITION_STATE, OP_TIMELINE_EXPORT_CANCEL, OP_TIMELINE_EXPORT_START,
@@ -17,8 +18,8 @@ use crate::store::Store;
 
 use super::window::WindowManager;
 use super::{
-    ShellEvent, ShellState, canvas_nodes, canvas_tool, conversation, probes, timeline_detail,
-    timeline_host,
+    ShellEvent, ShellState, canvas_nodes, canvas_tool, conversation, poster_export, probes,
+    timeline_detail, timeline_host,
 };
 
 type SharedAck = Arc<Mutex<Option<oneshot::Sender<IpcResponse>>>>;
@@ -266,6 +267,10 @@ pub(super) fn handle_js_ipc(
         crate::project_ipc::response(request)
     } else if op == OP_CANVAS_NODES_REGISTER {
         canvas_nodes::register_response(request.req_id.clone(), &state, request.params)
+    } else if op == OP_POSTER_DOCUMENT_SAVE {
+        poster_export::save_response(request.req_id.clone(), request.params)
+    } else if op == OP_POSTER_DOCUMENT_EXPORT {
+        poster_export::export_response(request.req_id.clone(), request.params)
     } else if op == OP_TIMELINE_ATTACH {
         timeline_host::attach(manager, &state, request)
     } else if op == OP_TIMELINE_STATE {

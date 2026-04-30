@@ -10,6 +10,7 @@ mod canvas_context;
 mod chat;
 mod chat_context;
 mod clips;
+mod component;
 mod cutout;
 mod desktop_verify;
 mod doctor;
@@ -18,6 +19,7 @@ mod image;
 mod interaction;
 mod ipc_client;
 mod media;
+mod poster;
 mod project;
 mod project_context;
 mod project_patch;
@@ -38,7 +40,7 @@ mod tts;
   Required params: image prompts use five labeled sections; cutout run needs --input/--output; click/type need --query.
   Pitfalls: live image/TTS provider calls may spend credits; click/type need a running shell and the right CAPYBARA_SOCKET.
   Command tag: [dev] means internal AI/dev verification or automation, not a PM-facing product workflow.
-  Help topics: dev, doctor, interaction, desktop, project, context, patch, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, timeline."
+  Help topics: dev, doctor, interaction, desktop, project, context, patch, canvas, chat, agent, image, image-cutout, cutout, tts, tts-karaoke, tts-batch, clips, media, poster, component, timeline."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -101,6 +103,10 @@ enum Command {
     Help(HelpArgs),
     #[command(about = "Package video clips for scroll-driven HTML pages")]
     Media(Box<media::MediaArgs>),
+    #[command(about = "Export Poster/PPT JSON into SVG, PNG, PDF, and image-based PPTX")]
+    Poster(Box<poster::PosterArgs>),
+    #[command(about = "Validate and inspect reusable Capybara component packages")]
+    Component(Box<component::ComponentArgs>),
     #[command(about = "Operate Timeline composition and recorder integration")]
     Timeline(Box<timeline::TimelineArgs>),
     #[command(about = "Generate, preview, play, batch, and align TTS audio")]
@@ -304,6 +310,8 @@ fn run() -> Result<(), String> {
         Command::Image(args) => image::handle(*args),
         Command::Help(args) => help_topics::print_capy_topic(args.topic.as_deref()),
         Command::Media(args) => media::handle(*args),
+        Command::Poster(args) => poster::handle(*args),
+        Command::Component(args) => component::handle(*args),
         Command::Timeline(args) => timeline::handle(*args),
         Command::Tts(args) => tts::handle(*args),
         Command::Clips(args) => clips::handle(*args),

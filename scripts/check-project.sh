@@ -8,6 +8,7 @@ scripts/lint-spec.sh
 export CAPY_SPEC_STRUCTURE_CHECKED=1
 scripts/check-architecture.sh
 scripts/check-large-files.sh
+bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts/open-debug-shell.sh scripts/verify-cef-shell.sh
 scripts/check-code-sign-clones.sh
 scripts/build-canvas-for-app.sh >/dev/null
 scripts/check-frontend-js.sh >/dev/null
@@ -94,6 +95,27 @@ test -f crates/capy-scroll-media/examples/outputs/card-pan-2s/scroll-hq.html
 test -f crates/capy-scroll-media/examples/outputs/card-pan-2s/manifest.json
 "$CAPY_BIN" media inspect \
   --manifest crates/capy-scroll-media/examples/outputs/card-pan-2s/manifest.json >/dev/null
+"$CAPY_BIN" component validate --path fixtures/components >/dev/null
+"$CAPY_BIN" component inspect \
+  --path fixtures/timeline/video-editing/components/html.capy-title >/dev/null
+"$CAPY_BIN" poster export \
+  --input fixtures/poster/v1/single-poster.json \
+  --out target/capy-poster-v1-check \
+  --formats svg,png,pdf,pptx,json >/dev/null
+if ! jq -e '.schema == "capy.poster.export.v1" and (.pages | length) == 1 and (.pptx_path | length) > 0' \
+  target/capy-poster-v1-check/manifest.json >/dev/null; then
+  echo "project check failed: poster v1 export must emit SVG/PNG/PDF/PPTX manifest" >&2
+  exit 1
+fi
+"$CAPY_BIN" poster export \
+  --input fixtures/poster/v1/shared-component.json \
+  --out target/capy-poster-shared-component-check \
+  --formats svg,png,json >/dev/null
+if ! jq -e '.schema == "capy.poster.export.v1" and (.pages | length) == 1 and (.pages[0].svg_path | length) > 0' \
+  target/capy-poster-shared-component-check/manifest.json >/dev/null; then
+  echo "project check failed: shared component poster fixture must export SVG/PNG from component package" >&2
+  exit 1
+fi
 "$CAPY_BIN" image generate --dry-run \
   "Scene: Warm studio tabletop. Subject: One ceramic cup centered, 40% frame height. Important details: Product photo, soft key light from upper left, cream and lavender palette. Use case: Hero card, 1:1 crop-safe. Constraints: No text, no watermark, no extra objects." \
   --size 1:1 --resolution 1k >/dev/null

@@ -48,9 +48,11 @@ export function createPosterPreviewController({ state, dom, stringifyError, curr
         applyLayerBox(el, layer);
         if (layer.kind === "component") {
           stage.appendChild(el);
-          const module = await componentRuntime.loadModule(
+          const component = document.components?.[layer.component];
+          const module = await componentRuntime.loadComponent(
             `${state.posterWorkspace.path || document.id}::${layer.component}`,
-            document.components?.[layer.component],
+            component,
+            state.posterWorkspace.path || globalThis.location?.href || "",
           );
           if (token !== renderToken) return;
           mounted.set(key, { el, module });
@@ -134,6 +136,7 @@ function componentContext(document, page, layer) {
     style: layer.style || {},
     theme: document.theme || {},
     viewport: document.viewport || {},
+    surface: { kind: "poster", page: { id: page.id }, layer: { id: layer.id } },
     page: { id: page.id, title: page.title || page.id },
     layer: { id: layer.id, kind: layer.kind },
   };

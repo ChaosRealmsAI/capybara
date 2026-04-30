@@ -207,6 +207,7 @@ check_no_binary_adapter
 check_v15_contract_boundary
 check_v16_tts_clips_boundary
 check_no_default_screen_recording_capture
+scripts/check-desktop-signing-boundary.sh
 
 for path in \
   Cargo.toml \
@@ -237,6 +238,7 @@ for path in \
   scripts/image-provider-apimart.mjs \
   scripts/capy-focus-cutout.py \
   scripts/build-canvas-for-app.sh \
+  scripts/sign-capy-shell-app.sh \
   scripts/verify-canvas-context-interface.mjs \
   scripts/verify-agent-canvas-image-placement.mjs \
   scripts/verify-poster-json-renderer.mjs \

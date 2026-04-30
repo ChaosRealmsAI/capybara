@@ -13,7 +13,9 @@
   },
   "assets": {},
   "components": {
-    "html.capy-title": "export function mount(root) { root.textContent = ''; root.style.position = 'absolute'; root.style.inset = '0'; }\nexport function update(root, ctx) { const p = ctx.params || {}; const accent = p.accent === 'mint' ? '#84cc16' : '#a78bfa'; root.innerHTML = `<section style=\"position:absolute;inset:0;overflow:hidden;background:linear-gradient(135deg,#fffaf0 0%,#fef3c7 48%,#ede9fe 100%);font-family:PingFang SC,Source Han Sans CN,sans-serif;color:#1c1917;\"><div style=\"position:absolute;inset:70px;border:1px solid rgba(120,113,108,.22);border-radius:52px;background:rgba(255,250,240,.72);backdrop-filter:blur(18px);padding:82px;box-shadow:0 30px 80px rgba(28,25,23,.14);\"><p style=\"margin:0 0 28px;color:#78716c;font-size:34px;font-weight:850;\">${escapeHtml(p.eyebrow || 'SHARED COMPONENT')}</p><h1 style=\"margin:0;max-width:1120px;font-size:102px;line-height:1.02;font-weight:900;\">${escapeHtml(p.title || '同一组件用于海报和视频')}</h1><p style=\"margin:34px 0 0;max-width:920px;font-size:42px;line-height:1.32;color:#57534e;font-weight:650;\">${escapeHtml(p.subtitle || 'mount/update/destroy 是共同合同')}</p><span style=\"position:absolute;left:82px;bottom:82px;display:inline-flex;height:76px;align-items:center;padding:0 34px;border-radius:999px;background:${accent};font-size:32px;font-weight:900;\">${escapeHtml(p.metric || 'static poster')}</span></div></section>`; }\nexport function destroy(root) { root.textContent = ''; }\nfunction escapeHtml(value) { return String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;'); }"
+    "html.capy-title": {
+      "package": "../../components/html.capy-title/component.json"
+    }
   },
   "pages": [
     {

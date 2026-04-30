@@ -15,6 +15,7 @@ base64.workspace = true
 capy-contracts.workspace = true
 capy-project.workspace = true
 capy-image-gen.workspace = true
+capy-poster.workspace = true
 capy-timeline.workspace = true
 ctrlc.workspace = true
 image.workspace = true

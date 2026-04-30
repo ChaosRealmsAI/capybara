@@ -1,0 +1,24 @@
+{
+  "schema": "capy.component.v1",
+  "id": "html.capy-title",
+  "version": "0.1.0",
+  "title": "Capybara Title",
+  "surfaces": ["poster", "video", "web"],
+  "entrypoints": {
+    "runtime": "runtime.js",
+    "static_svg": "static.svg",
+    "style": "style.css"
+  },
+  "params_schema": {
+    "type": "object",
+    "properties": {
+      "eyebrow": { "type": "string" },
+      "title": { "type": "string" },
+      "subtitle": { "type": "string" },
+      "metric": { "type": "string" },
+      "status": { "type": "string" },
+      "accent": { "type": "string" }
+    }
+  },
+  "trusted": true
+}
