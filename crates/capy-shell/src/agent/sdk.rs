@@ -7,22 +7,17 @@ use tao::event_loop::EventLoopProxy;
 
 use super::tool_path::tool_launch;
 use super::{event, record_and_emit};
+use crate::agent_tools::{
+    agent_tool_env, claude_append_system_prompt, codex_developer_instructions,
+};
 use crate::app::ShellEvent;
 use crate::store::{Conversation, Provider, Store};
 
 pub(super) struct SdkRunOutput {
     pub content: String,
+    pub native_session_id: Option<String>,
     pub native_thread_id: Option<String>,
     pub event_json: Value,
-}
-
-pub(super) fn enabled(config: &Value) -> bool {
-    config
-        .get("runtimeBackend")
-        .and_then(Value::as_str)
-        .map(|value| value.eq_ignore_ascii_case("sdk"))
-        .unwrap_or(false)
-        || config.get("sdk").and_then(Value::as_bool).unwrap_or(false)
 }
 
 pub(super) fn run(
@@ -43,14 +38,16 @@ pub(super) fn run(
             script.display()
         ));
     }
+    let prompt = sdk_prompt(conversation, prompt);
     let launch = tool_launch("node");
     let mut command = Command::new(launch.program());
     command
         .arg(&script)
         .arg("run-stream")
-        .args(stream_args(conversation, prompt, use_resume))
+        .args(stream_args(conversation, &prompt, use_resume))
         .current_dir(repo_root())
         .env("PATH", launch.path_env())
+        .envs(agent_tool_env(&conversation.config))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = command.spawn().map_err(|err| {
@@ -136,6 +133,10 @@ pub(super) fn run(
         return Err(format!("agent SDK bridge returned failure: {value}"));
     }
     let content = content_from_output(&value);
+    let native_session_id = value
+        .get("session_id")
+        .and_then(Value::as_str)
+        .map(ToString::to_string);
     let native_thread_id = value
         .get("thread_id")
         .and_then(Value::as_str)
@@ -148,9 +149,49 @@ pub(super) fn run(
     });
     Ok(SdkRunOutput {
         content,
+        native_session_id,
         native_thread_id,
         event_json,
     })
+}
+
+pub(super) fn doctor() -> Value {
+    let script = sdk_script_path();
+    if !script.is_file() {
+        return json!({
+            "ok": false,
+            "kind": "capy-agent-sdk-doctor",
+            "error": format!("agent SDK bridge script missing: {}", script.display())
+        });
+    }
+    let launch = tool_launch("node");
+    let output = Command::new(launch.program())
+        .arg(&script)
+        .arg("doctor")
+        .current_dir(repo_root())
+        .env("PATH", launch.path_env())
+        .output();
+    match output {
+        Ok(output) if output.status.success() => serde_json::from_slice(&output.stdout)
+            .unwrap_or_else(|err| {
+                json!({
+                    "ok": false,
+                    "kind": "capy-agent-sdk-doctor",
+                    "error": format!("doctor returned invalid JSON: {err}")
+                })
+            }),
+        Ok(output) => json!({
+            "ok": false,
+            "kind": "capy-agent-sdk-doctor",
+            "status": output.status.code(),
+            "stderr": String::from_utf8_lossy(&output.stderr).trim()
+        }),
+        Err(err) => json!({
+            "ok": false,
+            "kind": "capy-agent-sdk-doctor",
+            "error": format!("node failed to start using {}: {err}", launch.display())
+        }),
+    }
 }
 
 pub(super) fn content_from_output(value: &Value) -> String {
@@ -190,6 +231,54 @@ fn emit_sdk_event(
             .with_content(content)
             .with_event(value.clone()),
     );
+}
+
+pub(super) fn sdk_prompt(conversation: &Conversation, prompt: &str) -> String {
+    let mut instructions = Vec::new();
+    match conversation.provider {
+        Provider::Claude => {
+            push_instruction(
+                &mut instructions,
+                config_str(&conversation.config, "systemPrompt"),
+            );
+            push_instruction(
+                &mut instructions,
+                claude_append_system_prompt(
+                    config_str(&conversation.config, "appendSystemPrompt"),
+                    &conversation.config,
+                ),
+            );
+        }
+        Provider::Codex => {
+            push_instruction(
+                &mut instructions,
+                config_str(&conversation.config, "baseInstructions"),
+            );
+            push_instruction(
+                &mut instructions,
+                codex_developer_instructions(
+                    config_str(&conversation.config, "developerInstructions"),
+                    &conversation.config,
+                ),
+            );
+        }
+    }
+
+    if instructions.is_empty() {
+        return prompt.to_string();
+    }
+
+    format!(
+        "Capybara runtime instructions:\n{}\n\nUser prompt:\n{}",
+        instructions.join("\n\n"),
+        prompt
+    )
+}
+
+fn push_instruction(instructions: &mut Vec<String>, value: Option<String>) {
+    if let Some(value) = value {
+        instructions.push(value);
+    }
 }
 
 pub(super) fn args(

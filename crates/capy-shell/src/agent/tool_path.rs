@@ -1,8 +1,5 @@
 use std::env;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-
-use serde_json::{Value, json};
 
 const GUI_TOOL_PATH_DIRS: &[&str] = &[
     "/opt/homebrew/bin",
@@ -31,22 +28,6 @@ impl ToolLaunch {
 
     pub(super) fn display(&self) -> String {
         self.program.display().to_string()
-    }
-}
-
-pub(super) fn tool_version(bin: &str, args: &[&str]) -> Value {
-    let launch = tool_launch(bin);
-    match Command::new(launch.program())
-        .env("PATH", launch.path_env())
-        .args(args)
-        .output()
-    {
-        Ok(output) => json!({
-            "available": output.status.success(),
-            "version": String::from_utf8_lossy(&output.stdout).trim(),
-            "error": String::from_utf8_lossy(&output.stderr).trim()
-        }),
-        Err(err) => json!({ "available": false, "error": err.to_string() }),
     }
 }
 

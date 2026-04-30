@@ -16,6 +16,7 @@ fn creates_and_reloads_conversation_messages() -> Result<(), Box<dyn std::error:
         config: json!({ "effort": "medium" }),
     })?;
     let run = store.create_run(&conversation.id)?;
+    assert_eq!(conversation.config["runtimeBackend"], "sdk");
     store.add_message(&conversation.id, "user", "hello", json!({}))?;
     store.add_run_event(CreateRunEvent {
         conversation_id: &conversation.id,
@@ -44,6 +45,14 @@ fn creates_and_reloads_conversation_messages() -> Result<(), Box<dyn std::error:
     assert_eq!(events.len(), 2);
     assert_eq!(events[0].delta.as_deref(), Some("he"));
     assert_eq!(events[1].content.as_deref(), Some("hello"));
+    store.update_native_session(&conversation.id, "session-from-sdk")?;
+    store.update_native_thread(&conversation.id, "thread-from-sdk")?;
+    let updated = store.get_conversation(&conversation.id)?;
+    assert_eq!(
+        updated.native_session_id.as_deref(),
+        Some("session-from-sdk")
+    );
+    assert_eq!(updated.native_thread_id.as_deref(), Some("thread-from-sdk"));
     let _remove_result = std::fs::remove_file(path);
     Ok(())
 }

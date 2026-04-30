@@ -207,6 +207,7 @@ check_no_binary_adapter
 check_v15_contract_boundary
 check_v16_tts_clips_boundary
 check_no_default_screen_recording_capture
+scripts/check-sdk-only-agent-runtime.sh
 scripts/check-desktop-signing-boundary.sh
 
 for path in \
@@ -295,8 +296,8 @@ rg -q 'CanvasCommand::Context' crates/capy-cli/src/canvas.rs || fail "capy canva
 rg -q 'context export --selected' crates/capy-shell/src/agent_tools.rs scripts/verify-canvas-context-interface.mjs || fail "agent canvas context contract must require context export"
 rg -q 'canvas_context' crates/capy-cli/src/main.rs crates/capy-cli/src/chat.rs crates/capy-shell/src/app.rs crates/capy-shell/src/app crates/capy-shell/src/agent.rs frontend/capy-app/script.js frontend/capy-app/app || fail "chat messages must persist canvas_context metadata"
 rg -q 'canvas-generate-image' crates/capy-shell/src/app.rs crates/capy-shell/src/app || fail "desktop canvas image tool RPC must exist"
-rg -q 'capyCanvasTools' crates/capy-cli/src/main.rs crates/capy-cli/src/chat.rs crates/capy-shell/src/agent.rs frontend/capy-app/script.js frontend/capy-app/app || fail "agent canvas CLI tool contract must be wired for chat runtimes"
-rg -q 'CAPY_TOOL_CALL_LOG' crates/capy-cli/src/canvas.rs crates/capy-shell/src/agent.rs || fail "agent canvas CLI calls must support JSONL evidence logging"
+rg -q 'capyCanvasTools' crates/capy-cli/src/main.rs crates/capy-cli/src/chat.rs crates/capy-shell/src/agent.rs crates/capy-shell/src/agent_tools.rs frontend/capy-app/script.js frontend/capy-app/app || fail "agent canvas CLI tool contract must be wired for chat runtimes"
+rg -q 'CAPY_TOOL_CALL_LOG' crates/capy-cli/src/canvas.rs crates/capy-shell/src/agent.rs crates/capy-shell/src/agent_tools.rs crates/capy-shell/src/agent/sdk.rs || fail "agent canvas CLI calls must support JSONL evidence logging"
 rg -q 'v0.10-agent-canvas-image-placement' scripts/verify-agent-canvas-image-placement.mjs || fail "agent canvas placement verifier must target v0.10 evidence"
 rg -q 'provider-adapter' crates/capy-image-gen/src/apimart.rs || fail "first image provider must remain an adapter, not the top-level abstraction"
 rg -q 'default_no_spend_gate: true' crates/capy-image-gen/src/apimart.rs || fail "image provider must expose no-spend default gate metadata"

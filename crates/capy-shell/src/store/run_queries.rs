@@ -1,6 +1,7 @@
 use rusqlite::{OptionalExtension, params};
 
 use super::rows::row_to_run;
+use super::util::now_ms;
 use super::{RunRecord, Store};
 
 impl Store {
@@ -13,5 +14,33 @@ impl Store {
         )
         .optional()
         .map_err(|err| err.to_string())
+    }
+
+    pub fn update_native_thread(
+        &self,
+        conversation_id: &str,
+        thread_id: &str,
+    ) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE conversations SET native_thread_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![thread_id, now_ms(), conversation_id],
+        )
+        .map_err(|err| format!("update native thread failed: {err}"))?;
+        Ok(())
+    }
+
+    pub fn update_native_session(
+        &self,
+        conversation_id: &str,
+        session_id: &str,
+    ) -> Result<(), String> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE conversations SET native_session_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![session_id, now_ms(), conversation_id],
+        )
+        .map_err(|err| format!("update native session failed: {err}"))?;
+        Ok(())
     }
 }

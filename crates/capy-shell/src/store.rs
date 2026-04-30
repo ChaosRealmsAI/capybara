@@ -452,20 +452,6 @@ impl Store {
         Ok(())
     }
 
-    pub fn update_native_thread(
-        &self,
-        conversation_id: &str,
-        thread_id: &str,
-    ) -> Result<(), String> {
-        let conn = self.lock()?;
-        conn.execute(
-            "UPDATE conversations SET native_thread_id = ?1, updated_at = ?2 WHERE id = ?3",
-            params![thread_id, now_ms(), conversation_id],
-        )
-        .map_err(|err| format!("update native thread failed: {err}"))?;
-        Ok(())
-    }
-
     pub fn update_config(
         &self,
         conversation_id: &str,

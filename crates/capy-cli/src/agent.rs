@@ -7,12 +7,12 @@ use clap::{Args, Subcommand, ValueEnum};
 #[command(
     disable_help_subcommand = true,
     after_help = "AI quick start:
-  Use `capy agent --help` as the index and `capy agent help doctor` for the full runtime check workflow.
+  Use `capy agent --help` as the index and `capy agent help doctor` for the SDK runtime check workflow.
   Common command: `capy agent doctor`.
   SDK command: `capy agent sdk doctor`; full-auto smoke: `capy agent sdk run --provider codex --write-code --prompt ...`.
   Segment stream: `capy agent sdk run-stream --provider claude --prompt ...` emits normalized JSONL.
   Required params: none.
-  Pitfalls: check runtime availability before starting long chat runs.
+  Pitfalls: chat runtime is SDK-only; old direct CLI backends are removed.
   Help topics: `capy agent help doctor`, `capy agent help sdk`."
 )]
 pub struct AgentArgs {
@@ -22,7 +22,7 @@ pub struct AgentArgs {
 
 #[derive(Debug, Subcommand)]
 enum AgentCommand {
-    #[command(about = "Check Claude and Codex runtime availability")]
+    #[command(about = "Check Capybara SDK runtime availability")]
     Doctor,
     #[command(about = "Operate the standalone Claude/Codex SDK runtime")]
     Sdk(Box<SdkArgs>),

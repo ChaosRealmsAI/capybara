@@ -151,6 +151,21 @@ for item in "${command_topics[@]}"; do
   check_topic "command-$command-topic-$topic" "$CAPY_BIN" "$command" help "$topic"
 done
 
+chat_agent_topic="$(run_capture command-chat-topic-agent-sdk-default "$CAPY_BIN" chat help agent)"
+require_text "$chat_agent_topic" "SDK is the default and only runtime"
+if grep -Fq -- "--sdk" "$chat_agent_topic"; then
+  echo "help verification failed: chat agent help must not recommend the removed --sdk opt-in" >&2
+  sed -n '1,160p' "$chat_agent_topic" >&2
+  exit 1
+fi
+agent_sdk_topic="$(run_capture command-agent-topic-sdk-only "$CAPY_BIN" agent help sdk)"
+require_text "$agent_sdk_topic" 'use `--runtime-backend=cli`'
+if grep -Fq -- "chat new --provider claude|codex --sdk" "$agent_sdk_topic"; then
+  echo "help verification failed: agent sdk help must not recommend --sdk for chat" >&2
+  sed -n '1,180p' "$agent_sdk_topic" >&2
+  exit 1
+fi
+
 if [[ "$WITH_SMOKE" == "1" ]]; then
   echo "[smoke] no-spend commands"
   doctor_json="$(run_capture doctor-json "$CAPY_BIN" doctor)"
