@@ -29,6 +29,7 @@ bash -n scripts/check-code-sign-clones.sh scripts/sign-capy-shell-app.sh scripts
 scripts/check-code-sign-clones.sh
 scripts/check-architecture.sh
 scripts/verify-ai-cli-discovery.sh
+node --test scripts/tests/post-export-capture-verdict.test.mjs
 RUSTC_WRAPPER= cargo test -p capy-canvas-core --all-targets
 RUSTC_WRAPPER= cargo check -p capy-canvas-web --target wasm32-unknown-unknown
 scripts/check-frontend-js.sh

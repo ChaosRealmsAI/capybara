@@ -15,12 +15,20 @@ import {
   writeEvidencePage,
   writeManifest
 } from "./verify-ai-clip-suggestion-report.mjs";
+import {
+  buildCaptureAttempt,
+  summarizePostExportCapture
+} from "./post-export-capture-verdict.mjs";
+import {
+  initialQueue,
+  queueTotalDuration
+} from "./verify-ai-clip-suggestion-fixtures.mjs";
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: scripts/verify-ai-clip-suggestion.mjs [spec/versions/v0.48]
 
 Use when:
-  Verify the v0.48 AI clip suggestion feature end to end on a real CEF desktop.
+  Verify the v0.48+ AI clip suggestion and video export evidence loop end to end on a real CEF desktop.
 
 Required params:
   Optional first arg is the version directory. Default: spec/versions/v0.48.
@@ -41,6 +49,7 @@ Evidence outputs:
   ai-clip-suggestion-proposal-composition.json
   ai-clip-suggestion-delivery.mp4
   ai-clip-suggestion-sampled-frame.png
+  ai-clip-suggestion-export-capture-verdict.json
   ai-clip-suggestion-summary.json
   ai-clip-suggestion-command-log.json
   ai-clip-suggestion-*-desktop.png
@@ -50,6 +59,7 @@ Pitfalls:
   This verifies a no-spend deterministic planner, not a real paid model call.
   This remains a linear clip queue; do not interpret it as a multi-track NLE, transition, subtitle, or audio-mixing workflow.
   Frontend adoption must write through Shell IPC / Project Core, not direct .capy file writes.
+  Post-export capture timeout is classified in ai-clip-suggestion-export-capture-verdict.json; it never hides export failure or UI/page errors.
 
 Next step:
   Review <version>/evidence/index.html and <version>/evidence/assets/ai-clip-suggestion-summary.json.`);
@@ -58,6 +68,7 @@ Next step:
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const versionDir = path.resolve(process.argv[2] || "spec/versions/v0.48");
+const versionId = path.basename(versionDir);
 const evidenceDir = path.join(versionDir, "evidence");
 const assetsDir = path.join(evidenceDir, "assets");
 const capy = path.join(root, "target", "debug", "capy");
@@ -65,7 +76,7 @@ const projectDir = path.join(assetsDir, "ai-clip-suggestion-project");
 const mediaDir = path.join(projectDir, "media");
 const initialQueuePath = path.join(assetsDir, "ai-clip-suggestion-initial-queue.json");
 const projectManifest = path.join(projectDir, ".capy", "video-clip-queue.json");
-const instancePrefix = "v48-ai-clip-suggestion";
+const instancePrefix = `${versionId.replace(/[^A-Za-z0-9]+/g, "-")}-ai-clip-suggestion`;
 const logs = [];
 let shellBundleReady = false;
 let currentSocket = "";
@@ -141,7 +152,27 @@ try {
   assert(exportState.exportJob?.status === "done", `export job did not finish: ${exportState.exportJob?.status || "missing"}`);
   assert(existsSync(exportState.exportJob.output_path), `export file missing: ${exportState.exportJob.output_path}`);
   assertNoPageErrors(exportState, "suggestion queue export");
-  captureWithFallback("ai-clip-suggestion-export-desktop.png", "ai-clip-suggestion-export-capture.json", "ai-clip-suggestion-export-screenshot.json", "ai-clip-suggestion-restored-desktop.png");
+  const exportCaptureVerdict = captureWithFallback(
+    "ai-clip-suggestion-export-desktop.png",
+    "ai-clip-suggestion-export-capture.json",
+    "ai-clip-suggestion-export-screenshot.json",
+    "ai-clip-suggestion-restored-desktop.png",
+    {
+      stage: "post-export",
+      exportOk: exportState.exportJob?.status === "done",
+      exportStatus: exportState.exportJob?.status || "missing",
+      exportEvidence: "ai-clip-suggestion-export-state.json",
+      exportOutputPath: exportState.exportJob?.output_path || null,
+      stateEvidence: "ai-clip-suggestion-export-state.json",
+      priorVisibleEvidence: "ai-clip-suggestion-restored-desktop.png",
+      verdictEvidenceName: "ai-clip-suggestion-export-capture-verdict.json",
+      retryCommand: `CAPYBARA_SOCKET=${currentSocket} target/debug/capy capture --out=${path.join(assetsDir, "ai-clip-suggestion-export-desktop-retry.png")}`,
+      uiErrors: [
+        ...(exportState.consoleErrors || []),
+        ...(exportState.pageErrors || [])
+      ]
+    }
+  );
 
   const exportedCopy = path.join(assetsDir, "ai-clip-suggestion-delivery.mp4");
   copyFileSync(exportState.exportJob.output_path, exportedCopy);
@@ -155,9 +186,9 @@ try {
   assert(exportedDuration >= 4.1 && exportedDuration <= 4.9, `AI suggestion mp4 duration should be about 4.5s, got ${exportedDuration}`);
   command("target/debug/capy", ["timeline", "snapshot", "--composition", exportComposition, "--frame", "3000", "--out", path.join(assetsDir, "ai-clip-suggestion-sampled-frame.png")], "ai-clip-suggestion-sampled-frame.json");
 
-  const summary = writeSummary({ importA, importB, importC, workbench, cliSuggestion, suggestedState, adoptedState, restoredState, finalManifest, exportState, exportedCopy, exportComposition, proposalJson, ffprobeJson });
+  const summary = writeSummary({ importA, importB, importC, workbench, cliSuggestion, suggestedState, adoptedState, restoredState, finalManifest, exportState, exportCaptureVerdict, exportedCopy, exportComposition, proposalJson, ffprobeJson });
   writeEvidencePage({ evidenceDir, logs, summary });
-  writeManifest({ evidenceDir });
+  writeManifest({ evidenceDir, summary });
   await verifyEvidencePage({ evidenceDir, assetsDir });
   command("open", [path.join(evidenceDir, "index.html")], "evidence-open.log");
   logs.push({ command: "verdict", ok: true });
@@ -208,16 +239,23 @@ function command(cmd, args, evidenceName, options = {}) {
   return stdout;
 }
 
-function optionalCommand(cmd, args, evidenceName, options = {}) {
+function optionalCommandResult(cmd, args, evidenceName, options = {}) {
+  const started = Date.now();
   try {
     command(cmd, args, evidenceName, options);
-    return true;
+    const elapsed_ms = Date.now() - started;
+    return { ok: true, evidence: evidenceName, elapsed_ms };
   } catch (error) {
+    const elapsed_ms = Date.now() - started;
     const message = error instanceof Error ? error.message : String(error);
     logs.push({ command: [cmd, ...args].join(" "), evidence: evidenceName || null, ok: false, error: message });
     writeFileSync(path.join(assetsDir, evidenceName), evidenceName.endsWith(".json") ? `${JSON.stringify({ ok: false, error: message }, null, 2)}\n` : `${message}\n`);
-    return false;
+    return { ok: false, evidence: evidenceName, elapsed_ms, error: message };
   }
+}
+
+function optionalCommand(cmd, args, evidenceName, options = {}) {
+  return optionalCommandResult(cmd, args, evidenceName, options).ok;
 }
 
 function capyJson(args, evidenceName, env = process.env) {
@@ -229,70 +267,78 @@ function capyJson(args, evidenceName, env = process.env) {
   }
 }
 
-function captureWithFallback(imageName, captureEvidence, screenshotEvidence, fallbackImage = null) {
+function captureWithFallback(imageName, captureEvidence, screenshotEvidence, fallbackImage = null, verdictOptions = null) {
   const out = path.join(assetsDir, imageName);
-  if (optionalCommand("target/debug/capy", ["capture", `--out=${out}`], captureEvidence, { env: capyEnv() })) return;
-  if (optionalCommand("target/debug/capy", ["screenshot", `--out=${out}`], screenshotEvidence, { env: capyEnv() })) return;
+  const attempts = [];
+  const captureResult = optionalCommandResult("target/debug/capy", ["capture", `--out=${out}`], captureEvidence, { env: capyEnv() });
+  attempts.push(buildCaptureAttempt({
+    method: "capture",
+    ok: captureResult.ok,
+    evidence: captureEvidence,
+    image: imageName,
+    elapsed_ms: captureResult.elapsed_ms,
+    error: captureResult.error || null
+  }));
+  if (captureResult.ok) {
+    return writeCaptureVerdictIfNeeded({ imageName, fallbackImage: null, attempts, verdictOptions });
+  }
+
+  const screenshotResult = optionalCommandResult("target/debug/capy", ["screenshot", `--out=${out}`], screenshotEvidence, { env: capyEnv() });
+  attempts.push(buildCaptureAttempt({
+    method: "screenshot",
+    ok: screenshotResult.ok,
+    evidence: screenshotEvidence,
+    image: imageName,
+    elapsed_ms: screenshotResult.elapsed_ms,
+    error: screenshotResult.error || null
+  }));
+  if (screenshotResult.ok) {
+    return writeCaptureVerdictIfNeeded({ imageName, fallbackImage: null, attempts, verdictOptions });
+  }
+
   if (fallbackImage) {
     copyFileSync(path.join(assetsDir, fallbackImage), out);
     logs.push({ command: `fallback copy ${fallbackImage} ${imageName}`, evidence: imageName, ok: true });
-    return;
+    const verdict = writeCaptureVerdictIfNeeded({ imageName, fallbackImage, attempts, verdictOptions });
+    if (verdict?.capture?.blocking) throw new Error(`capture failed for ${imageName}: ${verdict.capture.status}`);
+    return verdict;
   }
+  const verdict = writeCaptureVerdictIfNeeded({ imageName, fallbackImage: null, attempts, verdictOptions });
+  if (verdict?.capture?.blocking) throw new Error(`capture failed for ${imageName}: ${verdict.capture.status}`);
   throw new Error(`capture failed for ${imageName}`);
 }
 
-function inspectSourceVideo(importResult) {
-  return {
-    filename: importResult.metadata.filename,
-    duration_ms: importResult.metadata.duration_ms,
-    width: importResult.metadata.width,
-    height: importResult.metadata.height
-  };
-}
-
-function initialQueue(importA, importB) {
-  return {
-    schema_version: "capy.project-video-clip-queue.v1",
-    project_id: "",
-    project_name: "",
-    updated_at: Date.now(),
-    items: [
-      {
-        id: "queue-initial-camera-a",
-        sequence: 1,
-        composition_path: importA.composition_path,
-        render_source_path: "",
-        clip_id: "source",
-        track_id: "video",
-        scene: "Camera A opening detail",
-        start_ms: 500,
-        end_ms: 1700,
-        duration_ms: 1200,
-        source_video: inspectSourceVideo(importA),
-        updated_at: Date.now()
-      },
-      {
-        id: "queue-initial-camera-b",
-        sequence: 2,
-        composition_path: importB.composition_path,
-        render_source_path: "",
-        clip_id: "source",
-        track_id: "video",
-        scene: "Camera B product closeup",
-        start_ms: 1000,
-        end_ms: 2500,
-        duration_ms: 1500,
-        source_video: inspectSourceVideo(importB),
-        updated_at: Date.now()
-      }
-    ]
-  };
+function writeCaptureVerdictIfNeeded({ imageName, fallbackImage, attempts, verdictOptions }) {
+  if (!verdictOptions) return null;
+  const verdict = summarizePostExportCapture({
+    version: versionId,
+    stage: verdictOptions.stage || "post-export",
+    export_ok: verdictOptions.exportOk,
+    export_status: verdictOptions.exportStatus || null,
+    export_evidence: verdictOptions.exportEvidence || null,
+    export_output_path: verdictOptions.exportOutputPath || null,
+    state_evidence: verdictOptions.stateEvidence || null,
+    prior_visible_evidence: verdictOptions.priorVisibleEvidence || null,
+    fallback_image: fallbackImage,
+    final_image: imageName,
+    attempts,
+    ui_errors: verdictOptions.uiErrors || [],
+    retry_command: verdictOptions.retryCommand || null
+  });
+  writeJson(verdictOptions.verdictEvidenceName, verdict);
+  logs.push({
+    command: "post-export capture verdict",
+    evidence: verdictOptions.verdictEvidenceName,
+    ok: verdict.verdict.status === "passed",
+    status: verdict.capture.status
+  });
+  return verdict;
 }
 
 function writeSummary(data) {
   const metadata = {
     schema: "capy.ai_clip_suggestion.summary.v1",
-    version: "v0.48",
+    version: versionId,
     generated_at: new Date().toISOString(),
     project_dir: projectDir,
     imports: {
@@ -306,6 +352,7 @@ function writeSummary(data) {
     final_queue: data.finalManifest.items,
     total_duration_ms: queueTotalDuration(data.finalManifest.items),
     export_state: data.exportState,
+    export_capture_verdict: data.exportCaptureVerdict,
     proposal_delivery: data.proposalJson.delivery,
     export_probe: {
       duration: data.ffprobeJson.format?.duration,
@@ -316,7 +363,8 @@ function writeSummary(data) {
       proposal: path.join(assetsDir, "ai-clip-suggestion-proposal-composition.json"),
       export_mp4: data.exportedCopy,
       export_composition: data.exportComposition,
-      sampled_frame: path.join(assetsDir, "ai-clip-suggestion-sampled-frame.png")
+      sampled_frame: path.join(assetsDir, "ai-clip-suggestion-sampled-frame.png"),
+      post_export_capture_verdict: path.join(assetsDir, "ai-clip-suggestion-export-capture-verdict.json")
     },
     desktop_captures: [
       path.join(assetsDir, "ai-clip-suggestion-desktop.png"),
@@ -324,7 +372,7 @@ function writeSummary(data) {
       path.join(assetsDir, "ai-clip-suggestion-restored-desktop.png"),
       path.join(assetsDir, "ai-clip-suggestion-export-desktop.png")
     ],
-    verdict: "passed"
+    verdict: data.exportCaptureVerdict?.verdict?.status === "passed" ? "passed" : "failed"
   };
   writeJson("ai-clip-suggestion-summary.json", metadata);
   return metadata;
@@ -336,10 +384,6 @@ function writeJson(name, value) {
 
 function writeLogs() {
   writeJson("ai-clip-suggestion-command-log.json", logs);
-}
-
-function queueTotalDuration(items) {
-  return items.reduce((total, item) => total + Math.max(1, Number(item.duration_ms || 0)), 0);
 }
 
 function assertSuggestion(suggestion, minItems, label) {
