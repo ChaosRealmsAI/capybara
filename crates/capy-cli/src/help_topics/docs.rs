@@ -10,7 +10,7 @@ Registered `[dev]` commands:
 3. Visible evidence: `screenshot`, `capture`
 4. UI automation: `click`, `type`
 5. Runtime inspection: `agent`, `agent sdk`
-Product workflow commands without `[dev]`: `chat`, `canvas`, `image`, `cutout`, `tts`, `clips`, `media`, `timeline`.
+Product workflow commands without `[dev]`: `chat`, `canvas`, `image`, `cutout`, `motion`, `tts`, `clips`, `media`, `timeline`.
 Recommended commands:
 1. `target/debug/capy --help`
 2. `target/debug/capy help`
@@ -271,6 +271,32 @@ Required parameters: `--manifest <json> --out-dir <dir>`; manifest has `items[]`
 Recommended command: `target/debug/capy cutout batch --manifest <manifest.json> --out-dir <out-dir> --report <summary.json>`
 Do not: put directories in item `input`; assume quality without checking QA previews.
 Next step: read summary JSON and inspect `qa/`.
+"#;
+
+pub(super) const MOTION_HELP: &str = r#"
+Topic: capy motion
+
+Use when: a real MP4 must become a high-quality moving transparent asset for APP, game, or animation use.
+Required parameters: `cutout` needs `--input <mp4>` and `--out <dir>`; use `--quality animation --target all --verify --overwrite` for the full package.
+Recommended commands:
+1. `target/debug/capy motion doctor`
+2. `target/debug/capy motion cutout --input /Users/Zhuanz/Downloads/d_f_d_d_a_bc_be_a_mp_.mp4 --out spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset --quality animation --target all --verify --overwrite --evidence-index spec/versions/v0.32-animation-grade-video-cutout/evidence/index.html`
+3. `target/debug/capy motion verify --manifest spec/versions/v0.32-animation-grade-video-cutout/evidence/assets/motion-asset/manifest.json`
+4. Serve `qa/preview.html` over HTTP and capture browser evidence on multiple backgrounds.
+Reuse command: after a full cutout exists, `--reuse-existing` rebuilds QA, manifest, preview HTML, and exports from existing frames without rerunning Focus.
+Do not: claim ordinary H.264 MP4 is transparent; judge quality from one still frame; use fixed-background/chroma-key removal; skip `qa/report.json` or `manifest.json`.
+Next step: if QA verdict is `draft`, inspect `qa/report.json` warnings and improve masks or source before calling the asset app-ready.
+"#;
+
+pub(super) const MOTION_MANIFEST_HELP: &str = r#"
+Topic: capy motion manifest
+
+Use when: AI or a runtime needs to consume the generated motion package.
+Required fields: `schema=capy.motion_asset.manifest.v1`, `source`, `strategy`, `outputs`, and `quality`.
+Recommended command: `target/debug/capy motion verify --manifest <motion-asset-dir>/manifest.json`
+Output families: `frames/rgba/` transparent PNG sequence, `masks/` alpha masks, `atlas/walk.png` plus `atlas/walk.json`, `video/preview.webm`, `video/rgb.mp4`, `video/alpha.mp4`, and `qa/preview.html`.
+Do not: move files without updating `manifest.json`; treat `video/rgb.mp4` alone as alpha-capable; discard masks or QA metrics.
+Next step: open `qa/preview.html` on black, white, photo, and game-like backgrounds before approving the package.
 "#;
 
 pub(super) const GAME_ASSETS_HELP: &str = r#"

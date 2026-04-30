@@ -3,8 +3,8 @@ use super::docs::{
     AGENT_HELP, AGENT_SDK_HELP, CANVAS_CONTEXT_HELP, CANVAS_HELP, CANVAS_IMAGES_HELP,
     CHAT_CANVAS_TOOLS_HELP, CHAT_HELP, CUTOUT_HELP, CUTOUT_MANIFEST_HELP, DESKTOP_HELP, DEV_HELP,
     DOCTOR_HELP, GAME_ASSETS_HELP, GAME_ASSETS_LIVE_HELP, GAME_ASSETS_MANIFEST_HELP,
-    IMAGE_CUTOUT_HELP, IMAGE_HELP, INTERACTION_HELP, PROJECT_CONTEXT_HELP, PROJECT_HELP,
-    PROJECT_PATCH_HELP,
+    IMAGE_CUTOUT_HELP, IMAGE_HELP, INTERACTION_HELP, MOTION_HELP, MOTION_MANIFEST_HELP,
+    PROJECT_CONTEXT_HELP, PROJECT_HELP, PROJECT_PATCH_HELP,
 };
 use super::media_docs::{
     CLIPS_HELP, CLIPS_YOUTUBE_HELP, COMPONENT_HELP, MEDIA_SCROLL_HELP, MEDIA_STORY_HELP,
@@ -95,6 +95,12 @@ pub(super) const CAPY_TOPICS: &[HelpTopic] = &[
         aliases: &["sprites", "asset-pack"],
         summary: "Generate, slice, preview, and verify compact game asset packs.",
         body: GAME_ASSETS_HELP,
+    },
+    HelpTopic {
+        name: "motion",
+        aliases: &["motion-cutout", "video-alpha", "dynamic-cutout"],
+        summary: "Convert videos into animation-grade transparent motion assets.",
+        body: MOTION_HELP,
     },
     HelpTopic {
         name: "tts",
@@ -194,6 +200,21 @@ pub(super) const GAME_ASSETS_TOPICS: &[HelpTopic] = &[
         aliases: &["pack", "schema"],
         summary: "Inspect the capy.game_assets.pack.v1 manifest contract.",
         body: GAME_ASSETS_MANIFEST_HELP,
+    },
+];
+
+pub(super) const MOTION_TOPICS: &[HelpTopic] = &[
+    HelpTopic {
+        name: "agent",
+        aliases: &["workflow", "cutout"],
+        summary: "Create and verify an animation-grade transparent motion package.",
+        body: MOTION_HELP,
+    },
+    HelpTopic {
+        name: "manifest",
+        aliases: &["package", "schema"],
+        summary: "Inspect the capy.motion_asset.manifest.v1 package contract.",
+        body: MOTION_MANIFEST_HELP,
     },
 ];
 

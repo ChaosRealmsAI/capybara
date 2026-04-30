@@ -20,6 +20,7 @@ mod image;
 mod interaction;
 mod ipc_client;
 mod media;
+mod motion;
 mod poster;
 mod project;
 mod project_context;
@@ -35,14 +36,14 @@ mod tts;
     disable_help_subcommand = true,
     after_help = "AI quick start:
   capy --help is the index. Use `capy help <topic>` for self-contained workflows.
-  Common checks: `capy doctor`, `capy verify`, `capy image doctor`, `capy cutout doctor`, `capy game-assets doctor`, `capy clips doctor`, `capy tts doctor`.
+  Common checks: `capy doctor`, `capy verify`, `capy image doctor`, `capy cutout doctor`, `capy motion doctor`, `capy game-assets doctor`, `capy clips doctor`, `capy tts doctor`.
   Common asset flow: `capy image generate --cutout-ready ...` then `capy cutout run ...`.
   Common game asset flow: `capy game-assets sample --preset forest-action-rpg-compact --out target/capy-game-assets-sample --overwrite`, then `capy game-assets verify --pack target/capy-game-assets-sample/pack.json`.
   Common UI flow: `capy devtools --query <css>`, then `capy click --query <css>` or `capy type --query <css> --text <text>`.
   Required params: image prompts use five labeled sections; cutout run needs --input/--output; click/type need --query.
   Pitfalls: live image/TTS provider calls may spend credits; click/type need a running shell and the right CAPYBARA_SOCKET.
   Command tag: [dev] means internal AI/dev verification or automation, not a PM-facing product workflow.
-  Help topics: dev, doctor, interaction, desktop, project, context, patch, canvas, chat, agent, image, image-cutout, cutout, game-assets, tts, tts-karaoke, tts-batch, clips, media, poster, component, timeline."
+  Help topics: dev, doctor, interaction, desktop, project, context, patch, canvas, chat, agent, image, image-cutout, cutout, motion, game-assets, tts, tts-karaoke, tts-batch, clips, media, poster, component, timeline."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -103,6 +104,8 @@ enum Command {
     Image(Box<image::ImageArgs>),
     #[command(about = "Generate, slice, preview, and verify 2D game asset packs")]
     GameAssets(Box<game_assets::GameAssetsArgs>),
+    #[command(about = "Convert videos into animation-grade transparent motion assets")]
+    Motion(Box<motion::MotionArgs>),
     #[command(about = "Show self-contained AI help topics")]
     Help(HelpArgs),
     #[command(about = "Package video clips for scroll-driven HTML pages")]
@@ -313,6 +316,7 @@ fn run() -> Result<(), String> {
         Command::Canvas(args) => canvas::handle(*args),
         Command::Image(args) => image::handle(*args),
         Command::GameAssets(args) => game_assets::handle(*args),
+        Command::Motion(args) => motion::handle(*args),
         Command::Help(args) => help_topics::print_capy_topic(args.topic.as_deref()),
         Command::Media(args) => media::handle(*args),
         Command::Poster(args) => poster::handle(*args),

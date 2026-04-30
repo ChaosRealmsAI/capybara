@@ -25,6 +25,17 @@ fi
 "$CAPY_BIN" agent doctor >/dev/null
 "$CAPY_BIN" cutout --help >/dev/null
 "$CAPY_BIN" cutout doctor >/dev/null
+"$CAPY_BIN" motion --help >/dev/null
+"$CAPY_BIN" motion help agent >/dev/null
+motion_dry_run="$("$CAPY_BIN" motion cutout \
+  --input tmp/nonexistent-motion-source.mp4 \
+  --out target/capy-motion-dry-run \
+  --dry-run)"
+if ! jq -e '.schema == "capy.motion.cutout-plan.v1" and (.files | index("manifest.json")) != null' \
+  <<<"$motion_dry_run" >/dev/null; then
+  echo "project check failed: motion cutout dry-run must describe the motion package contract" >&2
+  exit 1
+fi
 "$CAPY_BIN" timeline doctor \
   --recorder tmp/nonexistent-capy-recorder >/dev/null
 "$CAPY_BIN" image providers >/dev/null
