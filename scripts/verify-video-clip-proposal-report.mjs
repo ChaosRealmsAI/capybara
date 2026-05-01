@@ -7,6 +7,9 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
   const commandRows = logs.map(item => `<tr><td><code>${escapeHtml(item.command)}</code></td><td>${item.ok ? "通过" : "失败"}</td><td>${item.evidence ? `<a href="assets/${escapeHtml(item.evidence)}">${escapeHtml(item.evidence)}</a>` : ""}</td></tr>`).join("\n");
   const changeRows = summary.proposal.changes.map(change => `<tr><td>${escapeHtml(change.action_label_zh)}</td><td>${position(change.before_sequence)}</td><td>${position(change.after_sequence)}</td><td>${escapeHtml(change.scene)}</td><td>${escapeHtml(change.reason_summary)}</td><td>${escapeHtml(change.apply_status)}</td></tr>`).join("\n");
   const proposalRows = (summary.proposal_history?.entries || [summary.first_proposal, summary.stale_candidate_proposal, summary.conflict_decision, summary.proposal]).filter(Boolean).map(proposal => `<tr><td>r${escapeHtml(proposal.revision || 0)}</td><td>${escapeHtml(proposal.status || "")}</td><td>${escapeHtml(String(proposal.generated_at || ""))}</td><td><code>${escapeHtml(proposal.base_queue_hash || "")}</code></td><td><code>${escapeHtml(proposal.current_queue_hash || proposal.conflict?.current_queue_hash || "")}</code></td><td>${escapeHtml(proposal.decision?.decision || "未决策")}</td><td>${escapeHtml(proposal.conflict?.message_zh || "")}</td></tr>`).join("\n");
+  const contextSummary = summary.video_project_context_package || {};
+  const contextStatusRows = Object.entries(contextSummary.status_counts || {}).map(([status, count]) => `<tr><td>${escapeHtml(status)}</td><td>${escapeHtml(count)}</td></tr>`).join("\n");
+  const contextConflictRows = (contextSummary.conflicts || []).map(conflict => `<tr><td>r${escapeHtml(conflict.revision)}</td><td>${escapeHtml(conflict.conflict_type)}</td><td>${escapeHtml(conflict.message_zh)}</td><td><code>${escapeHtml(conflict.base_queue_hash)}</code></td><td><code>${escapeHtml(conflict.current_queue_hash)}</code></td></tr>`).join("\n");
   const captureRows = (summary.capture_verdicts || []).map(verdict => {
     const statusClass = verdict.capture.blocking ? "danger" : verdict.capture.status === "captured" ? "ok" : "warn";
     const attempts = (verdict.capture.attempts || []).map(attempt => `${escapeHtml(attempt.method)}:${attempt.ok ? "成功" : escapeHtml(attempt.failure_kind)}`).join(" / ");
@@ -51,6 +54,7 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
       <dl>
         <dt>Proposal diff</dt><dd><a href="assets/video-clip-proposal-diff.json">video-clip-proposal-diff.json</a></dd>
         <dt>Proposal history</dt><dd><a href="assets/video-clip-proposal-history.json">video-clip-proposal-history.json</a> · ${escapeHtml(summary.proposal_history?.entries?.length || 0)} 条记录</dd>
+        <dt>Context package</dt><dd><a href="assets/video-project-context-package.json">video-project-context-package.json</a> · <code>${escapeHtml(contextSummary.package_id || "")}</code> · anchor artifact <code>${escapeHtml(contextSummary.anchor_artifact_id || "")}</code></dd>
         <dt>重开后 state</dt><dd><a href="assets/video-clip-proposal-history-reopened-state.json">video-clip-proposal-history-reopened-state.json</a> · 历史 ${escapeHtml(summary.reopened_history_count || 0)} 条 · 只读 ${summary.reopened_history_readonly ? "是" : "否"}</dd>
         <dt>Reject 后 queue</dt><dd><a href="assets/video-clip-proposal-queue-after-reject.json">video-clip-proposal-queue-after-reject.json</a></dd>
         <dt>冲突后 queue</dt><dd><a href="assets/video-clip-proposal-queue-after-conflict.json">video-clip-proposal-queue-after-conflict.json</a></dd>
@@ -60,6 +64,24 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
         <dt>真实截图状态</dt><dd><span class="badge ${captureBadgeClass}">${capturedCount} 个真实截图成功 · ${fallbackCount} 个 fallback</span> · fallback 不是截图成功。</dd>
         <dt>红线</dt><dd>proposal 生成不改 queue；无 provider 调用；仍是线性 clip queue。</dd>
       </dl>
+    </section>
+    <section>
+      <h2>视频项目 Context Package</h2>
+      <p>通过现有 <code>capy context build</code> 生成，不新增 CLI 入口。包内把 source media、当前 queue、accepted/rejected/conflicted proposal history、设计约束和安全说明一次性给下一轮 AI；生成过程不写 queue。</p>
+      <dl>
+        <dt>完整 JSON</dt><dd><a href="assets/video-project-context-package.json">video-project-context-package.json</a></dd>
+        <dt>稳定 package id</dt><dd><code>${escapeHtml(contextSummary.package_id || "")}</code></dd>
+        <dt>稳定 artifact id</dt><dd><code>${escapeHtml(contextSummary.anchor_artifact_id || "")}</code></dd>
+        <dt>素材 / queue / history</dt><dd>${escapeHtml(contextSummary.source_media_count || 0)} 个素材 · ${escapeHtml(contextSummary.queue_item_count || 0)} 个 queue item · ${escapeHtml(contextSummary.proposal_history_count || 0)} 条历史</dd>
+        <dt>current_queue_hash</dt><dd><code>${escapeHtml(contextSummary.current_queue_hash || "")}</code></dd>
+        <dt>设计约束</dt><dd><code>${escapeHtml(contextSummary.design_language_ref || "")}</code> · ${escapeHtml(contextSummary.design_asset_count || 0)} 个资产</dd>
+        <dt>安全上下文</dt><dd>safe_for_next_ai_input=${contextSummary.safe_for_next_ai_input ? "true" : "false"} · no_queue_write=${contextSummary.no_queue_write ? "true" : "false"} · proposal_history_read_only=${contextSummary.proposal_history_read_only ? "true" : "false"}</dd>
+        <dt>下一轮说明</dt><dd>${escapeHtml(contextSummary.safety_note_zh || "")}</dd>
+      </dl>
+      <div class="grid">
+        <table><thead><tr><th>历史状态</th><th>数量</th></tr></thead><tbody>${contextStatusRows}</tbody></table>
+        <table><thead><tr><th>Revision</th><th>冲突类型</th><th>原因</th><th>base_queue_hash</th><th>current_queue_hash</th></tr></thead><tbody>${contextConflictRows}</tbody></table>
+      </div>
     </section>
     <section><h2>Proposal 持久历史</h2><table><thead><tr><th>Revision</th><th>状态</th><th>生成时间(ms)</th><th>base_queue_hash</th><th>current_queue_hash</th><th>决策</th><th>冲突说明</th></tr></thead><tbody>${proposalRows}</tbody></table></section>
     <section>
@@ -93,6 +115,7 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
         <dt>重开历史</dt><dd><a href="assets/video-clip-proposal-history-reopened-state.json">video-clip-proposal-history-reopened-state.json</a></dd>
         <dt>持久历史</dt><dd><a href="assets/video-clip-proposal-history.json">video-clip-proposal-history.json</a></dd>
         <dt>汇总</dt><dd><a href="assets/video-clip-proposal-summary.json">video-clip-proposal-summary.json</a></dd>
+        <dt>Context package</dt><dd><a href="assets/video-project-context-package.json">video-project-context-package.json</a></dd>
       </dl>
     </section>
     <section><h2>命令证据</h2><table><thead><tr><th>命令</th><th>结果</th><th>证据</th></tr></thead><tbody>${commandRows}</tbody></table></section>
@@ -117,6 +140,7 @@ export function writeProposalManifest({ evidenceDir, summary }) {
     artifacts: [
       { path: `spec/versions/${version}/evidence/index.html`, kind: "html-report", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-diff.json`, kind: "project-manifest", status: "verified" },
+      { path: `spec/versions/${version}/evidence/assets/video-project-context-package.json`, kind: "context-package", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-history.json`, kind: "project-manifest", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-history-reopened-state.json`, kind: "state-json", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-conflicted-desktop.png`, kind: "desktop-visual", status: "verified" },
@@ -149,6 +173,9 @@ export async function verifyProposalEvidencePage({ evidenceDir, assetsDir }) {
   assert(state.bodyText.includes("真实截图状态"), "capture verdict section missing");
   assert(state.bodyText.includes("fallback 不是截图成功"), "fallback warning missing");
   assert(state.bodyText.includes("Proposal 持久历史"), "proposal history section missing");
+  assert(state.bodyText.includes("视频项目 Context Package"), "video project context section missing");
+  assert(state.bodyText.includes("safe_for_next_ai_input=true"), "context safety status missing");
+  assert(state.bodyText.includes("video-project-context-package.json"), "context package link missing");
   assert(state.bodyText.includes("重开：持久 history 恢复"), "reopen history visual missing");
   assert(state.bodyText.includes("conflicted"), "conflict status missing");
   assert(state.bodyText.includes("Proposal Diff 明细"), "proposal diff section missing");

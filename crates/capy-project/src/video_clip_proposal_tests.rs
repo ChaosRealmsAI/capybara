@@ -1,5 +1,5 @@
 use crate::{
-    ArtifactKind, ArtifactRefV1, ProjectPackage, ProjectVideoClipQueueItemV1,
+    ArtifactKind, ArtifactRefV1, ContextBuildRequest, ProjectPackage, ProjectVideoClipQueueItemV1,
     VIDEO_CLIP_PROPOSAL_HISTORY_SCHEMA_VERSION, VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION,
 };
 use serde_json::json;
@@ -297,6 +297,85 @@ fn video_clip_proposal_history_persists_across_reopen() -> Result<(), Box<dyn Er
     let third = reopened.generate_video_clip_proposal()?;
     assert_eq!(third.revision, 3);
     assert_eq!(reopened.video_clip_proposal_history()?.entries.len(), 3);
+    Ok(())
+}
+
+#[test]
+fn context_build_includes_safe_video_project_package() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_project()?;
+    let package = &fixture.package;
+    fs::create_dir_all(package.root().join("design"))?;
+    fs::write(
+        package.root().join("design/video-rules.md"),
+        "Keep edits linear.",
+    )?;
+    package.add_design_asset(
+        "markdown".to_string(),
+        Some("brand-rule".to_string()),
+        "design/video-rules.md",
+        "Video rules".to_string(),
+        Some("Project-level video constraints".to_string()),
+    )?;
+    package.analyze_video_clip_semantics()?;
+    package.record_video_clip_feedback("queue-a", "这段不适合开场")?;
+
+    let first = package.generate_video_clip_proposal()?;
+    package.decide_video_clip_proposal_for_revision(
+        &first.proposal_id,
+        Some(first.revision),
+        "reject",
+        "PM rejected first proposal",
+    )?;
+    let stale = package.generate_video_clip_proposal()?;
+    let current = package.video_clip_queue()?;
+    package.write_video_clip_queue(vec![current.items[0].clone()])?;
+    package.decide_video_clip_proposal_for_revision(
+        &stale.proposal_id,
+        Some(stale.revision),
+        "accept",
+        "PM clicked stale proposal",
+    )?;
+    let valid = package.generate_video_clip_proposal()?;
+    package.decide_video_clip_proposal_for_revision(
+        &valid.proposal_id,
+        Some(valid.revision),
+        "accept",
+        "PM accepts current proposal",
+    )?;
+    let queue_before_manifest = package.video_clip_queue()?;
+    let queue_before = queue_ids(&queue_before_manifest);
+
+    let context = package.build_context(ContextBuildRequest {
+        artifact_id: "art_a".to_string(),
+        selector: None,
+        canvas_node: None,
+        json_pointer: None,
+    })?;
+    let video_context = context
+        .video_project_context
+        .ok_or("context package should include video project context")?;
+
+    assert!(video_context.package_id.starts_with("vpctx-fnv1a64-"));
+    assert_eq!(video_context.anchor_artifact.artifact_id, "art_a");
+    assert_eq!(video_context.source_media.len(), 2);
+    assert_eq!(video_context.proposal_history.entry_count, 3);
+    assert_eq!(video_context.proposal_history.status_counts["rejected"], 1);
+    assert_eq!(
+        video_context.proposal_history.status_counts["conflicted"],
+        1
+    );
+    assert_eq!(video_context.proposal_history.status_counts["accepted"], 1);
+    assert_eq!(video_context.proposal_history.conflicts.len(), 1);
+    assert!(
+        video_context
+            .clip_queue
+            .current_queue_hash
+            .starts_with("queue-fnv1a64-")
+    );
+    assert!(video_context.safety.safe_for_next_ai_input);
+    assert!(video_context.safety.no_queue_write);
+    assert_eq!(video_context.design_constraints.assets.len(), 1);
+    assert_eq!(queue_ids(&package.video_clip_queue()?), queue_before);
     Ok(())
 }
 

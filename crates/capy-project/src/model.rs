@@ -231,6 +231,8 @@ pub struct ContextPackageV1 {
     pub design_language_summary: DesignLanguageSummaryV1,
     #[serde(default)]
     pub design_language_refs: Vec<DesignLanguageAssetV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_project_context: Option<crate::video_project_context::VideoProjectContextPackageV1>,
     #[serde(default)]
     pub verification_requirements: Vec<String>,
     pub generated_at: u64,

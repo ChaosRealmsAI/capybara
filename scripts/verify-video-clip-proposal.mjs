@@ -7,6 +7,7 @@ import process from "node:process";
 import { initialQueue } from "./verify-ai-clip-suggestion-fixtures.mjs";
 import { proposalAcceptCurrentEval, proposalAcceptEval, proposalGenerateEval, proposalHistoryReopenEval, proposalLoadEval, proposalRejectEval, proposalSaveFeedbackEval } from "./verify-video-clip-proposal-evals.mjs";
 import { verifyProposalEvidencePage, writeProposalEvidencePage, writeProposalManifest } from "./verify-video-clip-proposal-report.mjs";
+import { buildVideoProjectContextEvidence, summarizeVideoProjectContext } from "./verify-video-project-context-lib.mjs";
 import {
   assertQueueIdsChangedTo,
   assertQueueIdsEqual,
@@ -30,7 +31,7 @@ Required params:
 State effects:
   Writes evidence under <version>/evidence/assets/.
   Creates a disposable project at <version>/evidence/assets/video-clip-proposal-project.
-  Imports two local WebM videos, seeds .capy/video-clip-queue.json, writes semantics and feedback through Project Core, launches an isolated debug shell id, generates proposal diff, rejects it, regenerates a stale candidate, changes the queue externally, proves stale accept returns conflicted without writing queue, regenerates a valid proposal, accepts it, closes and reopens the same project to prove persisted proposal history restores, and opens <version>/evidence/index.html.
+  Imports two local WebM videos, seeds .capy/video-clip-queue.json, writes semantics and feedback through Project Core, launches an isolated debug shell id, generates proposal diff, rejects it, regenerates a stale candidate, changes the queue externally, proves stale accept returns conflicted without writing queue, regenerates a valid proposal, accepts it, runs context build for the video project package, closes and reopens the same project to prove persisted proposal history restores, and opens <version>/evidence/index.html.
 
 Evidence outputs:
   video-clip-proposal-diff.json
@@ -41,6 +42,7 @@ Evidence outputs:
   video-clip-proposal-queue-after-conflict.json
   video-clip-proposal-queue-after-accept.json
   video-clip-proposal-summary.json
+  video-project-context-package.json
   video-clip-proposal-history.json
   video-clip-proposal-history-reopened-state.json
   video-clip-proposal-*-state.json
@@ -85,6 +87,7 @@ try {
   generateVideo(path.join(mediaDir, "camera-a-wide.webm"), "testsrc2=size=640x360:rate=30", 4, "video-clip-proposal-source-a-generate.log");
   generateVideo(path.join(mediaDir, "camera-b-close.webm"), "smptebars=size=480x270:rate=24", 5, "video-clip-proposal-source-b-generate.log");
   capyJson(["project", "init", "--project", projectDir, "--name", `${versionId} Video Clip Proposal Project`], "video-clip-proposal-project-init.json");
+  mkdirSync(path.join(projectDir, "design"), { recursive: true }); writeFileSync(path.join(projectDir, "design/video-context-rules.md"), "Keep video edits linear. Preserve project queue history and regenerate proposals after conflicts.\n"); capyJson(["project", "add-design", "--project", projectDir, "--path", "design/video-context-rules.md", "--kind", "markdown", "--role", "brand-rule", "--title", "Video context rules", "--description", "Project-level constraints for video context packages"], "video-project-context-design-add.json");
   rmSync(path.join(projectDir, ".capy", "evidence"), { recursive: true, force: true });
   const importA = capyJson(["project", "import-video", "--project", projectDir, "--path", "media/camera-a-wide.webm", "--title", "Camera A wide"], "video-clip-proposal-import-a.json");
   const importB = capyJson(["project", "import-video", "--project", projectDir, "--path", "media/camera-b-close.webm", "--title", "Camera B close"], "video-clip-proposal-import-b.json");
@@ -150,14 +153,14 @@ try {
   capyJson(["project", "clip-queue", "proposal-current", "--project", projectDir], "video-clip-proposal-current-accepted.json");
   const proposalHistory = capyJson(["project", "clip-queue", "proposal-history", "--project", projectDir], "video-clip-proposal-history.json");
   assertHistory(proposalHistory, ["rejected", "conflicted", "accepted"], "final history");
-
+  const contextPackage = buildVideoProjectContextEvidence({ capyJson, projectDir, artifactId: importA.artifact.id, contextOut: path.join(assetsDir, "video-project-context-package.json") });
   shutdown();
   openInstanceIds.length = 0;
   openShell("reopen", "video-clip-proposal-open-reopen.log");
   const reopenedState = capyJson(["devtools", "--eval", proposalHistoryReopenEval(projectDir, uiComposition)], "video-clip-proposal-history-reopened-state.json", capyEnv());
   assertReopenedHistory(reopenedState, proposalHistory);
 
-  const summary = writeSummary({ loadedState, savedState, proposedState, rejectedState, staleCandidateState, conflictedState, acceptedState, reopenedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterExternalChange, queueAfterConflict, queueAfterAccept, proposalHistory });
+  const summary = writeSummary({ loadedState, savedState, proposedState, rejectedState, staleCandidateState, conflictedState, acceptedState, reopenedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterExternalChange, queueAfterConflict, queueAfterAccept, proposalHistory, contextPackage });
   writeProposalEvidencePage({ evidenceDir, logs, summary });
   writeProposalManifest({ evidenceDir, summary });
   await verifyProposalEvidencePage({ evidenceDir, assetsDir });
@@ -173,12 +176,10 @@ try {
   console.error(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error), assets: assetsDir }, null, 2));
   process.exit(1);
 }
-
 function generateVideo(out, source, seconds, evidenceName) {
   command("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", source, "-t", String(seconds), "-c:v", "libvpx", "-b:v", "1200k", "-pix_fmt", "yuv420p", out], evidenceName);
   assert(existsSync(out), `source video missing: ${out}`);
 }
-
 function openShell(phase, evidenceName) {
   const instanceId = `${versionId.replace(/[^A-Za-z0-9]+/g, "-")}-video-clip-proposal-${phase}`;
   currentSocket = `/tmp/capybara-${instanceId}-${process.getuid ? process.getuid() : "user"}.sock`;
@@ -191,7 +192,6 @@ function openShell(phase, evidenceName) {
   assert(Number(ps.count || 0) > 0, `${phase} shell did not open a window`);
   shellBundleReady = true;
 }
-
 function command(cmd, args, evidenceName, options = {}) {
   const started = Date.now();
   const stdout = execFileSync(cmd, args, { cwd: root, env: options.env || process.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 128 * 1024 * 1024, timeout: options.timeout || 120_000 });
@@ -199,7 +199,6 @@ function command(cmd, args, evidenceName, options = {}) {
   logs.push({ command: [cmd, ...args].join(" "), evidence: evidenceName || null, elapsed_ms: Date.now() - started, ok: true });
   return stdout;
 }
-
 function launchShell(args, evidenceName, env) {
   try { command("scripts/open-debug-shell.sh", args, evidenceName, { env }); } catch (error) {
     const message = `${String(error?.stdout || "")}${String(error?.stderr || "")}\n${error instanceof Error ? error.message : String(error)}\n`;
@@ -325,7 +324,7 @@ function writeStageVisual(value, stateEvidenceName) {
   if (verdict.capture.blocking) throw new Error(`desktop capture blocked ${value.stage}: ${verdict.capture.status}`);
 }
 
-function writeSummary({ loadedState, savedState, proposedState, rejectedState, staleCandidateState, conflictedState, acceptedState, reopenedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterExternalChange, queueAfterConflict, queueAfterAccept, proposalHistory }) {
+function writeSummary({ loadedState, savedState, proposedState, rejectedState, staleCandidateState, conflictedState, acceptedState, reopenedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterExternalChange, queueAfterConflict, queueAfterAccept, proposalHistory, contextPackage }) {
   const summary = {
     version: versionId,
     verdict: stageCaptureVerdicts.some(item => item.capture.blocking) ? "failed" : "passed",
@@ -339,6 +338,7 @@ function writeSummary({ loadedState, savedState, proposedState, rejectedState, s
     conflict_attempt_decision: conflictedState.proposal?.decision || null,
     accept_decision: acceptedState.proposal?.decision || null,
     proposal_history: proposalHistory,
+    video_project_context_package: summarizeVideoProjectContext(contextPackage),
     reopened_history_count: reopenedState.proposalHistory?.length || 0,
     reopened_history_statuses: (reopenedState.proposalHistory || []).map(item => item.status),
     reopened_history_readonly: reopenedState.historyDecisionButtonCount === 0,

@@ -221,6 +221,13 @@ impl ProjectPackage {
         let design_language_summary = self.design_language_summary_for(&design_language);
         let design_refs = selected_design_assets(&design_language, &artifact.design_language_refs);
         let selection_context = self.build_selection_context(&artifact, &request)?;
+        let video_project_context = self.build_video_project_context(
+            &manifest,
+            &artifact,
+            &registry.artifacts,
+            &design_language_summary,
+            &design_refs,
+        )?;
         Ok(ContextPackageV1 {
             schema_version: CONTEXT_SCHEMA_VERSION.to_string(),
             context_id: new_id("ctx"),
@@ -235,6 +242,7 @@ impl ProjectPackage {
             design_language_ref: design_language_summary.design_language_ref.clone(),
             design_language_summary,
             design_language_refs: design_refs,
+            video_project_context,
             verification_requirements: vec![
                 "Run a visible preview check after patching.".to_string(),
                 "Save screenshot/state evidence for PM review.".to_string(),

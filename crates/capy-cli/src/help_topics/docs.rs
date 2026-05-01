@@ -70,8 +70,8 @@ Optional parameters: `--selector <css>` records the selected DOM target; `--json
 Recommended commands:
 1. `target/debug/capy context build --project <dir> --artifact <html_art_id> --selector '[data-capy-section="hero-title"]' --out target/context-html.json`
 2. `target/debug/capy context build --project <dir> --artifact <json_art_id> --json-pointer /pages/0/title --out target/context-json.json`
-Contract: HTML `data-capy-section` selectors and JSON Pointer values produce `selection_context` inside `capy.context.v1`. Other artifact kinds fall back to whole-artifact context with `fallback_reason`.
-Do not: call a model from this command; paste screenshots without the JSON packet; invent artifact ids.
+Contract: HTML `data-capy-section` selectors and JSON Pointer values produce `selection_context` inside `capy.context.v1`. When a project contains video source media, clip queue, or proposal history, the same packet includes read-only `video_project_context` with source media, current queue hash/items, accepted/rejected/conflicted history, conflict hashes, design constraints, and safety notes. Other artifact kinds fall back to whole-artifact context with `fallback_reason`.
+Do not: call a model from this command; paste screenshots without the JSON packet; invent artifact ids; use context build to accept, rewrite, or clear queue/proposal history.
 Next step: create a `capy.patch.v1` document and run `capy patch apply --dry-run`.
 "#;
 

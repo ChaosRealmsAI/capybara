@@ -25,6 +25,7 @@ mod video_clip_suggestion;
 #[cfg(test)]
 mod video_clip_suggestion_tests;
 mod video_import;
+pub mod video_project_context;
 mod workbench;
 
 pub use ai::{parse_project_ai_response, project_ai_output_schema};
@@ -69,3 +70,6 @@ pub use video_clip_suggestion::{
     VIDEO_CLIP_SUGGESTION_SCHEMA_VERSION,
 };
 pub use video_import::{VIDEO_IMPORT_SCHEMA_VERSION, VideoImportMetadataV1, VideoImportResultV1};
+pub use video_project_context::{
+    VIDEO_PROJECT_CONTEXT_SCHEMA_VERSION, VideoProjectContextPackageV1,
+};

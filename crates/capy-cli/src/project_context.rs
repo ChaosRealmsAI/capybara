@@ -10,7 +10,8 @@ use clap::{Args, Subcommand};
     after_help = "AI quick start:
   Use `capy context build --project <dir> --artifact <id>` to produce a capy.context.v1 JSON packet.
   Required params: build needs --project and --artifact; --selector, --json-pointer, or --canvas-node add precise selection context; --out writes the packet to disk.
-  Pitfalls: context building does not call models; it packages project/design/artifact/selection state for a later AI run.
+  Video projects: the same build command adds read-only video_project_context when source media, clip queue, or proposal history exists.
+  Pitfalls: context building does not call models, mutate queue, or apply proposal history; it packages project/design/artifact/selection state for a later AI run.
   Help topic: `capy help context`."
 )]
 pub struct ContextArgs {
