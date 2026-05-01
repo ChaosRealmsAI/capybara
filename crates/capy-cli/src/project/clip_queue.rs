@@ -84,7 +84,7 @@ enum ProjectClipQueueCommand {
   Use when: PM needs to preview how feedback-aware suggestions would change the clip queue before accepting.
   Required params: --project <dir>.
   Output: capy.project-video-clip-proposal.v1 JSON written to .capy/video-clip-proposal.json. It includes before_queue, after_queue, changes[], feedback_reason, semantic_reason, applicable, and apply_status.
-  State effects: writes only the proposal manifest and touches project metadata; it does not modify .capy/video-clip-queue.json.
+  State effects: writes only the proposal manifest and touches project metadata; it does not modify .capy/video-clip-queue.json. The manifest includes revision, generated_at, base_queue_hash, and current_queue_hash.
   Do not: treat proposal generation as adoption, call providers, or add NLE features.
   Verify: run project clip-queue inspect before and after proposal and confirm queue ids are unchanged; then use proposal-decision accept|reject."
     )]
@@ -98,7 +98,7 @@ enum ProjectClipQueueCommand {
   Output: capy.project-video-clip-proposal.v1 JSON from .capy/video-clip-proposal.json.
   State effects: read-only.
   Do not: assume this mutates queue; it only reports the latest proposal status.
-  Verify: changes[] should include before_sequence, after_sequence, reason_summary, applicable, and apply_status."
+  Verify: changes[] should include before_sequence, after_sequence, reason_summary, applicable, and apply_status; top-level revision and base_queue_hash identify the proposal basis."
     )]
     ProposalCurrent(ProjectClipQueuePathArgs),
     #[command(
@@ -106,11 +106,11 @@ enum ProjectClipQueueCommand {
         about = "Accept or reject a proposal diff",
         after_help = "AI quick start:
   Use when: PM has reviewed a proposal diff and explicitly chooses whether to apply it.
-  Required params: --project <dir>, --proposal <proposal-id>, --decision accept|reject. Optional --reason records the PM decision reason.
+  Required params: --project <dir>, --proposal <proposal-id>, --decision accept|reject. Pass --revision <n> when acting from UI/state to guard against stale proposal handles. Optional --reason records the PM decision reason.
   Output: capy.project-video-clip-proposal-decision-result.v1 JSON with proposal and queue_manifest when accepted.
-  State effects: reject records decision and leaves .capy/video-clip-queue.json unchanged; accept writes after_queue to .capy/video-clip-queue.json through Project Core.
-  Do not: accept without a PM decision, auto-apply on proposal generation, call providers, or edit queue outside Project Core.
-  Verify: inspect queue before/reject/accept and confirm reject preserves ids while accept matches proposal.after_queue."
+  State effects: reject records decision and leaves .capy/video-clip-queue.json unchanged; accept writes after_queue only when current queue hash still equals proposal.base_queue_hash. If the queue changed, status becomes conflicted and queue is not written.
+  Do not: accept without a PM decision, auto-apply on proposal generation, call providers, edit queue outside Project Core, or ignore a conflicted status.
+  Verify: inspect queue before/reject/conflict/accept and confirm reject plus conflicted accept preserve ids while valid accept matches proposal.after_queue."
     )]
     ProposalDecision(ProjectClipQueueDecisionArgs),
 }
@@ -145,6 +145,8 @@ struct ProjectClipQueueDecisionArgs {
     project: PathBuf,
     #[arg(long)]
     proposal: String,
+    #[arg(long)]
+    revision: Option<u64>,
     #[arg(long)]
     decision: String,
     #[arg(long, default_value = "")]
@@ -215,7 +217,12 @@ pub(crate) fn handle_clip_queue(args: ProjectClipQueueArgs) -> Result<Value, ser
             let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
             serde_json::to_value(
                 package
-                    .decide_video_clip_proposal(&args.proposal, &args.decision, &args.reason)
+                    .decide_video_clip_proposal_for_revision(
+                        &args.proposal,
+                        args.revision,
+                        &args.decision,
+                        &args.reason,
+                    )
                     .map_err(string_json_error)?,
             )
         }

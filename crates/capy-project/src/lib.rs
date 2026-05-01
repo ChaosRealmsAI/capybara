@@ -17,6 +17,7 @@ mod video_clip_feedback;
 mod video_clip_proposal;
 #[cfg(test)]
 mod video_clip_proposal_tests;
+mod video_clip_proposal_types;
 mod video_clip_queue;
 mod video_clip_semantics;
 mod video_clip_suggestion;
@@ -48,10 +49,11 @@ pub use video_clip_feedback::{
     ProjectVideoClipFeedbackItemV1, ProjectVideoClipFeedbackManifestV1,
     VIDEO_CLIP_FEEDBACK_SCHEMA_VERSION,
 };
-pub use video_clip_proposal::{
-    ProjectVideoClipProposalChangeV1, ProjectVideoClipProposalDecisionResultV1,
-    ProjectVideoClipProposalDecisionV1, ProjectVideoClipProposalV1,
-    VIDEO_CLIP_PROPOSAL_DECISION_SCHEMA_VERSION, VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION,
+pub use video_clip_proposal_types::{
+    ProjectVideoClipProposalChangeV1, ProjectVideoClipProposalConflictV1,
+    ProjectVideoClipProposalDecisionResultV1, ProjectVideoClipProposalDecisionV1,
+    ProjectVideoClipProposalV1, VIDEO_CLIP_PROPOSAL_DECISION_SCHEMA_VERSION,
+    VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION,
 };
 pub use video_clip_queue::{
     ProjectVideoClipQueueItemV1, ProjectVideoClipQueueManifestV1, VIDEO_CLIP_QUEUE_SCHEMA_VERSION,

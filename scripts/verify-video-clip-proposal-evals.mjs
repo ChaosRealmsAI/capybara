@@ -64,6 +64,16 @@ export function proposalAcceptEval() {
   })`;
 }
 
+export function proposalAcceptCurrentEval(expectedStatus = "accepted") {
+  return `new Promise(async resolve => {
+    ${proposalStateSource()}
+    const wait = ms => new Promise(done => setTimeout(done, ms));
+    document.querySelector("[data-video-proposal-decision='accept']")?.click();
+    await waitForProposal(wait, ${JSON.stringify(expectedStatus)});
+    resolve(await proposalState(${JSON.stringify(expectedStatus === "conflicted" ? "proposal-conflicted" : "proposal-accepted")}));
+  })`;
+}
+
 function proposalStateSource() {
   return `${semanticStateSource()}
   async function waitForFeedback(wait, text) {
@@ -97,7 +107,7 @@ function proposalStateSource() {
     for (let i = 0; i < 180; i += 1) {
       const state = window.capyWorkbench.stateSnapshot();
       const queue = state.video.clipQueue || [];
-      if (queue.length >= count && queue[0]?.id === "queue-initial-camera-b" && state.video.clipQueuePersistStatus === "saved") return;
+      if (queue.length >= count && state.video.clipQueuePersistStatus === "saved") return;
       await wait(100);
     }
   }
@@ -105,10 +115,12 @@ function proposalStateSource() {
     const base = await semanticState(stage);
     const state = window.capyWorkbench?.stateSnapshot ? window.capyWorkbench.stateSnapshot() : {};
     const proposal = state.video?.clipSuggestionProposal || null;
+    const proposalHistory = state.video?.clipSuggestionProposalHistory || [];
     const proposalEl = document.querySelector(".video-proposal-diff")?.getBoundingClientRect();
     return {
       ...base,
       proposal,
+      proposalHistory,
       proposalStatus: state.video?.clipSuggestionProposalStatus || "",
       proposalError: state.video?.clipSuggestionProposalError || null,
       domProposalText: document.querySelector(".video-proposal-diff")?.innerText || "",

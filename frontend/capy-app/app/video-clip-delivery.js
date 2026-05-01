@@ -53,6 +53,7 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.clipProposal = null;
     state.video.clipSuggestionProposal = null;
     state.video.clipSuggestionProposalStatus = "idle";
+    state.video.clipSuggestionProposalHistory = [];
     state.video.proposalStatus = "idle";
     renderVideoEditor();
   }

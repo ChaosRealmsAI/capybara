@@ -155,6 +155,7 @@ pub(crate) fn proposal_decide(params: &Value) -> Result<Value, String> {
         .or_else(|_| required_string(params, "proposal_id"))
         .or_else(|_| required_string(params, "proposalId"))?;
     let decision = required_string(params, "decision")?;
+    let revision = optional_u64(params, "revision");
     let reason = params
         .get("reason")
         .and_then(Value::as_str)
@@ -162,7 +163,7 @@ pub(crate) fn proposal_decide(params: &Value) -> Result<Value, String> {
         .to_string();
     serde_json::to_value(
         package
-            .decide_video_clip_proposal(&proposal, &decision, &reason)
+            .decide_video_clip_proposal_for_revision(&proposal, revision, &decision, &reason)
             .map_err(|err| err.to_string())?,
     )
     .map_err(|err| err.to_string())
@@ -183,4 +184,12 @@ fn required_string(params: &Value, key: &str) -> Result<String, String> {
         .and_then(Value::as_str)
         .map(ToString::to_string)
         .ok_or_else(|| format!("missing required parameter: {key}"))
+}
+
+fn optional_u64(params: &Value, key: &str) -> Option<u64> {
+    params.get(key).and_then(|value| {
+        value
+            .as_u64()
+            .or_else(|| value.as_str().and_then(|raw| raw.parse::<u64>().ok()))
+    })
 }

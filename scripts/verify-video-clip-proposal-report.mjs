@@ -6,6 +6,7 @@ import path from "node:path";
 export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
   const commandRows = logs.map(item => `<tr><td><code>${escapeHtml(item.command)}</code></td><td>${item.ok ? "通过" : "失败"}</td><td>${item.evidence ? `<a href="assets/${escapeHtml(item.evidence)}">${escapeHtml(item.evidence)}</a>` : ""}</td></tr>`).join("\n");
   const changeRows = summary.proposal.changes.map(change => `<tr><td>${escapeHtml(change.action_label_zh)}</td><td>${position(change.before_sequence)}</td><td>${position(change.after_sequence)}</td><td>${escapeHtml(change.scene)}</td><td>${escapeHtml(change.reason_summary)}</td><td>${escapeHtml(change.apply_status)}</td></tr>`).join("\n");
+  const proposalRows = [summary.first_proposal, summary.stale_candidate_proposal, summary.conflict_decision, summary.proposal].filter(Boolean).map(proposal => `<tr><td>r${escapeHtml(proposal.revision || 0)}</td><td>${escapeHtml(proposal.status || "")}</td><td>${escapeHtml(String(proposal.generated_at || ""))}</td><td><code>${escapeHtml(proposal.base_queue_hash || "")}</code></td><td><code>${escapeHtml(proposal.current_queue_hash || "")}</code></td><td>${escapeHtml(proposal.conflict?.message_zh || "")}</td></tr>`).join("\n");
   const captureRows = (summary.capture_verdicts || []).map(verdict => {
     const statusClass = verdict.capture.blocking ? "danger" : verdict.capture.status === "captured" ? "ok" : "warn";
     const attempts = (verdict.capture.attempts || []).map(attempt => `${escapeHtml(attempt.method)}:${attempt.ok ? "成功" : escapeHtml(attempt.failure_kind)}`).join(" / ");
@@ -41,21 +42,24 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
     <header>
       <div>
         <h1>${escapeHtml(summary.version)} 片段反馈生成修改提案</h1>
-        <p>已用真实 CEF DOM/state 完成反馈输入、proposal diff、拒绝不改 queue、重新生成并接受后更新 queue 的闭环验证。截图证据会单独标注真实 app-view capture 是否成功；fallback 不会被当作截图成功。</p>
+        <p>已用真实 CEF DOM/state 完成反馈输入、proposal revision/hash、拒绝不改 queue、外部改变 queue 后接受旧 proposal 被阻止、重新生成有效 proposal 后接受写入 queue 的闭环验证。截图证据会单独标注真实 app-view capture 是否成功；fallback 不会被当作截图成功。</p>
       </div>
-      <span class="badge">通过 · PM 明确决策后才写 queue</span>
+      <span class="badge">通过 · 旧 proposal 冲突不写 queue</span>
     </header>
     <section>
       <h2>验收结论</h2>
       <dl>
         <dt>Proposal diff</dt><dd><a href="assets/video-clip-proposal-diff.json">video-clip-proposal-diff.json</a></dd>
         <dt>Reject 后 queue</dt><dd><a href="assets/video-clip-proposal-queue-after-reject.json">video-clip-proposal-queue-after-reject.json</a></dd>
+        <dt>冲突后 queue</dt><dd><a href="assets/video-clip-proposal-queue-after-conflict.json">video-clip-proposal-queue-after-conflict.json</a></dd>
         <dt>Accept 后 queue</dt><dd><a href="assets/video-clip-proposal-queue-after-accept.json">video-clip-proposal-queue-after-accept.json</a></dd>
-        <dt>决策记录</dt><dd>先 rejected 保持原 queue，再 accepted 写入 after queue。</dd>
+        <dt>决策记录</dt><dd>先 rejected 保持原 queue；再把 queue 外部改成新 hash，旧 proposal accept 返回 conflicted 且不写 queue；最后重新生成有效 proposal 并 accepted 写入 after queue。</dd>
+        <dt>版本基准</dt><dd>最新 proposal r${escapeHtml(summary.proposal.revision || 0)} · base_queue_hash <code>${escapeHtml(summary.proposal.base_queue_hash || "")}</code>。冲突 proposal r${escapeHtml(summary.conflict_decision?.revision || 0)} 的 current_queue_hash 与 base 不一致。</dd>
         <dt>真实截图状态</dt><dd><span class="badge ${captureBadgeClass}">${capturedCount} 个真实截图成功 · ${fallbackCount} 个 fallback</span> · fallback 不是截图成功。</dd>
         <dt>红线</dt><dd>proposal 生成不改 queue；无 provider 调用；仍是线性 clip queue。</dd>
       </dl>
     </section>
+    <section><h2>Proposal 版本与冲突</h2><table><thead><tr><th>Revision</th><th>状态</th><th>生成时间(ms)</th><th>base_queue_hash</th><th>current_queue_hash</th><th>冲突说明</th></tr></thead><tbody>${proposalRows}</tbody></table></section>
     <section>
       <h2>真实截图状态</h2>
       <p>每个阶段都先尝试 CEF app-view capture / screenshot。若超时或失败，本页显示 state-derived fallback、原因和是否阻断；不会把 fallback 图伪装成真实截图成功。</p>
@@ -68,6 +72,7 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
         <figure><img src="assets/video-clip-proposal-feedback-saved-desktop.png" alt="反馈已保存"><figcaption>反馈：片段反馈绑定到 queue item</figcaption></figure>
         <figure><img src="assets/video-clip-proposal-generated-desktop.png" alt="proposal diff"><figcaption>提案：展示 before/after 和理由</figcaption></figure>
         <figure><img src="assets/video-clip-proposal-rejected-desktop.png" alt="拒绝提案"><figcaption>拒绝：记录 rejected，queue 不变</figcaption></figure>
+        <figure><img src="assets/video-clip-proposal-conflicted-desktop.png" alt="旧提案冲突"><figcaption>冲突：旧 proposal 被阻止，queue 不被覆盖</figcaption></figure>
         <figure><img src="assets/video-clip-proposal-accepted-desktop.png" alt="接受提案"><figcaption>接受：记录 accepted，queue 更新</figcaption></figure>
       </div>
     </section>
@@ -79,6 +84,8 @@ export function writeProposalEvidencePage({ evidenceDir, logs, summary }) {
         <dt>保存反馈</dt><dd><a href="assets/video-clip-proposal-feedback-saved-state.json">video-clip-proposal-feedback-saved-state.json</a></dd>
         <dt>生成提案</dt><dd><a href="assets/video-clip-proposal-generated-state.json">video-clip-proposal-generated-state.json</a></dd>
         <dt>拒绝提案</dt><dd><a href="assets/video-clip-proposal-rejected-state.json">video-clip-proposal-rejected-state.json</a></dd>
+        <dt>冲突候选</dt><dd><a href="assets/video-clip-proposal-stale-candidate-state.json">video-clip-proposal-stale-candidate-state.json</a></dd>
+        <dt>冲突提案</dt><dd><a href="assets/video-clip-proposal-conflicted-state.json">video-clip-proposal-conflicted-state.json</a></dd>
         <dt>接受提案</dt><dd><a href="assets/video-clip-proposal-accepted-state.json">video-clip-proposal-accepted-state.json</a></dd>
         <dt>汇总</dt><dd><a href="assets/video-clip-proposal-summary.json">video-clip-proposal-summary.json</a></dd>
       </dl>
@@ -99,12 +106,13 @@ export function writeProposalManifest({ evidenceDir, summary }) {
     version,
     status: captureBlocking ? "blocked" : "verified",
     generated_at: new Date().toISOString(),
-    summary: "片段反馈生成 proposal diff、拒绝保持 queue、接受更新 queue 已通过真实 CEF DOM/state 验证，并记录 app-view capture verdict。",
+    summary: "片段反馈生成 proposal diff、revision/hash、过期 proposal 冲突阻止写 queue、重新生成并接受有效 proposal 已通过真实 CEF DOM/state 验证，并记录 app-view capture verdict。",
     verdict: { status: captureBlocking ? "failed" : "passed", blockers: captureBlocking ? ["capture_blocked"] : [], warnings: captureWarnings },
     runs: [{ id: "video-clip-proposal-loop", command: `scripts/verify-video-clip-proposal.mjs spec/versions/${version}`, status: "passed", evidence: `spec/versions/${version}/evidence/assets/video-clip-proposal-summary.json` }],
     artifacts: [
       { path: `spec/versions/${version}/evidence/index.html`, kind: "html-report", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-diff.json`, kind: "project-manifest", status: "verified" },
+      { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-conflicted-desktop.png`, kind: "desktop-visual", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-accepted-desktop.png`, kind: "desktop-visual", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/video-clip-proposal-accepted-capture-verdict.json`, kind: "capture-verdict", status: "verified" },
       { path: `spec/versions/${version}/evidence/assets/evidence-page-browser.png`, kind: "browser-screenshot", status: "verified" }
@@ -132,9 +140,11 @@ export async function verifyProposalEvidencePage({ evidenceDir, assetsDir }) {
   assert(state.title.includes(version), "evidence page title missing version");
   assert(state.bodyText.includes("真实截图状态"), "capture verdict section missing");
   assert(state.bodyText.includes("fallback 不是截图成功"), "fallback warning missing");
+  assert(state.bodyText.includes("Proposal 版本与冲突"), "proposal revision/conflict section missing");
+  assert(state.bodyText.includes("conflicted"), "conflict status missing");
   assert(state.bodyText.includes("Proposal Diff 明细"), "proposal diff section missing");
   assert(state.bodyText.includes("接受：记录 accepted"), "accept evidence missing");
-  assert(state.images.length >= 5 && state.images.every(img => img.complete && img.w > 0), "evidence images did not load");
+  assert(state.images.length >= 6 && state.images.every(img => img.complete && img.w > 0), "evidence images did not load");
   assert(consoleErrors.length === 0 && pageErrors.length === 0, "evidence page has browser errors");
   await page.screenshot({ path: path.join(assetsDir, "evidence-page-browser.png"), fullPage: true });
   await browser.close();

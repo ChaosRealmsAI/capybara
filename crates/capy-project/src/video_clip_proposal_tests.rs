@@ -18,7 +18,14 @@ fn video_clip_proposal_preview_does_not_mutate_queue() -> Result<(), Box<dyn Err
 
     assert_eq!(proposal.schema_version, VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION);
     assert_eq!(proposal.status, "proposed");
+    assert_eq!(proposal.revision, 1);
+    assert!(proposal.base_queue_hash.starts_with("queue-fnv1a64-"));
+    assert_eq!(
+        proposal.current_queue_hash.as_deref(),
+        Some(proposal.base_queue_hash.as_str())
+    );
     assert!(proposal.safety_note.contains("不会修改"));
+    assert!(proposal.safety_note.contains("base_queue_hash"));
     assert_eq!(proposal.before_queue[0].id, "queue-a");
     assert_eq!(proposal.after_queue[0].id, "queue-b");
     assert!(proposal.changes.iter().any(|change| {
@@ -45,8 +52,12 @@ fn video_clip_proposal_decision_rejects_or_accepts_queue_update() -> Result<(), 
     let original = package.video_clip_queue()?;
     let rejected = package.generate_video_clip_proposal()?;
 
-    let reject_result =
-        package.decide_video_clip_proposal(&rejected.proposal_id, "reject", "PM wants original")?;
+    let reject_result = package.decide_video_clip_proposal_for_revision(
+        &rejected.proposal_id,
+        Some(rejected.revision),
+        "reject",
+        "PM wants original",
+    )?;
     assert_eq!(reject_result.proposal.status, "rejected");
     assert!(reject_result.queue_manifest.is_none());
     assert_eq!(
@@ -55,8 +66,13 @@ fn video_clip_proposal_decision_rejects_or_accepts_queue_update() -> Result<(), 
     );
 
     let accepted = package.generate_video_clip_proposal()?;
-    let accept_result =
-        package.decide_video_clip_proposal(&accepted.proposal_id, "accept", "PM approves")?;
+    assert!(accepted.revision > rejected.revision);
+    let accept_result = package.decide_video_clip_proposal_for_revision(
+        &accepted.proposal_id,
+        Some(accepted.revision),
+        "accept",
+        "PM approves",
+    )?;
     assert_eq!(accept_result.proposal.status, "accepted");
     assert_eq!(
         queue_ids(&package.video_clip_queue()?),
@@ -123,6 +139,80 @@ fn video_clip_proposal_queue_file_is_written_only_by_accept() -> Result<(), Box<
         queue_ids(&package.video_clip_queue()?),
         vec!["queue-b", "queue-a"]
     );
+    Ok(())
+}
+
+#[test]
+fn video_clip_proposal_accept_conflicts_when_queue_hash_changed() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_project()?;
+    let package = &fixture.package;
+    package.analyze_video_clip_semantics()?;
+    package.record_video_clip_feedback("queue-a", "这段不适合开场")?;
+    let proposal = package.generate_video_clip_proposal()?;
+    let current = package.video_clip_queue()?;
+    let externally_changed = vec![current.items[0].clone()];
+    package.write_video_clip_queue(externally_changed)?;
+    let queue_after_external_change = queue_manifest_text(package)?;
+
+    let result = package.decide_video_clip_proposal_for_revision(
+        &proposal.proposal_id,
+        Some(proposal.revision),
+        "accept",
+        "PM clicked stale proposal",
+    )?;
+
+    assert_eq!(result.proposal.status, "conflicted");
+    assert!(result.queue_manifest.is_none());
+    assert_eq!(queue_manifest_text(package)?, queue_after_external_change);
+    assert_eq!(queue_ids(&package.video_clip_queue()?), vec!["queue-a"]);
+    let conflict = result.proposal.conflict.ok_or("missing conflict")?;
+    assert_eq!(conflict.conflict_type, "queue_changed_since_proposal");
+    assert_eq!(conflict.base_queue_hash, proposal.base_queue_hash);
+    assert_ne!(conflict.current_queue_hash, proposal.base_queue_hash);
+    assert!(
+        result
+            .proposal
+            .changes
+            .iter()
+            .all(|change| change.apply_status == "conflicted")
+    );
+    Ok(())
+}
+
+#[test]
+fn video_clip_proposal_revision_distinguishes_repeated_generations() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_project()?;
+    let package = &fixture.package;
+    package.analyze_video_clip_semantics()?;
+    package.record_video_clip_feedback("queue-a", "这段不适合开场")?;
+
+    let first = package.generate_video_clip_proposal()?;
+    let second = package.generate_video_clip_proposal()?;
+    assert_eq!(first.revision, 1);
+    assert_eq!(second.revision, 2);
+    assert_ne!(first.proposal_id, second.proposal_id);
+    assert_eq!(first.base_queue_hash, second.base_queue_hash);
+
+    let error = package
+        .decide_video_clip_proposal_for_revision(
+            &second.proposal_id,
+            Some(first.revision),
+            "accept",
+            "",
+        )
+        .err()
+        .ok_or("expected stale revision error")?;
+    assert!(error.to_string().contains("proposal revision mismatch"));
+    assert_eq!(
+        queue_ids(&package.video_clip_queue()?),
+        vec!["queue-a", "queue-b"]
+    );
+
+    let current = package.video_clip_queue()?;
+    package.write_video_clip_queue(vec![current.items[1].clone(), current.items[0].clone()])?;
+    let third = package.generate_video_clip_proposal()?;
+    assert_eq!(third.revision, 3);
+    assert_ne!(third.base_queue_hash, first.base_queue_hash);
     Ok(())
 }
 

@@ -1,92 +1,22 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::package::{
     CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageResult, now_ms, read_json,
 };
 use crate::video_clip_feedback::queue_item_clip_key;
-use crate::video_clip_queue::{ProjectVideoClipQueueItemV1, ProjectVideoClipQueueManifestV1};
+use crate::video_clip_proposal_types::{
+    ProjectVideoClipProposalChangeV1, ProjectVideoClipProposalConflictV1,
+    ProjectVideoClipProposalDecisionResultV1, ProjectVideoClipProposalDecisionV1,
+    ProjectVideoClipProposalV1, VIDEO_CLIP_PROPOSAL_DECISION_SCHEMA_VERSION,
+    VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION,
+};
+use crate::video_clip_queue::ProjectVideoClipQueueItemV1;
 use crate::video_clip_suggestion::{
     ProjectVideoClipSuggestionItemV1, VIDEO_CLIP_SUGGESTION_SCHEMA_VERSION,
 };
-
-pub const VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION: &str = "capy.project-video-clip-proposal.v1";
-pub const VIDEO_CLIP_PROPOSAL_DECISION_SCHEMA_VERSION: &str =
-    "capy.project-video-clip-proposal-decision-result.v1";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectVideoClipProposalV1 {
-    pub schema_version: String,
-    pub project_id: String,
-    pub project_name: String,
-    pub proposal_id: String,
-    pub source_suggestion_id: String,
-    pub planner: String,
-    pub status: String,
-    pub generated_at: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub decided_at: Option<u64>,
-    pub rationale: String,
-    pub safety_note: String,
-    #[serde(default)]
-    pub before_queue: Vec<ProjectVideoClipQueueItemV1>,
-    #[serde(default)]
-    pub after_queue: Vec<ProjectVideoClipQueueItemV1>,
-    #[serde(default)]
-    pub changes: Vec<ProjectVideoClipProposalChangeV1>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub decision: Option<ProjectVideoClipProposalDecisionV1>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectVideoClipProposalChangeV1 {
-    pub id: String,
-    pub action: String,
-    pub action_label_zh: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub before_sequence: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub after_sequence: Option<u64>,
-    pub queue_item_id: String,
-    pub clip_key: String,
-    pub scene: String,
-    pub reason_summary: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub feedback_ref: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub feedback_text: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub feedback_reason: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub semantic_ref: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub semantic_reason: Option<String>,
-    pub applicable: bool,
-    pub apply_status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub before_item: Option<ProjectVideoClipQueueItemV1>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub after_item: Option<ProjectVideoClipQueueItemV1>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectVideoClipProposalDecisionV1 {
-    pub decision: String,
-    pub reason: String,
-    pub decided_at: u64,
-    pub queue_updated: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectVideoClipProposalDecisionResultV1 {
-    pub schema_version: String,
-    pub proposal: ProjectVideoClipProposalV1,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub queue_manifest: Option<ProjectVideoClipQueueManifestV1>,
-}
 
 impl ProjectPackage {
     pub fn generate_video_clip_proposal(&self) -> ProjectPackageResult<ProjectVideoClipProposalV1> {
@@ -100,6 +30,7 @@ impl ProjectPackage {
             )));
         }
         let now = now_ms();
+        let revision = self.next_video_clip_proposal_revision();
         let after_queue = suggestion
             .items
             .iter()
@@ -107,9 +38,12 @@ impl ProjectPackage {
                 suggestion_to_queue_item(item, &suggestion.suggestion_id, &queue.items, now)
             })
             .collect::<Vec<_>>();
+        let base_queue_hash = queue_hash(&queue.items);
         let basis = serde_json::json!({
             "project_id": project.id,
             "suggestion_id": suggestion.suggestion_id,
+            "revision": revision,
+            "base_queue_hash": base_queue_hash,
             "before": queue.items.iter().map(queue_basis).collect::<Vec<_>>(),
             "after": after_queue.iter().map(queue_basis).collect::<Vec<_>>()
         });
@@ -123,17 +57,21 @@ impl ProjectPackage {
             project_id: project.id,
             project_name: project.name,
             proposal_id,
+            revision,
             source_suggestion_id: suggestion.suggestion_id,
             planner: "local-deterministic-video-clip-proposal-planner".to_string(),
             status: "proposed".to_string(),
             generated_at: now,
             decided_at: None,
+            base_queue_hash: base_queue_hash.clone(),
+            current_queue_hash: Some(base_queue_hash),
             rationale: proposal_rationale(&changes),
-            safety_note: "生成 proposal diff 只写提案状态，不会修改 .capy/video-clip-queue.json；只有 PM 接受后才更新 queue。".to_string(),
+            safety_note: "生成 proposal diff 只写提案状态，不会修改 .capy/video-clip-queue.json；只有 PM 接受且 base_queue_hash 仍匹配当前 queue 后才更新 queue。".to_string(),
             before_queue: queue.items,
             after_queue,
             changes,
             decision: None,
+            conflict: None,
         };
         self.write_json(&self.video_clip_proposal_path(), &proposal)?;
         self.touch_project_manifest()?;
@@ -156,6 +94,16 @@ impl ProjectPackage {
         decision: &str,
         reason: &str,
     ) -> ProjectPackageResult<ProjectVideoClipProposalDecisionResultV1> {
+        self.decide_video_clip_proposal_for_revision(proposal_id, None, decision, reason)
+    }
+
+    pub fn decide_video_clip_proposal_for_revision(
+        &self,
+        proposal_id: &str,
+        expected_revision: Option<u64>,
+        decision: &str,
+        reason: &str,
+    ) -> ProjectPackageResult<ProjectVideoClipProposalDecisionResultV1> {
         let mut proposal = self.video_clip_proposal()?;
         if proposal.proposal_id != proposal_id {
             return Err(ProjectPackageError::Invalid(format!(
@@ -163,17 +111,43 @@ impl ProjectPackage {
                 proposal.proposal_id
             )));
         }
+        if let Some(expected_revision) = expected_revision {
+            if proposal.revision != expected_revision {
+                return Err(ProjectPackageError::Invalid(format!(
+                    "proposal revision mismatch: expected r{}, got r{expected_revision}",
+                    proposal.revision
+                )));
+            }
+        }
         let normalized = normalize_decision(decision)?;
         let now = now_ms();
+        let current_queue = self.video_clip_queue()?;
+        let base_queue_hash = proposal_base_queue_hash(&proposal);
+        let current_queue_hash = queue_hash(&current_queue.items);
+        proposal.base_queue_hash = base_queue_hash.clone();
+        proposal.current_queue_hash = Some(current_queue_hash.clone());
         let mut queue_manifest = None;
-        let queue_updated = normalized == "accept";
-        if queue_updated {
-            let manifest = self.write_video_clip_queue(proposal.after_queue.clone())?;
-            proposal.after_queue = manifest.items.clone();
-            queue_manifest = Some(manifest);
+        let mut queue_updated = false;
+        if normalized == "accept" {
+            if current_queue_hash == base_queue_hash {
+                let manifest = self.write_video_clip_queue(proposal.after_queue.clone())?;
+                proposal.after_queue = manifest.items.clone();
+                queue_manifest = Some(manifest);
+                queue_updated = true;
+            } else {
+                proposal.conflict = Some(ProjectVideoClipProposalConflictV1 {
+                    conflict_type: "queue_changed_since_proposal".to_string(),
+                    message_zh: "该 proposal 已过期：当前剪辑 queue 与生成提案时的 base_queue_hash 不一致，请重新生成 proposal。".to_string(),
+                    base_queue_hash: base_queue_hash.clone(),
+                    current_queue_hash: current_queue_hash.clone(),
+                    detected_at: now,
+                });
+            }
         }
         proposal.status = if queue_updated {
             "accepted"
+        } else if normalized == "accept" {
+            "conflicted"
         } else {
             "rejected"
         }
@@ -197,6 +171,8 @@ impl ProjectPackage {
                     "applied".to_string()
                 } else if queue_updated {
                     "not_applicable".to_string()
+                } else if normalized == "accept" {
+                    "conflicted".to_string()
                 } else {
                     "rejected".to_string()
                 };
@@ -214,6 +190,16 @@ impl ProjectPackage {
 
     fn video_clip_proposal_path(&self) -> PathBuf {
         self.root().join(CAPY_DIR).join("video-clip-proposal.json")
+    }
+
+    fn next_video_clip_proposal_revision(&self) -> u64 {
+        let path = self.video_clip_proposal_path();
+        if !path.exists() {
+            return 1;
+        }
+        read_json::<ProjectVideoClipProposalV1>(&path, "read previous project video clip proposal")
+            .map(|proposal| proposal.revision.saturating_add(1).max(1))
+            .unwrap_or(1)
     }
 }
 
@@ -460,6 +446,22 @@ fn queue_basis(item: &ProjectVideoClipQueueItemV1) -> Value {
         "start_ms": item.start_ms,
         "end_ms": item.end_ms
     })
+}
+
+fn proposal_base_queue_hash(proposal: &ProjectVideoClipProposalV1) -> String {
+    if proposal.base_queue_hash.trim().is_empty() {
+        queue_hash(&proposal.before_queue)
+    } else {
+        proposal.base_queue_hash.clone()
+    }
+}
+
+fn queue_hash(items: &[ProjectVideoClipQueueItemV1]) -> String {
+    let basis = items.iter().map(queue_basis).collect::<Vec<_>>();
+    format!(
+        "queue-fnv1a64-{:016x}",
+        fnv1a64(serde_json::to_string(&basis).unwrap_or_default().as_bytes())
+    )
 }
 
 fn fnv1a64(bytes: &[u8]) -> u64 {
