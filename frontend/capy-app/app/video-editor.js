@@ -133,17 +133,20 @@ export function createVideoEditor(ctx) {
     if (!projectPath) {
       clipDelivery.applyProjectQueueManifest(null, "");
       clipDelivery.applyProjectSemanticsManifest(null);
+      clipDelivery.applyProjectProposalHistoryManifest(null);
       return null;
     }
     try {
-      const [manifest, semantics, feedback] = await Promise.all([
+      const [manifest, semantics, feedback, proposalHistory] = await Promise.all([
         rpc("project-video-clip-queue-get", { project: projectPath }),
         rpc("project-video-clip-semantics-get", { project: projectPath }),
-        rpc("project-video-clip-feedback-get", { project: projectPath })
+        rpc("project-video-clip-feedback-get", { project: projectPath }),
+        rpc("project-video-clip-proposal-history-get", { project: projectPath })
       ]);
       clipDelivery.applyProjectQueueManifest(manifest, projectPath);
       clipDelivery.applyProjectSemanticsManifest(semantics);
       clipDelivery.applyProjectFeedbackManifest(feedback);
+      clipDelivery.applyProjectProposalHistoryManifest(proposalHistory);
       return manifest;
     } catch (error) {
       state.video.clipQueue = [];
@@ -156,6 +159,8 @@ export function createVideoEditor(ctx) {
       state.video.clipFeedback = null;
       state.video.clipFeedbackStatus = "error";
       state.video.clipFeedbackError = stringifyError(error);
+      state.video.clipSuggestionProposalHistoryManifest = null;
+      state.video.clipSuggestionProposalHistory = [];
       renderVideoEditor();
       return null;
     }

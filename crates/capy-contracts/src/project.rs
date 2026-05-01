@@ -16,6 +16,8 @@ pub const OP_PROJECT_VIDEO_CLIP_FEEDBACK_SET: &str = "project-video-clip-feedbac
 pub const OP_PROJECT_VIDEO_CLIP_PROPOSAL_GET: &str = "project-video-clip-proposal-get";
 pub const OP_PROJECT_VIDEO_CLIP_PROPOSAL_GENERATE: &str = "project-video-clip-proposal-generate";
 pub const OP_PROJECT_VIDEO_CLIP_PROPOSAL_DECIDE: &str = "project-video-clip-proposal-decide";
+pub const OP_PROJECT_VIDEO_CLIP_PROPOSAL_HISTORY_GET: &str =
+    "project-video-clip-proposal-history-get";
 pub const OP_PROJECT_GENERATE: &str = "project-generate";
 pub const OP_PROJECT_RUN_LIST: &str = "project-run-list";
 pub const OP_PROJECT_RUN_SHOW: &str = "project-run-show";
@@ -37,10 +39,10 @@ mod tests {
         OP_PROJECT_SURFACE_NODE_UPDATE, OP_PROJECT_SURFACE_NODES,
         OP_PROJECT_VIDEO_CLIP_FEEDBACK_GET, OP_PROJECT_VIDEO_CLIP_FEEDBACK_SET,
         OP_PROJECT_VIDEO_CLIP_PROPOSAL_DECIDE, OP_PROJECT_VIDEO_CLIP_PROPOSAL_GENERATE,
-        OP_PROJECT_VIDEO_CLIP_PROPOSAL_GET, OP_PROJECT_VIDEO_CLIP_QUEUE_GET,
-        OP_PROJECT_VIDEO_CLIP_QUEUE_SET, OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST,
-        OP_PROJECT_VIDEO_CLIP_SEMANTICS_ANALYZE, OP_PROJECT_VIDEO_CLIP_SEMANTICS_GET,
-        OP_PROJECT_WORKBENCH,
+        OP_PROJECT_VIDEO_CLIP_PROPOSAL_GET, OP_PROJECT_VIDEO_CLIP_PROPOSAL_HISTORY_GET,
+        OP_PROJECT_VIDEO_CLIP_QUEUE_GET, OP_PROJECT_VIDEO_CLIP_QUEUE_SET,
+        OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST, OP_PROJECT_VIDEO_CLIP_SEMANTICS_ANALYZE,
+        OP_PROJECT_VIDEO_CLIP_SEMANTICS_GET, OP_PROJECT_WORKBENCH,
     };
 
     #[test]
@@ -95,6 +97,10 @@ mod tests {
         assert_eq!(
             OP_PROJECT_VIDEO_CLIP_PROPOSAL_DECIDE,
             "project-video-clip-proposal-decide"
+        );
+        assert_eq!(
+            OP_PROJECT_VIDEO_CLIP_PROPOSAL_HISTORY_GET,
+            "project-video-clip-proposal-history-get"
         );
         assert_eq!(OP_PROJECT_GENERATE, "project-generate");
         assert_eq!(OP_PROJECT_RUN_LIST, "project-run-list");

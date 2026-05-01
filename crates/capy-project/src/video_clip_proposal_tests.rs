@@ -1,6 +1,6 @@
 use crate::{
     ArtifactKind, ArtifactRefV1, ProjectPackage, ProjectVideoClipQueueItemV1,
-    VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION,
+    VIDEO_CLIP_PROPOSAL_HISTORY_SCHEMA_VERSION, VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION,
 };
 use serde_json::json;
 use std::error::Error;
@@ -26,6 +26,14 @@ fn video_clip_proposal_preview_does_not_mutate_queue() -> Result<(), Box<dyn Err
     );
     assert!(proposal.safety_note.contains("不会修改"));
     assert!(proposal.safety_note.contains("base_queue_hash"));
+    let history = package.video_clip_proposal_history()?;
+    assert_eq!(
+        history.schema_version,
+        VIDEO_CLIP_PROPOSAL_HISTORY_SCHEMA_VERSION
+    );
+    assert_eq!(history.entries.len(), 1);
+    assert_eq!(history.entries[0].proposal_id, proposal.proposal_id);
+    assert_eq!(history.entries[0].status, "proposed");
     assert_eq!(proposal.before_queue[0].id, "queue-a");
     assert_eq!(proposal.after_queue[0].id, "queue-b");
     assert!(proposal.changes.iter().any(|change| {
@@ -59,6 +67,10 @@ fn video_clip_proposal_decision_rejects_or_accepts_queue_update() -> Result<(), 
         "PM wants original",
     )?;
     assert_eq!(reject_result.proposal.status, "rejected");
+    assert_eq!(
+        package.video_clip_proposal_history()?.entries[0].status,
+        "rejected"
+    );
     assert!(reject_result.queue_manifest.is_none());
     assert_eq!(
         queue_ids(&original),
@@ -74,6 +86,18 @@ fn video_clip_proposal_decision_rejects_or_accepts_queue_update() -> Result<(), 
         "PM approves",
     )?;
     assert_eq!(accept_result.proposal.status, "accepted");
+    assert!(
+        package
+            .video_clip_proposal_history()?
+            .entries
+            .iter()
+            .any(|entry| entry.revision == accepted.revision
+                && entry.status == "accepted"
+                && entry
+                    .decision
+                    .as_ref()
+                    .is_some_and(|decision| decision.queue_updated))
+    );
     assert_eq!(
         queue_ids(&package.video_clip_queue()?),
         vec!["queue-b", "queue-a"]
@@ -176,6 +200,21 @@ fn video_clip_proposal_accept_conflicts_when_queue_hash_changed() -> Result<(), 
             .iter()
             .all(|change| change.apply_status == "conflicted")
     );
+    let history = package.video_clip_proposal_history()?;
+    let conflicted = history
+        .entries
+        .iter()
+        .find(|entry| entry.revision == proposal.revision)
+        .ok_or("missing conflicted history entry")?;
+    assert_eq!(conflicted.status, "conflicted");
+    assert_eq!(
+        conflicted
+            .conflict
+            .as_ref()
+            .ok_or("missing history conflict")?
+            .conflict_type,
+        "queue_changed_since_proposal"
+    );
     Ok(())
 }
 
@@ -213,6 +252,51 @@ fn video_clip_proposal_revision_distinguishes_repeated_generations() -> Result<(
     let third = package.generate_video_clip_proposal()?;
     assert_eq!(third.revision, 3);
     assert_ne!(third.base_queue_hash, first.base_queue_hash);
+    Ok(())
+}
+
+#[test]
+fn video_clip_proposal_history_persists_across_reopen() -> Result<(), Box<dyn Error>> {
+    let fixture = fixture_project()?;
+    let package = &fixture.package;
+    package.analyze_video_clip_semantics()?;
+    package.record_video_clip_feedback("queue-a", "这段不适合开场")?;
+
+    let first = package.generate_video_clip_proposal()?;
+    package.decide_video_clip_proposal_for_revision(
+        &first.proposal_id,
+        Some(first.revision),
+        "reject",
+        "PM rejected first proposal",
+    )?;
+    let second = package.generate_video_clip_proposal()?;
+    let current = package.video_clip_queue()?;
+    package.write_video_clip_queue(vec![current.items[0].clone()])?;
+    package.decide_video_clip_proposal_for_revision(
+        &second.proposal_id,
+        Some(second.revision),
+        "accept",
+        "PM tried stale proposal",
+    )?;
+
+    let reopened = ProjectPackage::open(package.root())?;
+    let history = reopened.video_clip_proposal_history()?;
+    assert_eq!(
+        history.schema_version,
+        VIDEO_CLIP_PROPOSAL_HISTORY_SCHEMA_VERSION
+    );
+    assert_eq!(history.entries.len(), 2);
+    assert_eq!(history.entries[0].status, "rejected");
+    assert_eq!(history.entries[1].status, "conflicted");
+    assert_eq!(history.entries[0].changes.len(), first.changes.len());
+    assert_eq!(history.entries[1].changes.len(), second.changes.len());
+    assert!(history.entries[0].decision.is_some());
+    assert!(history.entries[1].conflict.is_some());
+    assert_eq!(reopened.video_clip_proposal()?.status, "conflicted");
+
+    let third = reopened.generate_video_clip_proposal()?;
+    assert_eq!(third.revision, 3);
+    assert_eq!(reopened.video_clip_proposal_history()?.entries.len(), 3);
     Ok(())
 }
 

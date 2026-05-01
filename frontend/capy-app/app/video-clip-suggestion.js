@@ -17,6 +17,10 @@ export function createVideoClipSuggestionController(ctx) {
     if (!dom.videoSuggestionEl) return;
     const status = state.video.clipSuggestionStatus || "idle";
     const suggestion = state.video.clipSuggestion;
+    const history = state.video.clipSuggestionProposalHistory || [];
+    const proposal = state.video.clipSuggestionProposal;
+    const proposalStatus = state.video.clipSuggestionProposalStatus || proposal?.status || "idle";
+    const proposalError = state.video.clipSuggestionProposalError || "";
     if (status === "planning") {
       dom.videoSuggestionEl.hidden = false;
       dom.videoSuggestionEl.innerHTML = "<p>正在生成本地 AI 剪辑建议...</p>";
@@ -27,15 +31,27 @@ export function createVideoClipSuggestionController(ctx) {
       dom.videoSuggestionEl.innerHTML = `<p>AI 建议生成失败：${escapeHtml(state.video.clipSuggestionError || "unknown")}</p>`;
       return;
     }
-    if (!suggestion) {
+    if (!suggestion && !proposal && !history.length) {
       dom.videoSuggestionEl.hidden = true;
       dom.videoSuggestionEl.replaceChildren();
       return;
     }
     dom.videoSuggestionEl.hidden = false;
-    const proposal = state.video.clipSuggestionProposal;
-    const proposalStatus = state.video.clipSuggestionProposalStatus || proposal?.status || "idle";
-    const proposalError = state.video.clipSuggestionProposalError || "";
+    if (!suggestion) {
+      dom.videoSuggestionEl.innerHTML = `
+        <header class="video-suggestion-head">
+          <div>
+            <span>修改提案历史</span>
+            <strong>已从项目持久历史恢复</strong>
+          </div>
+        </header>
+        <p>这些记录来自 Project Core proposal history；历史详情只读，不能绕过当前 queue 冲突检测。</p>
+        ${renderProposalDiff(proposal, proposalStatus, proposalError)}
+        ${renderProposalHistory(history, proposal)}
+      `;
+      attachProposalDecisionHandlers();
+      return;
+    }
     const rows = (suggestion.items || []).map((item) => `
       <li>
         <strong>${String(item.sequence).padStart(2, "0")} · ${escapeHtml(item.source_video?.filename || item.scene || item.clip_id)}</strong>
@@ -59,13 +75,17 @@ export function createVideoClipSuggestionController(ctx) {
       <p>${escapeHtml(suggestion.rationale || "本地 deterministic planner 基于项目素材和队列生成。")}</p>
       <ol class="video-suggestion-list">${rows}</ol>
       ${renderProposalDiff(proposal, proposalStatus, proposalError)}
-      ${renderProposalHistory(state.video.clipSuggestionProposalHistory || [], proposal)}
+      ${renderProposalHistory(history, proposal)}
     `;
     const generateProposal = dom.videoSuggestionEl.querySelector("[data-video-generate-proposal]");
     if (generateProposal) {
       generateProposal.disabled = proposalStatus === "planning";
       generateProposal.addEventListener("click", () => generateProposalDiff());
     }
+    attachProposalDecisionHandlers();
+  }
+
+  function attachProposalDecisionHandlers() {
     dom.videoSuggestionEl.querySelector("[data-video-proposal-decision=\"accept\"]")
       ?.addEventListener("click", () => decideProposal("accept"));
     dom.videoSuggestionEl.querySelector("[data-video-proposal-decision=\"reject\"]")
@@ -91,7 +111,6 @@ export function createVideoClipSuggestionController(ctx) {
       state.video.clipSuggestionProposal = null;
       state.video.clipSuggestionProposalStatus = "idle";
       state.video.clipSuggestionProposalError = null;
-      state.video.clipSuggestionProposalHistory = [];
       renderDelivery();
     } catch (error) {
       state.video.clipSuggestionStatus = "error";
@@ -199,10 +218,40 @@ function renderProposalHistory(history, currentProposal) {
   const currentKey = proposalHistoryKey(currentProposal);
   const rows = items.slice().reverse().map((proposal) => {
     const isCurrent = proposalHistoryKey(proposal) === currentKey;
+    const changes = (proposal.changes || []).map((change) => `
+      <li>
+        <strong>${escapeHtml(change.action_label_zh || change.action || "调整")} · ${escapeHtml(change.scene || "片段")}</strong>
+        <span>Before ${positionLabel(change.before_sequence)} → After ${positionLabel(change.after_sequence)} · ${escapeHtml(change.apply_status || "pending")}</span>
+        <small>${escapeHtml(change.reason_summary || "")}</small>
+      </li>
+    `).join("");
+    const conflict = proposal.conflict ? `
+      <p class="video-proposal-conflict">
+        冲突原因：${escapeHtml(proposal.conflict.message_zh || "当前 queue 与提案基准不一致。")}
+        · 原基准 ${escapeHtml(proposal.conflict.base_queue_hash || proposal.base_queue_hash || "")}
+        · 当前 ${escapeHtml(proposal.conflict.current_queue_hash || proposal.current_queue_hash || "")}
+      </p>
+    ` : "";
     return `
       <li data-video-proposal-history="${escapeAttr(proposalHistoryKey(proposal))}" ${isCurrent ? "data-current=\"true\"" : ""}>
-        <strong>r${escapeHtml(proposal.revision || 0)} · ${escapeHtml(proposalStatusLabel(proposal, proposal.status))}${isCurrent ? " · 当前" : ""}</strong>
-        <span>${escapeHtml(formatGeneratedAt(proposal.generated_at))} · base_queue_hash ${escapeHtml(proposal.base_queue_hash || "unknown")}</span>
+        <details ${isCurrent || proposal.status === "conflicted" ? "open" : ""}>
+          <summary>
+            <strong>r${escapeHtml(proposal.revision || 0)} · ${escapeHtml(proposalStatusLabel(proposal, proposal.status))}${isCurrent ? " · 当前" : ""}</strong>
+            <span>${escapeHtml(formatGeneratedAt(proposal.generated_at))} · base_queue_hash ${escapeHtml(proposal.base_queue_hash || "unknown")}</span>
+          </summary>
+          <div class="video-proposal-history-detail">
+            <dl>
+              <dt>Status</dt><dd>${escapeHtml(proposal.status || "unknown")}</dd>
+              <dt>Decision</dt><dd>${escapeHtml(proposalDecisionLabel(proposal))}</dd>
+              <dt>Current hash</dt><dd>${escapeHtml(proposal.current_queue_hash || proposal.conflict?.current_queue_hash || "unknown")}</dd>
+              <dt>Queue counts</dt><dd>${escapeHtml(proposal.before_queue_count ?? 0)} → ${escapeHtml(proposal.after_queue_count ?? 0)}</dd>
+            </dl>
+            ${conflict}
+            <p>${escapeHtml(proposal.rationale || "本地 proposal diff 等待 PM 决策。")}</p>
+            <p class="video-proposal-readonly">历史详情只读；接受或拒绝只能作用于当前 proposal，且仍必须通过 base_queue_hash 冲突检测。</p>
+            <ol class="video-proposal-diff-list">${changes}</ol>
+          </div>
+        </details>
       </li>
     `;
   }).join("");
@@ -236,6 +285,14 @@ function proposalStatusLabel(proposal, status) {
   if (value === "accepting") return "接受中";
   if (value === "rejecting") return "拒绝中";
   return value;
+}
+
+function proposalDecisionLabel(proposal) {
+  const decision = proposal?.decision;
+  if (!decision) return "未决策";
+  const label = decision.decision === "accept" ? "接受" : decision.decision === "reject" ? "拒绝" : decision.decision;
+  const write = decision.queue_updated ? "已写入 queue" : "未写入 queue";
+  return `${label} · ${write}`;
 }
 
 function formatGeneratedAt(value) {

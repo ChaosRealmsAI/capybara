@@ -357,18 +357,18 @@ active_version="$(jq -r '.active_version // empty' spec/versions/REGISTRY.json)"
 [[ -n "$active_version" ]] || fail "spec active_version is missing"
 require_file "spec/versions/$active_version/bdd.json"
 require_file "spec/versions/$active_version/status.json"
-jq -e '.versions[] | select(.id == "v0.4-cef-shell-poc" and .status == "merged-verified")' \
-  spec/versions/REGISTRY.json >/dev/null || fail "v0.4 CEF foundation must remain registered as merged-verified"
+jq -e '.versions[] | select(.id == "v0.4-cef-shell-poc" and .status == "merged-verified")' spec/versions/REGISTRY.json >/dev/null || fail "v0.4 CEF foundation must remain registered as merged-verified"
 jq -e --arg active "$active_version" '
   . as $registry |
-  def deps($id):
-    ($registry.versions[] | select(.id == $id) | (.depends_on // [])) as $direct
-    | $direct + ([$direct[]? | deps(.)] | add // []);
-  ($active == "v0.4-cef-shell-poc") or
-  ((deps($active) | unique) as $deps |
-    ($deps | index("v0.4-cef-shell-poc") != null) or
-    ($deps | index("v0.5-desktop-foundation-hardening") != null) or
-    ($deps | index("v0.6-canvas-chat-workbench") != null))
+  def version_deps($id): [$registry.versions[] | select(.id == $id) | (.depends_on // [])[]];
+  def deps($frontier; $seen):
+    if ($frontier | length) == 0 then $seen else
+      ($frontier | map(. as $id | select(($seen | index($id)) == null))) as $new
+      | ($new | map(version_deps(.)) | add // []) as $next
+      | deps($next; (($seen + $new) | unique))
+    end;
+  ($active == "v0.4-cef-shell-poc") or ((deps([$active]; []) | unique) as $deps |
+    any(["v0.4-cef-shell-poc", "v0.5-desktop-foundation-hardening", "v0.6-canvas-chat-workbench"][]; $deps | index(.) != null))
 ' spec/versions/REGISTRY.json >/dev/null || fail "active version must be v0.4 CEF foundation or depend on the CEF desktop foundation chain"
 if rg -n '\bwry\b|javascriptcore|WKWebView|WebKit' Cargo.toml Cargo.lock; then
   fail "desktop mainline must not reintroduce wry/WebKit dependencies"

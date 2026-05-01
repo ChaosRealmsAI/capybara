@@ -53,7 +53,6 @@ export function createVideoClipDeliveryController(ctx) {
     state.video.clipProposal = null;
     state.video.clipSuggestionProposal = null;
     state.video.clipSuggestionProposalStatus = "idle";
-    state.video.clipSuggestionProposalHistory = [];
     state.video.proposalStatus = "idle";
     renderVideoEditor();
   }
@@ -63,6 +62,16 @@ export function createVideoClipDeliveryController(ctx) {
   }
   function applyProjectFeedbackManifest(manifest) {
     clipFeedback.applyManifest(manifest);
+    renderVideoEditor();
+  }
+  function applyProjectProposalHistoryManifest(manifest) {
+    const entries = Array.isArray(manifest?.entries) ? manifest.entries : [];
+    const latest = entries[entries.length - 1] || null;
+    state.video.clipSuggestionProposalHistoryManifest = manifest || null;
+    state.video.clipSuggestionProposalHistory = entries;
+    state.video.clipSuggestionProposal = latest;
+    state.video.clipSuggestionProposalStatus = latest?.status || "idle";
+    state.video.clipSuggestionProposalError = null;
     renderVideoEditor();
   }
   function render() {
@@ -358,6 +367,7 @@ export function createVideoClipDeliveryController(ctx) {
     applyProjectQueueManifest,
     applyProjectSemanticsManifest,
     applyProjectFeedbackManifest,
+    applyProjectProposalHistoryManifest,
     render,
     selectClipRange,
     selectRangeFromTrack,
@@ -422,29 +432,12 @@ function secondsInput(input, fallback) {
   const value = Number(input?.value || fallback || 0);
   return Number.isFinite(value) ? Math.max(0, value) : fallback;
 }
-function secondsValue(ms) {
-  const seconds = Number(ms || 0) / 1000;
-  return seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.?0+$/, "");
-}
-function domInputLocked(input) {
-  return document.activeElement === input;
-}
+function secondsValue(ms) { const seconds = Number(ms || 0) / 1000; return seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.?0+$/, ""); }
+function domInputLocked(input) { return document.activeElement === input; }
 function safeSlug(value) {
-  return String(value || "clip")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    || "clip";
+  return String(value || "clip").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "clip";
 }
-function formatTime(ms) {
-  const seconds = Number(ms || 0) / 1000;
-  return `${seconds.toFixed(seconds >= 10 ? 1 : 2)}s`;
-}
+function formatTime(ms) { const seconds = Number(ms || 0) / 1000; return `${seconds.toFixed(seconds >= 10 ? 1 : 2)}s`; }
 function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }

@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
-
-use serde_json::Value;
 
 use crate::package::{
-    CAPY_DIR, ProjectPackage, ProjectPackageError, ProjectPackageResult, now_ms, read_json,
+    ProjectPackage, ProjectPackageError, ProjectPackageResult, now_ms, read_json,
 };
 use crate::video_clip_feedback::queue_item_clip_key;
+use crate::video_clip_proposal_history::{
+    fnv1a64, proposal_base_queue_hash, queue_basis, queue_hash,
+};
 use crate::video_clip_proposal_types::{
     ProjectVideoClipProposalChangeV1, ProjectVideoClipProposalConflictV1,
     ProjectVideoClipProposalDecisionResultV1, ProjectVideoClipProposalDecisionV1,
@@ -74,6 +74,7 @@ impl ProjectPackage {
             conflict: None,
         };
         self.write_json(&self.video_clip_proposal_path(), &proposal)?;
+        self.upsert_video_clip_proposal_history(&proposal)?;
         self.touch_project_manifest()?;
         Ok(proposal)
     }
@@ -180,26 +181,13 @@ impl ProjectPackage {
             })
             .collect();
         self.write_json(&self.video_clip_proposal_path(), &proposal)?;
+        self.upsert_video_clip_proposal_history(&proposal)?;
         self.touch_project_manifest()?;
         Ok(ProjectVideoClipProposalDecisionResultV1 {
             schema_version: VIDEO_CLIP_PROPOSAL_DECISION_SCHEMA_VERSION.to_string(),
             proposal,
             queue_manifest,
         })
-    }
-
-    fn video_clip_proposal_path(&self) -> PathBuf {
-        self.root().join(CAPY_DIR).join("video-clip-proposal.json")
-    }
-
-    fn next_video_clip_proposal_revision(&self) -> u64 {
-        let path = self.video_clip_proposal_path();
-        if !path.exists() {
-            return 1;
-        }
-        read_json::<ProjectVideoClipProposalV1>(&path, "read previous project video clip proposal")
-            .map(|proposal| proposal.revision.saturating_add(1).max(1))
-            .unwrap_or(1)
     }
 }
 
@@ -435,40 +423,4 @@ fn suggestion_clip_key(item: &ProjectVideoClipSuggestionItemV1) -> String {
         item.start_ms,
         item.end_ms
     )
-}
-
-fn queue_basis(item: &ProjectVideoClipQueueItemV1) -> Value {
-    serde_json::json!({
-        "id": item.id,
-        "sequence": item.sequence,
-        "composition_path": item.composition_path,
-        "clip_id": item.clip_id,
-        "start_ms": item.start_ms,
-        "end_ms": item.end_ms
-    })
-}
-
-fn proposal_base_queue_hash(proposal: &ProjectVideoClipProposalV1) -> String {
-    if proposal.base_queue_hash.trim().is_empty() {
-        queue_hash(&proposal.before_queue)
-    } else {
-        proposal.base_queue_hash.clone()
-    }
-}
-
-fn queue_hash(items: &[ProjectVideoClipQueueItemV1]) -> String {
-    let basis = items.iter().map(queue_basis).collect::<Vec<_>>();
-    format!(
-        "queue-fnv1a64-{:016x}",
-        fnv1a64(serde_json::to_string(&basis).unwrap_or_default().as_bytes())
-    )
-}
-
-fn fnv1a64(bytes: &[u8]) -> u64 {
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in bytes {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    hash
 }

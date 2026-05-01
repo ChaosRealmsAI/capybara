@@ -15,6 +15,7 @@ mod selection_context;
 mod surface_nodes;
 mod video_clip_feedback;
 mod video_clip_proposal;
+mod video_clip_proposal_history;
 #[cfg(test)]
 mod video_clip_proposal_tests;
 mod video_clip_proposal_types;
@@ -52,8 +53,9 @@ pub use video_clip_feedback::{
 pub use video_clip_proposal_types::{
     ProjectVideoClipProposalChangeV1, ProjectVideoClipProposalConflictV1,
     ProjectVideoClipProposalDecisionResultV1, ProjectVideoClipProposalDecisionV1,
+    ProjectVideoClipProposalHistoryEntryV1, ProjectVideoClipProposalHistoryV1,
     ProjectVideoClipProposalV1, VIDEO_CLIP_PROPOSAL_DECISION_SCHEMA_VERSION,
-    VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION,
+    VIDEO_CLIP_PROPOSAL_HISTORY_SCHEMA_VERSION, VIDEO_CLIP_PROPOSAL_SCHEMA_VERSION,
 };
 pub use video_clip_queue::{
     ProjectVideoClipQueueItemV1, ProjectVideoClipQueueManifestV1, VIDEO_CLIP_QUEUE_SCHEMA_VERSION,

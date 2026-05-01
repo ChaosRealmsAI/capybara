@@ -3,9 +3,10 @@ use std::path::PathBuf;
 use capy_contracts::project::{
     OP_PROJECT_VIDEO_CLIP_FEEDBACK_GET, OP_PROJECT_VIDEO_CLIP_FEEDBACK_SET,
     OP_PROJECT_VIDEO_CLIP_PROPOSAL_DECIDE, OP_PROJECT_VIDEO_CLIP_PROPOSAL_GENERATE,
-    OP_PROJECT_VIDEO_CLIP_PROPOSAL_GET, OP_PROJECT_VIDEO_CLIP_QUEUE_GET,
-    OP_PROJECT_VIDEO_CLIP_QUEUE_SET, OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST,
-    OP_PROJECT_VIDEO_CLIP_SEMANTICS_ANALYZE, OP_PROJECT_VIDEO_CLIP_SEMANTICS_GET,
+    OP_PROJECT_VIDEO_CLIP_PROPOSAL_GET, OP_PROJECT_VIDEO_CLIP_PROPOSAL_HISTORY_GET,
+    OP_PROJECT_VIDEO_CLIP_QUEUE_GET, OP_PROJECT_VIDEO_CLIP_QUEUE_SET,
+    OP_PROJECT_VIDEO_CLIP_QUEUE_SUGGEST, OP_PROJECT_VIDEO_CLIP_SEMANTICS_ANALYZE,
+    OP_PROJECT_VIDEO_CLIP_SEMANTICS_GET,
 };
 use capy_project::{ProjectPackage, ProjectVideoClipQueueItemV1};
 use serde_json::Value;
@@ -22,6 +23,7 @@ pub(crate) fn handles(op: &str) -> bool {
             | OP_PROJECT_VIDEO_CLIP_FEEDBACK_SET
             | OP_PROJECT_VIDEO_CLIP_PROPOSAL_GET
             | OP_PROJECT_VIDEO_CLIP_PROPOSAL_GENERATE
+            | OP_PROJECT_VIDEO_CLIP_PROPOSAL_HISTORY_GET
             | OP_PROJECT_VIDEO_CLIP_PROPOSAL_DECIDE
     )
 }
@@ -37,6 +39,7 @@ pub(crate) fn response(op: &str, params: &Value) -> Result<Value, String> {
         OP_PROJECT_VIDEO_CLIP_FEEDBACK_SET => feedback_set(params),
         OP_PROJECT_VIDEO_CLIP_PROPOSAL_GET => proposal_get(params),
         OP_PROJECT_VIDEO_CLIP_PROPOSAL_GENERATE => proposal_generate(params),
+        OP_PROJECT_VIDEO_CLIP_PROPOSAL_HISTORY_GET => proposal_history_get(params),
         OP_PROJECT_VIDEO_CLIP_PROPOSAL_DECIDE => proposal_decide(params),
         _ => Err(format!("unknown video clip queue op: {op}")),
     }
@@ -143,6 +146,17 @@ pub(crate) fn proposal_generate(params: &Value) -> Result<Value, String> {
     serde_json::to_value(
         package
             .generate_video_clip_proposal()
+            .map_err(|err| err.to_string())?,
+    )
+    .map_err(|err| err.to_string())
+}
+
+pub(crate) fn proposal_history_get(params: &Value) -> Result<Value, String> {
+    let package =
+        ProjectPackage::open(required_path(params, "project")?).map_err(|err| err.to_string())?;
+    serde_json::to_value(
+        package
+            .video_clip_proposal_history()
             .map_err(|err| err.to_string())?,
     )
     .map_err(|err| err.to_string())

@@ -9,7 +9,7 @@ use serde_json::Value;
 #[command(after_help = "AI quick start:
   Use when: AI or desktop verification needs to inspect, seed, or locally suggest the project-level linear video clip queue.
   Required params: every command needs --project <dir>; write also needs --manifest <queue.json>.
-  Outputs: inspect/write return capy.project-video-clip-queue.v1; analyze/semantics return capy.project-video-clip-semantics.v1; feedback/feedbacks return capy.project-video-clip-feedback.v1; suggest returns capy.project-video-clip-suggestion.v1; proposal returns capy.project-video-clip-proposal.v1; proposal-decision returns capy.project-video-clip-proposal-decision-result.v1.
+  Outputs: inspect/write return capy.project-video-clip-queue.v1; analyze/semantics return capy.project-video-clip-semantics.v1; feedback/feedbacks return capy.project-video-clip-feedback.v1; suggest returns capy.project-video-clip-suggestion.v1; proposal returns capy.project-video-clip-proposal.v1; proposal-history returns capy.project-video-clip-proposal-history.v1; proposal-decision returns capy.project-video-clip-proposal-decision-result.v1.
   Pitfalls: this is a linear edit queue, not a multi-track NLE; analyze, feedback, suggest, and proposal are no-spend deterministic local flows and must not call paid providers; suggest and proposal are read-only with respect to the queue; only proposal-decision --decision accept mutates the queue.
   Next step: run analyze, save feedback, run suggest/proposal, inspect proposal-current, then accept or reject with proposal-decision and verify with inspect.")]
 pub(crate) struct ProjectClipQueueArgs {
@@ -101,6 +101,18 @@ enum ProjectClipQueueCommand {
   Verify: changes[] should include before_sequence, after_sequence, reason_summary, applicable, and apply_status; top-level revision and base_queue_hash identify the proposal basis."
     )]
     ProposalCurrent(ProjectClipQueuePathArgs),
+    #[command(
+        name = "proposal-history",
+        about = "Inspect persisted proposal history",
+        after_help = "AI quick start:
+  Use when: AI or PM needs to trace every generated video clip proposal after project reopen.
+  Required params: --project <dir>.
+  Output: capy.project-video-clip-proposal-history.v1 JSON from .capy/video-clip-proposal-history.json; missing history returns entries[].
+  State effects: read-only.
+  Do not: apply history entries to the queue, bypass conflict detection, or treat history as a regeneration command. It is audit/detail state only.
+  Verify: entries[] should contain proposal_id, revision, status, base_queue_hash, current_queue_hash, changes[], decision, and conflict when applicable."
+    )]
+    ProposalHistory(ProjectClipQueuePathArgs),
     #[command(
         name = "proposal-decision",
         about = "Accept or reject a proposal diff",
@@ -212,6 +224,14 @@ pub(crate) fn handle_clip_queue(args: ProjectClipQueueArgs) -> Result<Value, ser
         ProjectClipQueueCommand::ProposalCurrent(args) => {
             let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
             serde_json::to_value(package.video_clip_proposal().map_err(string_json_error)?)
+        }
+        ProjectClipQueueCommand::ProposalHistory(args) => {
+            let package = ProjectPackage::open(args.project).map_err(string_json_error)?;
+            serde_json::to_value(
+                package
+                    .video_clip_proposal_history()
+                    .map_err(string_json_error)?,
+            )
         }
         ProjectClipQueueCommand::ProposalDecision(args) => {
             let package = ProjectPackage::open(args.project).map_err(string_json_error)?;

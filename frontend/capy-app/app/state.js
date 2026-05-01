@@ -124,6 +124,7 @@ export const state = {
     clipSuggestionProposal: null,
     clipSuggestionProposalStatus: "idle",
     clipSuggestionProposalError: null,
+    clipSuggestionProposalHistoryManifest: null,
     clipSuggestionProposalHistory: [],
     clipProposal: null,
     proposalStatus: "idle",

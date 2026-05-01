@@ -5,7 +5,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { initialQueue } from "./verify-ai-clip-suggestion-fixtures.mjs";
-import { proposalAcceptCurrentEval, proposalAcceptEval, proposalGenerateEval, proposalLoadEval, proposalRejectEval, proposalSaveFeedbackEval } from "./verify-video-clip-proposal-evals.mjs";
+import { proposalAcceptCurrentEval, proposalAcceptEval, proposalGenerateEval, proposalHistoryReopenEval, proposalLoadEval, proposalRejectEval, proposalSaveFeedbackEval } from "./verify-video-clip-proposal-evals.mjs";
 import { verifyProposalEvidencePage, writeProposalEvidencePage, writeProposalManifest } from "./verify-video-clip-proposal-report.mjs";
 import {
   assertQueueIdsChangedTo,
@@ -30,7 +30,7 @@ Required params:
 State effects:
   Writes evidence under <version>/evidence/assets/.
   Creates a disposable project at <version>/evidence/assets/video-clip-proposal-project.
-  Imports two local WebM videos, seeds .capy/video-clip-queue.json, writes semantics and feedback through Project Core, launches an isolated debug shell id, generates proposal diff, rejects it, regenerates a stale candidate, changes the queue externally, proves stale accept returns conflicted without writing queue, regenerates a valid proposal, accepts it, and opens <version>/evidence/index.html.
+  Imports two local WebM videos, seeds .capy/video-clip-queue.json, writes semantics and feedback through Project Core, launches an isolated debug shell id, generates proposal diff, rejects it, regenerates a stale candidate, changes the queue externally, proves stale accept returns conflicted without writing queue, regenerates a valid proposal, accepts it, closes and reopens the same project to prove persisted proposal history restores, and opens <version>/evidence/index.html.
 
 Evidence outputs:
   video-clip-proposal-diff.json
@@ -41,6 +41,8 @@ Evidence outputs:
   video-clip-proposal-queue-after-conflict.json
   video-clip-proposal-queue-after-accept.json
   video-clip-proposal-summary.json
+  video-clip-proposal-history.json
+  video-clip-proposal-history-reopened-state.json
   video-clip-proposal-*-state.json
   video-clip-proposal-*-desktop.png
   video-clip-proposal-*-capture-verdict.json
@@ -62,18 +64,14 @@ Next step:
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const versionDir = path.resolve(process.argv[2] || "spec/versions/v0.52");
 const versionId = path.basename(versionDir);
-const evidenceDir = path.join(versionDir, "evidence");
-const assetsDir = path.join(evidenceDir, "assets");
-const projectDir = path.join(assetsDir, "video-clip-proposal-project");
-const mediaDir = path.join(projectDir, "media");
-const initialQueuePath = path.join(assetsDir, "video-clip-proposal-initial-queue.json");
-const projectProposalManifest = path.join(projectDir, ".capy", "video-clip-proposal.json");
+const evidenceDir = path.join(versionDir, "evidence"), assetsDir = path.join(evidenceDir, "assets");
+const projectDir = path.join(assetsDir, "video-clip-proposal-project"), mediaDir = path.join(projectDir, "media");
+const initialQueuePath = path.join(assetsDir, "video-clip-proposal-initial-queue.json"), projectProposalManifest = path.join(projectDir, ".capy", "video-clip-proposal.json");
 const uiComposition = "__queue_only__";
 const logs = [];
 const openInstanceIds = [];
 const stageCaptureVerdicts = [];
-let currentSocket = "";
-let shellBundleReady = false;
+let currentSocket = "", shellBundleReady = false;
 
 rmSync(assetsDir, { recursive: true, force: true });
 mkdirSync(assetsDir, { recursive: true });
@@ -108,12 +106,16 @@ try {
   const proposedState = capyJson(["devtools", "--eval", proposalGenerateEval()], "video-clip-proposal-generated-state.json", capyEnv());
   assertProposal(proposedState.proposal, "generated");
   assertTextIncludes(proposedState.domProposalText, ["修改提案", "Before", "After", "Revision", "base_queue_hash", "可接受"], "proposal DOM");
+  const historyAfterGenerated = capyJson(["project", "clip-queue", "proposal-history", "--project", projectDir], "video-clip-proposal-history-after-generated.json");
+  assertHistory(historyAfterGenerated, ["proposed"], "history after generated");
   copyFileSync(projectProposalManifest, path.join(assetsDir, "video-clip-proposal-first-diff.json"));
   const queueAfterProposal = capyJson(["project", "clip-queue", "inspect", "--project", projectDir], "video-clip-proposal-queue-after-proposal.json");
   assertQueueIdsEqual(queueBeforeProposal, queueAfterProposal, "proposal generation mutated queue");
 
   const rejectedState = capyJson(["devtools", "--eval", proposalRejectEval()], "video-clip-proposal-rejected-state.json", capyEnv());
   assertDecision(rejectedState.proposal, "rejected");
+  const historyAfterReject = capyJson(["project", "clip-queue", "proposal-history", "--project", projectDir], "video-clip-proposal-history-after-reject.json");
+  assertHistory(historyAfterReject, ["rejected"], "history after reject");
   const queueAfterReject = capyJson(["project", "clip-queue", "inspect", "--project", projectDir], "video-clip-proposal-queue-after-reject.json");
   assertQueueIdsEqual(queueBeforeProposal, queueAfterReject, "reject mutated queue");
 
@@ -133,6 +135,8 @@ try {
   const conflictedState = capyJson(["devtools", "--eval", proposalAcceptCurrentEval("conflicted")], "video-clip-proposal-conflicted-state.json", capyEnv());
   assertDecision(conflictedState.proposal, "conflicted");
   assertTextIncludes(conflictedState.domProposalText, ["已过期", "冲突", "current_queue_hash"], "conflicted proposal DOM");
+  const historyAfterConflict = capyJson(["project", "clip-queue", "proposal-history", "--project", projectDir], "video-clip-proposal-history-after-conflict.json");
+  assertHistory(historyAfterConflict, ["rejected", "conflicted"], "history after conflict");
   const queueAfterConflict = capyJson(["project", "clip-queue", "inspect", "--project", projectDir], "video-clip-proposal-queue-after-conflict.json");
   assertQueueIdsEqual(queueAfterExternalChange, queueAfterConflict, "conflicted accept mutated queue");
 
@@ -144,8 +148,16 @@ try {
   assert(summarizeQueueMutation(queueAfterConflict, queueAfterAccept).changed, "valid accept did not change queue after conflict");
   copyFileSync(projectProposalManifest, path.join(assetsDir, "video-clip-proposal-diff.json"));
   capyJson(["project", "clip-queue", "proposal-current", "--project", projectDir], "video-clip-proposal-current-accepted.json");
+  const proposalHistory = capyJson(["project", "clip-queue", "proposal-history", "--project", projectDir], "video-clip-proposal-history.json");
+  assertHistory(proposalHistory, ["rejected", "conflicted", "accepted"], "final history");
 
-  const summary = writeSummary({ loadedState, savedState, proposedState, rejectedState, staleCandidateState, conflictedState, acceptedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterExternalChange, queueAfterConflict, queueAfterAccept });
+  shutdown();
+  openInstanceIds.length = 0;
+  openShell("reopen", "video-clip-proposal-open-reopen.log");
+  const reopenedState = capyJson(["devtools", "--eval", proposalHistoryReopenEval(projectDir, uiComposition)], "video-clip-proposal-history-reopened-state.json", capyEnv());
+  assertReopenedHistory(reopenedState, proposalHistory);
+
+  const summary = writeSummary({ loadedState, savedState, proposedState, rejectedState, staleCandidateState, conflictedState, acceptedState, reopenedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterExternalChange, queueAfterConflict, queueAfterAccept, proposalHistory });
   writeProposalEvidencePage({ evidenceDir, logs, summary });
   writeProposalManifest({ evidenceDir, summary });
   await verifyProposalEvidencePage({ evidenceDir, assetsDir });
@@ -228,7 +240,8 @@ function writeStageVisual(value, stateEvidenceName) {
     "proposal-generated": "video-clip-proposal-generated-desktop.png",
     "proposal-rejected": "video-clip-proposal-rejected-desktop.png",
     "proposal-conflicted": "video-clip-proposal-conflicted-desktop.png",
-    "proposal-accepted": "video-clip-proposal-accepted-desktop.png"
+    "proposal-accepted": "video-clip-proposal-accepted-desktop.png",
+    "proposal-history-reopened": "video-clip-proposal-history-reopened-desktop.png"
   }[value?.stage];
   if (!imageName) return;
   const fallbackImage = imageName.replace(/-desktop\.png$/, "-state-derived.png");
@@ -236,7 +249,7 @@ function writeStageVisual(value, stateEvidenceName) {
   const panels = [
     ["Clip queue", value.domQueueText || ""],
     ["修改提案", value.domProposalText || "尚未生成提案"],
-    ["AI 建议", value.domSuggestionText || "尚未生成建议"]
+    ["Proposal history", value.domProposalHistoryText || "尚未恢复历史"]
   ];
   writeStateDerivedImage({
     assetsDir,
@@ -312,7 +325,7 @@ function writeStageVisual(value, stateEvidenceName) {
   if (verdict.capture.blocking) throw new Error(`desktop capture blocked ${value.stage}: ${verdict.capture.status}`);
 }
 
-function writeSummary({ loadedState, savedState, proposedState, rejectedState, staleCandidateState, conflictedState, acceptedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterExternalChange, queueAfterConflict, queueAfterAccept }) {
+function writeSummary({ loadedState, savedState, proposedState, rejectedState, staleCandidateState, conflictedState, acceptedState, reopenedState, feedbackCli, queueBeforeProposal, queueAfterProposal, queueAfterReject, queueAfterExternalChange, queueAfterConflict, queueAfterAccept, proposalHistory }) {
   const summary = {
     version: versionId,
     verdict: stageCaptureVerdicts.some(item => item.capture.blocking) ? "failed" : "passed",
@@ -325,6 +338,10 @@ function writeSummary({ loadedState, savedState, proposedState, rejectedState, s
     reject_decision: rejectedState.proposal?.decision || null,
     conflict_attempt_decision: conflictedState.proposal?.decision || null,
     accept_decision: acceptedState.proposal?.decision || null,
+    proposal_history: proposalHistory,
+    reopened_history_count: reopenedState.proposalHistory?.length || 0,
+    reopened_history_statuses: (reopenedState.proposalHistory || []).map(item => item.status),
+    reopened_history_readonly: reopenedState.historyDecisionButtonCount === 0,
     queue_before_proposal: queueBeforeProposal.items || [],
     queue_after_reject: queueAfterReject.items || [],
     queue_after_external_change: queueAfterExternalChange.items || [],
@@ -338,14 +355,14 @@ function writeSummary({ loadedState, savedState, proposedState, rejectedState, s
       accept: summarizeQueueMutation(queueAfterConflict, queueAfterAccept)
     },
     capture_verdicts: stageCaptureVerdicts,
-    states: { loaded: summarizeState(loadedState), saved: summarizeState(savedState), proposed: summarizeState(proposedState), rejected: summarizeState(rejectedState), stale_candidate: summarizeState(staleCandidateState), conflicted: summarizeState(conflictedState), accepted: summarizeState(acceptedState) }
+    states: { loaded: summarizeState(loadedState), saved: summarizeState(savedState), proposed: summarizeState(proposedState), rejected: summarizeState(rejectedState), stale_candidate: summarizeState(staleCandidateState), conflicted: summarizeState(conflictedState), accepted: summarizeState(acceptedState), reopened: summarizeState(reopenedState) }
   };
   writeJson("video-clip-proposal-summary.json", summary);
   return summary;
 }
 
 function summarizeState(state) {
-  return { stage: state.stage, queue_count: state.queue?.length || 0, semantic_count: state.semantics?.items?.length || 0, feedback_count: state.feedback?.items?.length || 0, proposal_status: state.proposal?.status || "", proposal_revision: state.proposal?.revision || 0, base_queue_hash: state.proposal?.base_queue_hash || "", proposal_history_count: state.proposalHistory?.length || 0, change_count: state.proposal?.changes?.length || 0, layout: state.layout, console_errors: state.consoleErrors || [], page_errors: state.pageErrors || [] };
+  return { stage: state.stage, queue_count: state.queue?.length || 0, semantic_count: state.semantics?.items?.length || 0, feedback_count: state.feedback?.items?.length || 0, proposal_status: state.proposal?.status || "", proposal_revision: state.proposal?.revision || 0, base_queue_hash: state.proposal?.base_queue_hash || "", proposal_history_count: state.proposalHistory?.length || 0, proposal_history_statuses: (state.proposalHistory || []).map(item => item.status), history_readonly: state.historyDecisionButtonCount === 0, change_count: state.proposal?.changes?.length || 0, layout: state.layout, console_errors: state.consoleErrors || [], page_errors: state.pageErrors || [] };
 }
 
 function assertSemantics(manifest, minCount, label) {
@@ -379,6 +396,29 @@ function assertDecision(proposal, status) {
   }
 }
 
+function assertHistory(history, requiredStatuses, label) {
+  assert(history?.schema_version === "capy.project-video-clip-proposal-history.v1", `${label} history schema mismatch`);
+  const entries = history.entries || [];
+  assert(entries.length >= requiredStatuses.length, `${label} history entry count too small`);
+  for (const status of requiredStatuses) {
+    assert(entries.some(entry => entry.status === status), `${label} missing ${status} entry`);
+  }
+  for (const entry of entries) {
+    assert(Number(entry.revision || 0) >= 1, `${label} entry missing revision`);
+    assert(String(entry.base_queue_hash || "").startsWith("queue-fnv1a64-"), `${label} entry missing base queue hash`);
+    assert(Array.isArray(entry.changes) && entry.changes.length > 0, `${label} entry missing changes`);
+  }
+}
+
+function assertReopenedHistory(state, history) {
+  assertNoPageErrors(state, "reopened history");
+  assert((state.proposalHistory || []).length === (history.entries || []).length, "reopened history count mismatch");
+  assert(state.historyDecisionButtonCount === 0, "history rows must not contain decision buttons");
+  assert(String(state.domProposalHistoryText || "").toLowerCase().includes("proposal history"), "reopened history DOM missing proposal history heading");
+  assertTextIncludes(state.domProposalHistoryText, ["历史详情只读", "base_queue_hash", "已过期/冲突", "已接受"], "reopened history DOM");
+  assert((state.proposalHistory || []).some(item => item.status === "conflicted" && item.conflict?.base_queue_hash && item.conflict?.current_queue_hash), "reopened history missing conflicted hashes");
+}
+
 function assertNoPageErrors(state, label) {
   const errors = [...(state.consoleErrors || []), ...(state.pageErrors || [])];
   assert(errors.length === 0, `${label} has page/console errors: ${JSON.stringify(errors)}`);
@@ -407,6 +447,4 @@ function writeLogs() {
   writeFileSync(path.join(assetsDir, "video-clip-proposal-command-log.json"), `${JSON.stringify(logs, null, 2)}\n`);
 }
 
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
+function assert(condition, message) { if (!condition) throw new Error(message); }
